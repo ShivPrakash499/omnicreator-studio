@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+config/google_accounts/*/client_secret.json
+config/google_accounts/*/token.json

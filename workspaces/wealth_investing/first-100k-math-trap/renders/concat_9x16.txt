@@ -1,0 +1,4 @@
+file 'C:/OmniCreator_Studio/workspaces/wealth_investing/first-100k-math-trap/assets/scene_01_9x16.mp4'
+file 'C:/OmniCreator_Studio/workspaces/wealth_investing/first-100k-math-trap/assets/scene_02_9x16.mp4'
+file 'C:/OmniCreator_Studio/workspaces/wealth_investing/first-100k-math-trap/assets/scene_03_9x16.mp4'
+file 'C:/OmniCreator_Studio/workspaces/wealth_investing/first-100k-math-trap/assets/scene_04_9x16.mp4'

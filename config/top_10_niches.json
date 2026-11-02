@@ -1,0 +1,682 @@
+{
+  "regions_countries_languages": {
+    "India": {
+      "India": {
+        "Hinglish (Hindi + English)": {
+          "market_id": "india_metro_global_hybrid",
+          "cpm_range": "₹300 - ₹1,000 CPM ($3.50 - $12.00) + High Brand Deals",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "en-IN-PrabhatNeural",
+          "language_label": "Hinglish",
+          "country_short": "India",
+          "audience_context": "Indian investors, traders, professionals, and youth across Mumbai, Delhi, Bengaluru, Hyderabad, Pune, and Tier-1/2 cities. Use ₹ (Rupees, Lakh, Crore), Nifty 50, Bank Nifty, Sensex, SEBI reports, RBI data, SIPs, and Indian market examples.",
+          "famous_regional_creators": ["Zerodha Varsity", "Akshat Shrivastava", "Pranjal Kamra", "Ankur Warikoo", "Think School", "Dhruv Rathee", "Tech Burner"]
+        },
+        "English (India)": {
+          "market_id": "india_metro_global_hybrid",
+          "cpm_range": "₹450 - ₹1,250 CPM ($5.00 - $15.00)",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "en-IN-PrabhatNeural",
+          "language_label": "English (India)",
+          "country_short": "India",
+          "audience_context": "Indian corporate professionals, equity investors, founders, and NRIs. Use ₹ Crore / Lakh, Nifty 50, SEBI & RBI institutional reports, and Indian startup/market case studies.",
+          "famous_regional_creators": ["Zerodha Varsity", "Akshat Shrivastava", "Think School", "Nikhil Kamath", "SOIC (Ishmohit Arora)", "Beebom"]
+        },
+        "Hindi (हिन्दी)": {
+          "market_id": "india_hindi_belt",
+          "cpm_range": "₹180 - ₹700 CPM (Massive 500M+ India Reach)",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "hi-IN-MadhurNeural",
+          "language_label": "Hindi",
+          "country_short": "India",
+          "audience_context": "Hindi-speaking audience across India. Use ₹ Lakh/Crore, Nifty/Sensex, SEBI, RBI, and relatable Indian examples.",
+          "famous_regional_creators": ["Pushkar Raj Thakur", "Pranjal Kamra", "Nitish Rajput", "Khan GS Research Centre", "Power of Stocks"]
+        },
+        "Tamil (தமிழ்)": {
+          "market_id": "india_tamil",
+          "cpm_range": "₹300 - ₹900 CPM",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "ta-IN-ValluvarNeural",
+          "language_label": "Tamil",
+          "country_short": "India",
+          "audience_context": "Tamil-speaking audience in India (Tamil Nadu) and global diaspora using ₹ Lakh/Crore and Indian benchmarks.",
+          "famous_regional_creators": ["Madan Gowri", "Finance Boosan", "Money Pechu (Anand Srinivasan)", "Tamil Pokkisham", "Tech Boss"]
+        },
+        "Telugu (తెలుగు)": {
+          "market_id": "india_telugu",
+          "cpm_range": "₹300 - ₹950 CPM",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "te-IN-MohanNeural",
+          "language_label": "Telugu",
+          "country_short": "India",
+          "audience_context": "Telugu-speaking audience in India (Hyderabad, Telangana, AP) and NRI community using ₹ Lakh/Crore.",
+          "famous_regional_creators": ["Kowshik Maridi (Boss Wallah Telugu)", "Day Trader Telugu", "Prasadtechintelugu", "Aye Jude"]
+        },
+        "Kannada (ಕನ್ನಡ)": {
+          "market_id": "india_kannada",
+          "cpm_range": "₹250 - ₹850 CPM",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "kn-IN-GaganNeural",
+          "language_label": "Kannada",
+          "country_short": "India",
+          "audience_context": "Kannada-speaking audience in Bengaluru and Karnataka using ₹ Lakh/Crore and Indian market data.",
+          "famous_regional_creators": ["Dr Bro", "Stock Market Kannada", "Tech in Kannada", "Madan Kannada"]
+        },
+        "Malayalam (മലയാളം)": {
+          "market_id": "india_malayalam",
+          "cpm_range": "₹350 - ₹1,050 CPM",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "ml-IN-MidhunNeural",
+          "language_label": "Malayalam",
+          "country_short": "India",
+          "audience_context": "Malayalam-speaking audience in Kerala and Gulf/Global NRIs using ₹ Lakh/Crore.",
+          "famous_regional_creators": ["Sharique Samsudheen (Fundfolio)", "Karikku", "M4 Tech", "PR Sundar"]
+        },
+        "Marathi (मराठी)": {
+          "market_id": "india_marathi",
+          "cpm_range": "₹250 - ₹800 CPM",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "mr-IN-ManoharNeural",
+          "language_label": "Marathi",
+          "country_short": "India",
+          "audience_context": "Marathi-speaking audience in Mumbai, Pune, and Maharashtra using ₹ Lakh/Crore.",
+          "famous_regional_creators": ["CA Rachana Ranade Marathi", "Sanket Awate", "Marathi Sanket", "Bhadipa"]
+        },
+        "Gujarati (ગુજરાતી)": {
+          "market_id": "india_gujarati",
+          "cpm_range": "₹300 - ₹950 CPM",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "gu-IN-NiranjanNeural",
+          "language_label": "Gujarati",
+          "country_short": "India",
+          "audience_context": "Gujarati-speaking investors, traders, and business owners in Gujarat and Mumbai using ₹ Lakh/Crore.",
+          "famous_regional_creators": ["Market Gurukul Gujarati", "Share Market Gujarati", "The Comedy Factory"]
+        },
+        "Bengali (বাংলা)": {
+          "market_id": "india_bengali",
+          "cpm_range": "₹220 - ₹700 CPM",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "bn-IN-BashkarNeural",
+          "language_label": "Bengali",
+          "country_short": "India",
+          "audience_context": "Bengali-speaking audience in Kolkata and West Bengal using ₹ Lakh/Crore.",
+          "famous_regional_creators": ["Pushkar Raj Thakur Bangla", "The Bong Guy", "Indranil Chakraborty"]
+        },
+        "Punjabi (ਪੰਜਾਬੀ)": {
+          "market_id": "india_punjabi",
+          "cpm_range": "₹350 - ₹1,150 CPM",
+          "currency_symbol": "₹",
+          "currency_code": "INR",
+          "voice": "pa-IN-OjasNeural",
+          "language_label": "Punjabi",
+          "country_short": "India",
+          "audience_context": "Punjabi-speaking audience in India and global diaspora.",
+          "famous_regional_creators": ["Prime Asia TV", "Punjabi Trekker", "Raka"]
+        }
+      }
+    },
+    "United States & North America": {
+      "United States": {
+        "English (US)": {
+          "market_id": "tier1_us_uk_global",
+          "cpm_range": "$18.00 - $45.00 CPM",
+          "currency_symbol": "$",
+          "currency_code": "USD",
+          "voice": "en-US-AndrewMultilingualNeural",
+          "language_label": "English (US)",
+          "country_short": "United States",
+          "audience_context": "US English-speaking audience. Use USD ($), S&P 500, SEC filings, Roth IRA/401(k), and Wall Street benchmarks.",
+          "famous_regional_creators": ["Patrick Boyle", "The Plain Bagel", "How Money Works", "MKBHD", "Veritasium", "Graham Stephan"]
+        },
+        "Spanish (US Hispanic / Español)": {
+          "market_id": "us_hispanic_spanish",
+          "cpm_range": "$12.00 - $28.00 CPM",
+          "currency_symbol": "$",
+          "currency_code": "USD",
+          "voice": "es-US-AlonsoNeural",
+          "language_label": "Spanish (US)",
+          "country_short": "United States",
+          "audience_context": "US Hispanic audience in California, Texas, Florida, and New York using USD ($).",
+          "famous_regional_creators": ["Luisito Comunica", "VisualPolitik", "Adrián Sáenz", "Nate Gentile"]
+        }
+      },
+      "Canada": {
+        "English (Canada)": {
+          "market_id": "tier1_us_uk_global",
+          "cpm_range": "$15.00 - $34.00 CPM",
+          "currency_symbol": "$",
+          "currency_code": "CAD",
+          "voice": "en-CA-LiamNeural",
+          "language_label": "English (Canada)",
+          "country_short": "Canada",
+          "audience_context": "Canadian audience (Toronto, Vancouver).",
+          "famous_regional_creators": ["The Plain Bagel", "Ben Felix", "Linus Tech Tips"]
+        },
+        "French (Canada)": {
+          "market_id": "canada_french",
+          "cpm_range": "$12.00 - $25.00 CPM",
+          "currency_symbol": "$",
+          "currency_code": "CAD",
+          "voice": "fr-CA-AntoineNeural",
+          "language_label": "French (Canada)",
+          "country_short": "Canada",
+          "audience_context": "Francophone Canadian audience.",
+          "famous_regional_creators": ["7 jours sur Terre", "Émile Roy"]
+        }
+      }
+    },
+    "United Kingdom & Europe": {
+      "United Kingdom": {
+        "English (UK)": {
+          "market_id": "tier1_us_uk_global",
+          "cpm_range": "£14.00 - £32.00 CPM ($18 - $40)",
+          "currency_symbol": "£",
+          "currency_code": "GBP",
+          "voice": "en-GB-RyanNeural",
+          "language_label": "English (UK)",
+          "country_short": "United Kingdom",
+          "audience_context": "UK audience (London, Manchester). Use £ GBP, ISA/SIPP, and FTSE/Global benchmarks.",
+          "famous_regional_creators": ["Patrick Boyle", "Mark Tilbury", "Ali Abdaal", "Mrwhosetheboss"]
+        }
+      },
+      "Europe": {
+        "Spanish (Spain)": {
+          "market_id": "europe_spanish",
+          "cpm_range": "€10.00 - €24.00 CPM",
+          "currency_symbol": "€",
+          "currency_code": "EUR",
+          "voice": "es-ES-AlvaroNeural",
+          "language_label": "Spanish",
+          "country_short": "Spain",
+          "audience_context": "European Spanish audience using € EUR.",
+          "famous_regional_creators": ["VisualPolitik", "Adrián Sáenz", "QuantumFracture"]
+        },
+        "German (Deutsch)": {
+          "market_id": "europe_german",
+          "cpm_range": "€15.00 - €35.00 CPM",
+          "currency_symbol": "€",
+          "currency_code": "EUR",
+          "voice": "de-DE-ConradNeural",
+          "language_label": "German",
+          "country_short": "Germany",
+          "audience_context": "DACH region (Germany, Switzerland, Austria) using € EUR.",
+          "famous_regional_creators": ["Finanzfluss", "Kurzgesagt DE", "Simplicissimus"]
+        }
+      }
+    },
+    "Middle East (UAE) & Asia-Pacific": {
+      "UAE & MENA": {
+        "English (UAE / Global)": {
+          "market_id": "tier1_uae_singapore_global",
+          "cpm_range": "$16.00 - $38.00 CPM",
+          "currency_symbol": "$",
+          "currency_code": "USD",
+          "voice": "en-GB-RyanNeural",
+          "language_label": "English",
+          "country_short": "UAE",
+          "audience_context": "Founders, investors, and expats in Dubai and Abu Dhabi.",
+          "famous_regional_creators": ["Iman Gadzhi", "Khalid Al Ameri", "Supercar Blondie"]
+        },
+        "Arabic (العربية)": {
+          "market_id": "mena_arabic",
+          "cpm_range": "$10.00 - $26.00 CPM",
+          "currency_symbol": "AED",
+          "currency_code": "AED",
+          "voice": "ar-AE-HamdanNeural",
+          "language_label": "Arabic",
+          "country_short": "UAE & KSA",
+          "audience_context": "Arabic-speaking audience in UAE and Saudi Arabia.",
+          "famous_regional_creators": ["AlMokhbir AlEqtisadi", "Da7ee7", "Thmanyah"]
+        }
+      }
+    }
+  },
+  "target_markets": {
+    "india_metro_global_hybrid": {
+      "id": "india_metro_global_hybrid",
+      "name": "India (₹ INR — Nifty 50, Sensex, SEBI & Indian Market Context)",
+      "cpm_range_usd": "₹300 - ₹1,200 CPM ($4.00 - $14.00) + High Brand/Affiliate Deals",
+      "currency_symbol": "₹",
+      "currency_code": "INR",
+      "audience_context": "Indian audience across Hindi, Hinglish, English (India), and regional languages. Always use ₹ (Rupees, Lakh, Crore), Nifty 50, Sensex, Bank Nifty, SEBI reports, RBI data, SIP/Mutual Funds, and Indian tax rules.",
+      "default_voice": "en-IN-PrabhatNeural",
+      "secondary_voice": "hi-IN-MadhurNeural"
+    },
+    "tier1_us_uk_global": {
+      "id": "tier1_us_uk_global",
+      "name": "United States, UK & Global Tier-1 ($ USD)",
+      "cpm_range_usd": "$18.00 - $45.00 CPM ($12.00 - $32.00 RPM)",
+      "currency_symbol": "$",
+      "currency_code": "USD",
+      "audience_context": "US, UK, Canadian, and Australian audiences using USD ($), S&P 500, and SEC filings.",
+      "default_voice": "en-US-AndrewMultilingualNeural",
+      "secondary_voice": "en-GB-RyanNeural"
+    },
+    "tier1_uae_singapore_global": {
+      "id": "tier1_uae_singapore_global",
+      "name": "UAE, Singapore & Global Hubs ($ USD)",
+      "cpm_range_usd": "$16.00 - $38.00 CPM",
+      "currency_symbol": "$",
+      "currency_code": "USD",
+      "audience_context": "Global entrepreneurs and investors in Dubai, Singapore, and London.",
+      "default_voice": "en-GB-RyanNeural",
+      "secondary_voice": "en-US-AndrewMultilingualNeural"
+    },
+    "us_hispanic_spanish": {
+      "id": "us_hispanic_spanish",
+      "name": "US Hispanic & Spanish Market ($ USD)",
+      "cpm_range_usd": "$10.00 - $28.00 CPM",
+      "currency_symbol": "$",
+      "currency_code": "USD",
+      "audience_context": "Spanish-speaking audience in the US and Latin America.",
+      "default_voice": "es-US-AlonsoNeural",
+      "secondary_voice": "es-ES-AlvaroNeural"
+    }
+  },
+  "visual_modalities": {
+    "EXEC_SLIDES_AND_REPORTS": {
+      "name": "Executive Motion Slides & Institutional Reports (SEBI / RBI / SEC / Bloomberg Style)",
+      "description": "Clean dark-mode glassmorphic keynote slides, highlighted PDF research reports, animated financial tickers, and precision data callouts."
+    },
+    "3D_ISOMETRIC_AND_CAD": {
+      "name": "3D Isometric Models, Hardware Cutaways & Forensic Environments (Fern / Neo Style)",
+      "description": "Unreal/Blender-style 3D cross-sections, exploded hardware schematics, 3D wealth comparison towers, and volumetric camera flythroughs."
+    },
+    "LIVE_UI_AND_SPLIT_BENCHMARK": {
+      "name": "Split-Screen Live Workflows, Trading Charts & Spec Benchmarks",
+      "description": "Side-by-side 'Before vs After' benchmark matrices, live trading/terminal diagrams, and glowing telemetry comparisons."
+    },
+    "HYBRID_AVATAR_KEYNOTE": {
+      "name": "Locked Channel AI Presenter / Avatar + Picture-in-Picture Data Proof",
+      "description": "Consistent channel AI presenter/avatar (locked face, wardrobe, lighting, and voice) delivering high-trust hooks and verdicts alongside full-screen data slides."
+    },
+    "CINEMATIC_STORY_AND_VLOG": {
+      "name": "Cinematic Documentary, Storytelling & High-Retention Vlog Visuals",
+      "description": "Photorealistic cinematic storytelling frames, cultural/historical visuals, dynamic b-roll compositions, and high-impact captions."
+    }
+  },
+  "niches": [
+    {
+      "id": "wealth_investing",
+      "category": "High-RPM Tier",
+      "rank": 1,
+      "name": "1. Personal Finance, Trading, Investing & Wealth Engineering",
+      "rpm_usd": "₹400 - ₹1,200 / $18 - $32",
+      "recommended_visual_modality": "HYBRID_AVATAR_KEYNOTE",
+      "supported_modalities": ["HYBRID_AVATAR_KEYNOTE", "EXEC_SLIDES_AND_REPORTS", "3D_ISOMETRIC_AND_CAD"],
+      "top_competitors": ["Patrick Boyle", "The Plain Bagel", "How Money Works", "Mark Tilbury", "Ben Felix"],
+      "india_competitors": ["Zerodha Varsity", "Akshat Shrivastava", "Pranjal Kamra", "Power of Stocks (Subasish Pani)", "Ankur Warikoo", "CA Rachana Ranade", "SOIC"],
+      "market_winning_format": "Forensic financial reports (SEBI/RBI in India; SEC/Fed in US), dark-mode institutional keynote slides, and 3D portfolio visualizers.",
+      "default_topic_ideas": [
+        "Why the First $100,000 Is a Mathematical Trap (And How to Break It in 3 Years)",
+        "The Silent Wealth Killer Hiding in Your S&P 500 Index Fund (2026 Report)",
+        "How the Top 1% Legally Pay 0% Tax Using Asset-Backed Debt"
+      ],
+      "india_topic_ideas": [
+        "Why Your First ₹1 Crore Is a Mathematical Trap (And How to Cross It in 3 Years)",
+        "SEBI Report Shock: Why 93% of Indian F&O Traders Lose Money (And the 7% Institutional Strategy)",
+        "The Silent Wealth Killer Hiding in Your Nifty 50 Index Fund & SIP Portfolio (2026 RBI & SEBI Data)",
+        "How India's Top 1% Legally Save Crores in Income Tax Using HUF & Debt Arbitrage"
+      ]
+    },
+    {
+      "id": "ai_enterprise_automation",
+      "category": "High-RPM Tier",
+      "rank": 2,
+      "name": "2. AI Agents, Enterprise Automation & High-ROI SaaS Workflows",
+      "rpm_usd": "₹350 - ₹950 / $15 - $26",
+      "recommended_visual_modality": "LIVE_UI_AND_SPLIT_BENCHMARK",
+      "supported_modalities": ["LIVE_UI_AND_SPLIT_BENCHMARK", "EXEC_SLIDES_AND_REPORTS", "HYBRID_AVATAR_KEYNOTE"],
+      "top_competitors": ["Jeff Su", "Liam Ottley", "Matt Wolfe", "Greg Isenberg", "Fireship"],
+      "india_competitors": ["Varun Mayya", "Ishan Sharma", "Harkirat Singh", "CodeWithHarry", "Think School", "Apna College"],
+      "market_winning_format": "Fast-paced executive architecture slides, split-screen workflow comparisons, and live ROI calculators.",
+      "default_topic_ideas": [
+        "5 AI Agent Workflows That Replace a $120,000/Year Operations Team",
+        "Stop Using Amateur Prompts: The Enterprise R-C-C-O Architecture Explained",
+        "How Solo Founders Are Building $50k/Month Micro-SaaS Apps in 72 Hours"
+      ],
+      "india_topic_ideas": [
+        "5 Autonomous AI Agent Workflows Replacing ₹25 Lakh/Year IT & Agency Roles in India",
+        "How Solo Indian Founders Are Building ₹10 Lakh/Month AI Micro-SaaS Apps From Bengaluru",
+        "Stop Using Basic Prompts: The Complete 2026 AI Engineering Stack Explained"
+      ]
+    },
+    {
+      "id": "flagship_gadgets_hardware",
+      "category": "High-RPM Tier",
+      "rank": 3,
+      "name": "3. Flagship Tech, Smartphones & Smart Hardware Buying Guides",
+      "rpm_usd": "₹250 - ₹700 / $12 - $20 + Affiliates",
+      "recommended_visual_modality": "3D_ISOMETRIC_AND_CAD",
+      "supported_modalities": ["3D_ISOMETRIC_AND_CAD", "LIVE_UI_AND_SPLIT_BENCHMARK", "EXEC_SLIDES_AND_REPORTS"],
+      "top_competitors": ["MKBHD", "Dave2D", "Geekerwan", "JerryRigEverything", "Optimum"],
+      "india_competitors": ["Tech Burner", "Trakin Tech", "Geekyranjit", "Gyan Therapy", "Beebom"],
+      "market_winning_format": "3D exploded hardware cutaways, lab thermal/battery telemetry charts, and 'Buy This / Skip That' price-to-performance matrices.",
+      "default_topic_ideas": [
+        "The 200MP Smartphone Camera Lie: Silicon Physics vs Marketing Hype",
+        "Why Next-Gen ARM Laptops Are Destroying $4,000 Desktop Workstations",
+        "5 Overpriced Flagship Gadgets Exposed (And the $99 Engineer Favorites)"
+      ],
+      "india_topic_ideas": [
+        "Best Smartphones Under ₹30,000 vs ₹80,000 Flagships: The 200MP Camera Marketing Lie Exposed",
+        "5 Overpriced Gadgets in India You Should Never Buy (And Better Value Alternatives)",
+        "Why Next-Gen ARM Laptops Are Destroying ₹2 Lakh Gaming & Editing Laptops"
+      ]
+    },
+    {
+      "id": "longevity_clinical_nutrition",
+      "category": "High-RPM Tier",
+      "rank": 4,
+      "name": "4. Health, Longevity Science, Clinical Nutrition & Fitness",
+      "rpm_usd": "₹250 - ₹800 / $12 - $22",
+      "recommended_visual_modality": "EXEC_SLIDES_AND_REPORTS",
+      "supported_modalities": ["EXEC_SLIDES_AND_REPORTS", "3D_ISOMETRIC_AND_CAD", "HYBRID_AVATAR_KEYNOTE"],
+      "top_competitors": ["Peter Attia MD", "Andrew Huberman", "Bryan Johnson", "FoundMyFitness", "Physionic"],
+      "india_competitors": ["Fit Tuber", "FoodPharmer (Revant Himatsingka)", "Dr. Pal", "BeerBiceps Health", "Trustified"],
+      "market_winning_format": "Lab purity test reports, clinical trial callouts, 3D metabolic pathway renders, and ingredient label breakdowns.",
+      "default_topic_ideas": [
+        "The 'Healthy' Breakfast Foods Spiking Your Insulin by 300% (Clinical Data)",
+        "3 Peer-Reviewed Longevity Protocols That Reverse Biological Age Markers",
+        "Why 90% of Store-Bought Supplements Fail Lab Purity Tests (FDA & Lab Report)"
+      ],
+      "india_topic_ideas": [
+        "Lab Report Shock: 7 'Healthy' Indian Supermarket Foods Spiking Your Blood Sugar by 300%",
+        "Why 85% of Protein Supplements in India Failed Independent Lab Purity Tests (2026 Report)",
+        "The Science-Backed Indian Diet Protocol to Reverse Fatty Liver & Insulin Resistance"
+      ]
+    },
+    {
+      "id": "forensic_business_documentaries",
+      "category": "High-RPM Tier",
+      "rank": 5,
+      "name": "5. Billionaire Case Studies, Startup Forensics & Business Documentaries",
+      "rpm_usd": "₹350 - ₹900 / $14 - $24",
+      "recommended_visual_modality": "3D_ISOMETRIC_AND_CAD",
+      "supported_modalities": ["3D_ISOMETRIC_AND_CAD", "EXEC_SLIDES_AND_REPORTS", "HYBRID_AVATAR_KEYNOTE"],
+      "top_competitors": ["MagnatesMedia", "Fern", "ColdFusion", "Company Man", "Bloomberg Originals"],
+      "india_competitors": ["Think School", "Aditya Saini", "Aevy TV", "Backstage with Millionaires", "GrowthX"],
+      "market_winning_format": "3D forensic investigation boards, financial filing highlights, timeline maps, and corporate rise-and-fall storytelling.",
+      "default_topic_ideas": [
+        "How a $40 Billion Wall Street Empire Collapsed in 48 Hours (Forensic Breakdown)",
+        "The Monopoly Playbook: How One Quiet Holding Company Owns Everything You Buy",
+        "Inside the $100 Billion AI Chip War: TSMC, Nvidia, and the Silicon Chokepoint"
+      ],
+      "india_topic_ideas": [
+        "How a ₹50,000 Crore Indian Unicorn Collapsed Overnight (Forensic Balance Sheet Breakdown)",
+        "The Ruthless Supply-Chain Monopoly: How One Indian Conglomerate Dominated 4 Industries",
+        "Quick-Commerce War: The Hidden Unit Economics of Blinkit, Zepto & Swiggy Instamart"
+      ]
+    },
+    {
+      "id": "real_estate_tax_strategy",
+      "category": "High-RPM Tier",
+      "rank": 6,
+      "name": "6. Real Estate Cashflow, Commercial Assets & Legal Tax Shields",
+      "rpm_usd": "₹450 - ₹1,300 / $20 - $35",
+      "recommended_visual_modality": "EXEC_SLIDES_AND_REPORTS",
+      "supported_modalities": ["EXEC_SLIDES_AND_REPORTS", "3D_ISOMETRIC_AND_CAD", "HYBRID_AVATAR_KEYNOTE"],
+      "top_competitors": ["BiggerPockets", "Karlton Dennis", "Ken McElroy", "Grant Cardone", "Financial Education"],
+      "india_competitors": ["AssetYogi", "Labour Law Advisor (LLA)", "Akshat Shrivastava", "Pranjal Kamra", "ThinkThatThrough"],
+      "market_winning_format": "3D architectural property cutaways paired with live rental-yield vs SIP spreadsheets and tax-code callouts.",
+      "default_topic_ideas": [
+        "Why Buying a Primary Home in 2026 Is a Mathematical Liability (Rent vs Invest Math)",
+        "How Real Estate Investors Use Cost Segregation to Wipe Out 6-Figure Tax Bills",
+        "The Commercial Cashflow Formula: Analyzing 3 Properties in 10 Minutes"
+      ],
+      "india_topic_ideas": [
+        "Why Buying a ₹1.5 Crore Flat in India Is a Mathematical Trap (3% Rental Yield vs Nifty 50 SIP)",
+        "How Savvy Indian Investors Use Section 54 & Commercial REITs to Pay Zero Capital Gains Tax",
+        "Tier-1 vs Tier-2 Real Estate in India: Where the Next 5x Infrastructure Boom Is Happening"
+      ]
+    },
+    {
+      "id": "cybersecurity_digital_forensics",
+      "category": "High-RPM Tier",
+      "rank": 7,
+      "name": "7. Cybersecurity, Zero-Day Heists & Digital Forensics",
+      "rpm_usd": "₹300 - ₹850 / $14 - $23",
+      "recommended_visual_modality": "3D_ISOMETRIC_AND_CAD",
+      "supported_modalities": ["3D_ISOMETRIC_AND_CAD", "LIVE_UI_AND_SPLIT_BENCHMARK", "EXEC_SLIDES_AND_REPORTS"],
+      "top_competitors": ["NetworkChuck", "Jack Rhysider (Darknet Diaries)", "John Hammond", "Fern", "Sumsub"],
+      "india_competitors": ["Bitten Tech", "Technical Sagar", "Cyberians", "Varun Mayya", "Think School"],
+      "market_winning_format": "3D server-room and packet-routing visualizations, threat intelligence reports, and heist reconstructions.",
+      "default_topic_ideas": [
+        "How Hackers Breached a $1.5 Billion Vault Using One Infected PDF (3D Forensics)",
+        "Why Your Password Manager and 2FA Can Still Be Bypassed by Session Hijacking",
+        "Inside the Global AI Voice-Cloning Bank Heist (And How to Lock Your Identity)"
+      ],
+      "india_topic_ideas": [
+        "Inside the ₹200 Crore AI Voice-Cloning & UPI Bank Scam in India (3D Forensic Breakdown)",
+        "How Session-Hijacking Malware Bypasses OTP & 2FA on Indian Smartphones",
+        "How One Fake PDF Breached a Major Corporate Server in 14 Minutes"
+      ]
+    },
+    {
+      "id": "executive_career_compensation",
+      "category": "High-RPM Tier",
+      "rank": 8,
+      "name": "8. High-Income Tech Careers, Remote Compensation & Negotiation",
+      "rpm_usd": "₹300 - ₹800 / $13 - $21",
+      "recommended_visual_modality": "EXEC_SLIDES_AND_REPORTS",
+      "supported_modalities": ["EXEC_SLIDES_AND_REPORTS", "LIVE_UI_AND_SPLIT_BENCHMARK", "HYBRID_AVATAR_KEYNOTE"],
+      "top_competitors": ["Jeff Su", "A Life After Layoff", "Levels.fyi", "Dan Lok", "Harvard Business Review"],
+      "india_competitors": ["Ankur Warikoo", "Striver (take U forward)", "Love Babbar", "Ishan Sharma", "Harkirat Singh"],
+      "market_winning_format": "Compensation reports, side-by-side resume/LinkedIn rewrites, and salary negotiation playbooks.",
+      "default_topic_ideas": [
+        "The Exact 3-Email Script That Negotiated an Extra $45,000 in Base Salary",
+        "Stop Sending Generic Resumes: How ATS Algorithms Score Your CV in 6 Seconds",
+        "Top 5 Remote Tech Roles Paying $180,000+ Without a Computer Science Degree"
+      ],
+      "india_topic_ideas": [
+        "How Indian Engineers Are Landing ₹50+ LPA Remote Jobs From Home (2026 Playbook)",
+        "The Exact HR Salary Negotiation Script That Added ₹12 Lakh to a CTC Offer",
+        "Stop Sending Generic Resumes: How ATS Filters Reject 90% of Indian Job Applicants"
+      ]
+    },
+    {
+      "id": "behavioral_economics_performance",
+      "category": "High-RPM Tier",
+      "rank": 9,
+      "name": "9. Behavioral Economics, Decision Science & Executive Performance",
+      "rpm_usd": "₹250 - ₹700 / $10 - $18",
+      "recommended_visual_modality": "EXEC_SLIDES_AND_REPORTS",
+      "supported_modalities": ["EXEC_SLIDES_AND_REPORTS", "3D_ISOMETRIC_AND_CAD", "HYBRID_AVATAR_KEYNOTE"],
+      "top_competitors": ["Veritasium", "Ali Abdaal", "Harvard Business Review", "Theories of Everything", "Big Think"],
+      "india_competitors": ["Think School", "Prakhar ke Pravachan", "Shwetabh Gangwar", "Sandeep Maheshwari", "Ankur Warikoo"],
+      "market_winning_format": "Minimalist architectural motion slides, behavioral game-theory matrices, and experimental data breakdowns.",
+      "default_topic_ideas": [
+        "The Game Theory Secret Used by Billionaire Negotiators (Prisoner's Dilemma Applied)",
+        "Why Your Brain Is Wired to Lose Money in Bull Markets (Nobel Prize Research)",
+        "The 90-Minute Ultradian Deep-Work Protocol Used by Elite Quant Traders"
+      ],
+      "india_topic_ideas": [
+        "The Game Theory Psychology Used by India's Sharpest Business Negotiators",
+        "Why Retail Investors Panic-Sell at the Bottom and Buy at the Top (Behavioral Data)",
+        "The 90-Minute Deep-Work Protocol Used by Top Rankers & Quant Founders"
+      ]
+    },
+    {
+      "id": "future_engineering_megaprojects",
+      "category": "High-RPM Tier",
+      "rank": 10,
+      "name": "10. Future Engineering, Solid-State EVs & Megaprojects",
+      "rpm_usd": "₹250 - ₹750 / $11 - $19",
+      "recommended_visual_modality": "3D_ISOMETRIC_AND_CAD",
+      "supported_modalities": ["3D_ISOMETRIC_AND_CAD", "EXEC_SLIDES_AND_REPORTS", "LIVE_UI_AND_SPLIT_BENCHMARK"],
+      "top_competitors": ["Real Engineering", "Practical Engineering", "The B1M", "Mustard", "Undecided with Matt Ferrell"],
+      "india_competitors": [" Gareeb Scientist", "Trisul", "PowerTrain", "The DeshBhakt", "Defence Matrix"],
+      "market_winning_format": "3D CAD engineering cross-sections, physics/thermodynamics telemetry overlays, and megaproject cost reports.",
+      "default_topic_ideas": [
+        "Why Solid-State Batteries Were Stuck in Labs for 15 Years (3D Physics Breakdown)",
+        "The $500 Billion Megaproject Engineering Mistake Nobody Calculated",
+        "How Small Modular Nuclear Reactors Are Powering the Next Generation of AI Data Centers"
+      ],
+      "india_topic_ideas": [
+        "Inside India's ₹1.2 Lakh Crore Bullet Train & Dedicated Freight Corridor Engineering (3D Breakdown)",
+        "Why Solid-State EV Batteries Will Transform Indian Highways by 2027",
+        "How ISRO Built a Deep-Space Mission at 10% of Global Aerospace Costs (3D CAD Analysis)"
+      ]
+    },
+    {
+      "id": "geopolitics_current_affairs",
+      "category": "All Niches (High Reach & Viral)",
+      "rank": 11,
+      "name": "11. Geopolitics, World History, Current Affairs & Explainer Documentaries",
+      "rpm_usd": "₹200 - ₹600 / $6 - $15",
+      "recommended_visual_modality": "HYBRID_AVATAR_KEYNOTE",
+      "supported_modalities": ["HYBRID_AVATAR_KEYNOTE", "3D_ISOMETRIC_AND_CAD", "EXEC_SLIDES_AND_REPORTS", "CINEMATIC_STORY_AND_VLOG"],
+      "top_competitors": ["Johnny Harris", "RealLifeLore", "CaspianReport", "VisualPolitik", "TLDR News"],
+      "india_competitors": ["Dhruv Rathee", "Nitish Rajput", "Abhi and Niyu", "Mohak Mangal (Soch)", "StudyIQ IAS", "Prashant Dhawan"],
+      "market_winning_format": "Animated 3D geopolitical maps, archival document callouts, and high-authority presenter storytelling.",
+      "default_topic_ideas": [
+        "Why This Single Strait Controls 40% of the Global Economy (Geopolitical Map Breakdown)",
+        "The Untold History Behind the Border Dispute Nobody Talks About",
+        "How New Trade Corridors Are Redrawing the 2026 World Map"
+      ],
+      "india_topic_ideas": [
+        "How the India-Middle East-Europe Corridor (IMEC) Is Redrawing Global Trade Maps",
+        "Why Semiconductor Geopolitics Makes India the Most Critical Hub of the Next Decade",
+        "The Untold Economic & Geopolitical Story Behind Oil Pricing in 2026"
+      ]
+    },
+    {
+      "id": "entertainment_pop_culture_cinema",
+      "category": "All Niches (High Reach & Viral)",
+      "rank": 12,
+      "name": "12. Entertainment, Cinema Breakdowns, Celebrity & Pop Culture",
+      "rpm_usd": "₹150 - ₹450 / $4 - $10",
+      "recommended_visual_modality": "CINEMATIC_STORY_AND_VLOG",
+      "supported_modalities": ["CINEMATIC_STORY_AND_VLOG", "HYBRID_AVATAR_KEYNOTE", "EXEC_SLIDES_AND_REPORTS"],
+      "top_competitors": ["New Rockstars", "The Canadian Lad", "WatchMojo", "Filmento", "ScreenCrush"],
+      "india_competitors": ["PJ Explained", "BnfTV", "Yogi Bolta Hai", "Tried&Refused Productions", "ComicVerse"],
+      "market_winning_format": "Frame-by-frame easter egg breakdowns, box-office economics charts, and high-energy commentary.",
+      "default_topic_ideas": [
+        "10 Hidden Details Everyone Missed in the Biggest Blockbuster Trailer of 2026",
+        "How a $15 Million Indie Film Beat a $300 Million Studio Giant at the Box Office",
+        "The Real Reason Cinema Franchises Are Changing Their Release Formula"
+      ],
+      "india_topic_ideas": [
+        "10 Hidden Details Everyone Missed in the Biggest Indian Blockbuster Trailer of 2026",
+        "How a ₹20 Crore Regional Film Beat a ₹400 Crore Megabudget Movie at the Box Office",
+        "The Secret Box-Office Economics Behind Cinematic Universes in India"
+      ]
+    },
+    {
+      "id": "mythology_ancient_history_spirituality",
+      "category": "All Niches (High Reach & Viral)",
+      "rank": 13,
+      "name": "13. Mythology, Ancient Civilizations, Spiritual Wisdom & Epic Stories",
+      "rpm_usd": "₹180 - ₹550 / $5 - $12",
+      "recommended_visual_modality": "CINEMATIC_STORY_AND_VLOG",
+      "supported_modalities": ["CINEMATIC_STORY_AND_VLOG", "3D_ISOMETRIC_AND_CAD", "HYBRID_AVATAR_KEYNOTE"],
+      "top_competitors": ["Toldinstone", "Fall of Civilizations", "Mythology & Fiction Explained", "Voices of the Past"],
+      "india_competitors": ["Project Shivoham", "RAAAZ by BigBrainco", "Keerthi History", "The Ranveer Show", "Praveen Mohan"],
+      "market_winning_format": "Photorealistic ancient temple/architectural reconstructions, manuscript translations, and immersive narration.",
+      "default_topic_ideas": [
+        "The Unexplained Engineering Behind a 1,200-Year-Old Monolithic Temple",
+        "5 Ancient Strategic Lessons From Epic Scriptures That Still Apply Today",
+        "How Archaeological Lidar Scans Revealed a Lost Underground City"
+      ],
+      "india_topic_ideas": [
+        "The Unexplained Acoustic & Stone Engineering of the 1,200-Year-Old Kailasa Temple",
+        "5 Strategic Leadership Lessons From the Mahabharata & Arthashastra for Modern Life",
+        "Untold Secrets of the Indus Valley & Saraswati Civilization Revealed by Modern Archaeology"
+      ]
+    },
+    {
+      "id": "kids_stories_moral_animation",
+      "category": "All Niches (High Reach & Viral)",
+      "rank": 14,
+      "name": "14. Moral Stories, Folklore, Fables & Family Edutainment",
+      "rpm_usd": "₹120 - ₹400 / $3 - $9",
+      "recommended_visual_modality": "CINEMATIC_STORY_AND_VLOG",
+      "supported_modalities": ["CINEMATIC_STORY_AND_VLOG", "3D_ISOMETRIC_AND_CAD"],
+      "top_competitors": ["ChuChu TV", "Infobells", "Panchatantra Tales", "Kurzgesagt", "TED-Ed"],
+      "india_competitors": ["ChuChu TV", "Infobells Hindi/Tamil/Telugu", "Hindi Kahaniya", "Pocket FM Stories"],
+      "market_winning_format": "Vibrant 3D Pixar-style / storybook scenes, expressive character continuity, and clear moral takeaways.",
+      "default_topic_ideas": [
+        "The Clever Merchant and the Golden Scale: A Timeless Story of Honesty",
+        "Why Patience Beats Greed: The Story of the Two Bamboo Farmers",
+        "How One Small Act of Kindness Saved an Entire Village"
+      ]
+    },
+    {
+      "id": "gaming_esports_streaming",
+      "category": "All Niches (High Reach & Viral)",
+      "rank": 15,
+      "name": "15. Gaming, Esports Breakdowns, GTA/Minecraft Lore & Game Dev",
+      "rpm_usd": "₹140 - ₹450 / $4 - $11",
+      "recommended_visual_modality": "LIVE_UI_AND_SPLIT_BENCHMARK",
+      "supported_modalities": ["LIVE_UI_AND_SPLIT_BENCHMARK", "3D_ISOMETRIC_AND_CAD", "CINEMATIC_STORY_AND_VLOG"],
+      "top_competitors": ["VaatiVidya", "Digital Foundry", "gameranx", "TheRadBrad"],
+      "india_competitors": ["Techno Gamerz", "Total Gaming", "MortaL", "Mythpat", "BeastBoyShub"],
+      "market_winning_format": "60fps gameplay benchmark overlays, secret lore timelines, and frame-time engine analysis.",
+      "default_topic_ideas": [
+        "15 Secret Mechanics Hidden Inside the New Open-World Engine",
+        "How One Esports Underdog Pulled Off the Greatest Comeback in Tournament History",
+        "Unreal Engine 5 vs Custom Engines: Why Next-Gen Physics Look So Real"
+      ]
+    },
+    {
+      "id": "cooking_food_culinary_travel",
+      "category": "All Niches (High Reach & Viral)",
+      "rank": 16,
+      "name": "16. Cooking, Regional Recipes, Street Food & Culinary Science",
+      "rpm_usd": "₹180 - ₹500 / $5 - $13",
+      "recommended_visual_modality": "CINEMATIC_STORY_AND_VLOG",
+      "supported_modalities": ["CINEMATIC_STORY_AND_VLOG", "HYBRID_AVATAR_KEYNOTE", "EXEC_SLIDES_AND_REPORTS"],
+      "top_competitors": ["Joshua Weissman", "Nick DiGiovanni", "Babish Culinary Universe", "Gordon Ramsay"],
+      "india_competitors": ["Ranveer Brar", "Village Cooking Channel", "Kabita's Kitchen", "Your Food Lab (Sanjyot Keer)", "Hebbars Kitchen"],
+      "market_winning_format": "Macro food cinematography, step-by-step ingredient ratio cards, and regional culinary storytelling.",
+      "default_topic_ideas": [
+        "The 3-Ingredient Restaurant Secret That Makes Any Curry 10x Richer",
+        "High-Protein 15-Minute Meal Prep for Busy Professionals (Full Macros)",
+        "Recreating a 200-Year-Old Royal Recipe With Traditional Techniques"
+      ]
+    },
+    {
+      "id": "sports_cricket_football_analytics",
+      "category": "All Niches (High Reach & Viral)",
+      "rank": 17,
+      "name": "17. Sports Analytics, Cricket (IPL/ICC), Football Tactics & Athlete Stories",
+      "rpm_usd": "₹180 - ₹550 / $4.50 - $12",
+      "recommended_visual_modality": "EXEC_SLIDES_AND_REPORTS",
+      "supported_modalities": ["EXEC_SLIDES_AND_REPORTS", "3D_ISOMETRIC_AND_CAD", "HYBRID_AVATAR_KEYNOTE"],
+      "top_competitors": ["Tifo Football", "Athletic Interest", "Jarrod Kimber", "JimmyxHighroller"],
+      "india_competitors": ["Ravichandran Ashwin", "Aakash Chopra", "Cricbuzz", "Sports Tak", "2 Sloggers"],
+      "market_winning_format": "3D pitch/field tactical heatmaps, auction moneyball analytics, and match-turning point breakdowns.",
+      "default_topic_ideas": [
+        "The Moneyball Data Strategy That Won the IPL Auction & Championship",
+        "3D Pitch Biomechanics: Why This Bowling Variation Is Almost Impossible to Read",
+        "How Franchise Cricket Valuations Crossed the ₹10,000 Crore Mark"
+      ]
+    },
+    {
+      "id": "automobiles_evs_motorsports",
+      "category": "All Niches (High Reach & Viral)",
+      "rank": 18,
+      "name": "18. Cars, SUVs, Electric Vehicles, Supercars & Buyer Comparisons",
+      "rpm_usd": "₹300 - ₹850 / $9 - $19",
+      "recommended_visual_modality": "3D_ISOMETRIC_AND_CAD",
+      "supported_modalities": ["3D_ISOMETRIC_AND_CAD", "LIVE_UI_AND_SPLIT_BENCHMARK", "CINEMATIC_STORY_AND_VLOG"],
+      "top_competitors": ["carwow", "Doug DeMuro", "Throttle House", "Hagerty"],
+      "india_competitors": ["Faisal Khan", "Autocar India", "Gagan Choudhary", "MotorOctane", "DDS (Dheeraj)"],
+      "market_winning_format": "3D drivetrain/chassis cutaways, real-world mileage/range tests, and on-road price vs maintenance tables.",
+      "default_topic_ideas": [
+        "The Real 5-Year Ownership Cost of EVs vs Hybrids vs Diesel SUVs in India (₹ Lakh Math)",
+        "Why Automakers Are Bringing Back Physical Buttons and Strong Hybrid Engines",
+        "Top 5 Safest 5-Star Bharat NCAP SUVs Tested Under the New Protocol"
+      ]
+    }
+  ]
+}

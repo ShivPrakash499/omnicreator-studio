@@ -1,0 +1,142 @@
+{
+  "niche_id": "wealth_investing",
+  "target_market_id": "tier1_us_uk_global",
+  "topic": "Personal Finance (The $100K Institutional Report)",
+  "visual_modality_key": "EXEC_SLIDES_AND_REPORTS",
+  "host_identity": "Alex Vance (Executive Analyst & Showrunner)",
+  "locked_voice": "en-US-AndrewMultilingualNeural",
+  "scenes": [
+    {
+      "scene_id": 1,
+      "visual_type": "HYBRID_AVATAR_KEYNOTE",
+      "tag": "SCENE 01 | HOOK & INSTITUTIONAL REPORT (USD)",
+      "headline": "THE $100K MYTH EXPOSED",
+      "metric_highlight": "92% of Retail Participants Miss This Structural Lever",
+      "report_citation": "2026 Institutional Benchmark (Tier-1 High-CPM Markets (US, UK, Canada, Australia, Western Europe))",
+      "data_points": [
+        {
+          "label": "Conventional Strategy",
+          "value": "$14,200 / yr (Stagnant)",
+          "pct": 28,
+          "color": "#FF5252"
+        },
+        {
+          "label": "Institutional Protocol",
+          "value": "$118,500 / yr (Compounded)",
+          "pct": 92,
+          "color": "#00E676"
+        }
+      ],
+      "include_avatar_badge": true,
+      "expression_chain": "Direct piercing eye contact into lens, slight forward lean, one eyebrow raised in analytical challenge",
+      "veo_omni_prompt": "MASTER IDENTITY LOCK [HOST_ALEX_EXECUTIVE_V1]: Medium close-up shot, 50mm f/1.4 Sony Venice cinema lens, locked tripod, 30yo executive presenter with identical facial geometry, charcoal merino blazer over matte black crewneck, modern glass-and-walnut studio with subtle data terminal bokeh, warm key light + cool teal rim light. | EXPRESSION: [Direct piercing eye contact into lens, slight forward lean, one eyebrow raised in analytical challenge] | Executive slide overlay showing Personal Finance (The $100K Institutional Report).",
+      "narration": "Look closely at the 2026 benchmark report on your screen. Almost ninety-two percent of people approaching Personal Finance (The $100K Institutional Report) focus on the wrong variable—and it silently costs them over eighty percent of their upside.",
+      "duration_sec": 15.6,
+      "png_16x9": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_01_16x9.png",
+      "png_9x16": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_01_9x16.png",
+      "audio_wav": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_01_voice.wav",
+      "mp4_16x9": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_01_16x9.mp4",
+      "mp4_9x16": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_01_9x16.mp4"
+    },
+    {
+      "scene_id": 2,
+      "visual_type": "EXEC_SLIDES_AND_REPORTS",
+      "tag": "SCENE 02 | EXEC SLIDES AND REPORTS",
+      "headline": "FORENSIC DATA TEAR-DOWN",
+      "metric_highlight": "Why Traditional Advice Fails Under 2026 Market Conditions",
+      "report_citation": "SEC 10-K / Peer-Reviewed Meta-Analysis",
+      "data_points": [
+        {
+          "label": "Retail Friction & Fees",
+          "value": "-44% Net Drag",
+          "pct": 44,
+          "color": "#FF5252"
+        },
+        {
+          "label": "Automated Direct Execution",
+          "value": "+310% Net Velocity",
+          "pct": 90,
+          "color": "#00E5FF"
+        }
+      ],
+      "include_avatar_badge": false,
+      "expression_chain": "Calm authoritative posture, gesturing cleanly toward data slide on camera-left",
+      "veo_omni_prompt": "3D isometric and executive data slide breakdown for Personal Finance (The $100K Institutional Report), camera glides across glowing telemetry metrics.",
+      "narration": "When we pull the actual institutional filings, the bottleneck becomes obvious. Traditional methods lose forty-four percent of their efficiency to hidden friction before compounding even begins.",
+      "duration_sec": 12.79,
+      "png_16x9": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_02_16x9.png",
+      "png_9x16": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_02_9x16.png",
+      "audio_wav": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_02_voice.wav",
+      "mp4_16x9": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_02_16x9.mp4",
+      "mp4_9x16": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_02_9x16.mp4"
+    },
+    {
+      "scene_id": 3,
+      "visual_type": "3D_ISOMETRIC_AND_CAD",
+      "tag": "SCENE 03 | 3D SYSTEM ARCHITECTURE & PROOF",
+      "headline": "THE 3-LAYER LEVERAGE ENGINE",
+      "metric_highlight": "3.8x Output Multiplier With Zero Extra Overhead",
+      "report_citation": "Tier-1 Systems Architecture Model",
+      "data_points": [
+        {
+          "label": "Layer 1: Baseline Audit",
+          "value": "Eliminate Low-ROI Inputs",
+          "pct": 55,
+          "color": "#FFC400"
+        },
+        {
+          "label": "Layer 2: Core Automation",
+          "value": "Lock 80% Compounding Loop",
+          "pct": 94,
+          "color": "#00E676"
+        }
+      ],
+      "include_avatar_badge": false,
+      "expression_chain": "Knowing half-smirk, slight head tilt, holding up forensic report",
+      "veo_omni_prompt": "3D CAD cutaway model illustrating the 3-layer architecture of Personal Finance (The $100K Institutional Report), volumetric lighting on dark obsidian grid.",
+      "narration": "Instead of working harder on low-leverage tasks, top performers deploy a three-layer architecture: audit the baseline, strip out high-friction liabilities, and automate the core compounding engine.",
+      "duration_sec": 12.05,
+      "png_16x9": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_03_16x9.png",
+      "png_9x16": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_03_9x16.png",
+      "audio_wav": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_03_voice.wav",
+      "mp4_16x9": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_03_16x9.mp4",
+      "mp4_9x16": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_03_9x16.mp4"
+    },
+    {
+      "scene_id": 4,
+      "visual_type": "HYBRID_AVATAR_KEYNOTE",
+      "tag": "SCENE 04 | EXECUTIVE VERDICT & BLUEPRINT",
+      "headline": "YOUR 2026 ACTION PROTOCOL",
+      "metric_highlight": "Download the Full Model & Checklist in Description",
+      "report_citation": "Verified by Alex Vance (Executive Analyst & Showrunner)",
+      "data_points": [
+        {
+          "label": "Step 1: Apply the Audit Matrix",
+          "value": "15 Minutes Setup",
+          "pct": 75,
+          "color": "#00E5FF"
+        },
+        {
+          "label": "Step 2: Scale Tier-1 Output",
+          "value": "Compounds Monthly",
+          "pct": 96,
+          "color": "#00E676"
+        }
+      ],
+      "include_avatar_badge": true,
+      "expression_chain": "Confident reassuring nod, steady eye contact, pointing toward link below",
+      "veo_omni_prompt": "MASTER IDENTITY LOCK [HOST_ALEX_EXECUTIVE_V1]: Medium close-up shot, 50mm f/1.4 Sony Venice cinema lens, locked tripod, 30yo executive presenter with identical facial geometry, charcoal merino blazer over matte black crewneck, modern glass-and-walnut studio with subtle data terminal bokeh, warm key light + cool teal rim light. | EXPRESSION: [Confident reassuring nod, steady eye contact, pointing toward link below] | Closing executive verdict stamp.",
+      "narration": "Do not leave your trajectory to guesswork. Grab the complete interactive model and institutional checklist linked in the description below, and subscribe for weekly data-driven breakdowns.",
+      "duration_sec": 11.16,
+      "png_16x9": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_04_16x9.png",
+      "png_9x16": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_04_9x16.png",
+      "audio_wav": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_04_voice.wav",
+      "mp4_16x9": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_04_16x9.mp4",
+      "mp4_9x16": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\assets\\scene_04_9x16.mp4"
+    }
+  ],
+  "renders": {
+    "long_16x9_mp4": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\renders\\FINAL_LONG_16x9.mp4",
+    "reel_9x16_mp4": "C:\\OmniCreator_Studio\\workspaces\\wealth_investing\\personal-finance\\renders\\FINAL_REEL_SHORT_9x16.mp4"
+  }
+}
