@@ -1,0 +1,10 @@
+.git/
+.gitignore
+__pycache__/
+*.pyc
+*.pyo
+.env
+*.zip
+workspaces/*/*/assets/*.mp4
+workspaces/*/*/assets/*.wav
+workspaces/*/*/assets/*.mp3

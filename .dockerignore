@@ -4,3 +4,7 @@ __pycache__/
 .git/
 .venv/
 venv/
+*.zip
+workspaces/*/*/assets/*.mp4
+workspaces/*/*/assets/*.wav
+workspaces/*/*/assets/*.mp3

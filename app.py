@@ -19,8 +19,11 @@ OmniCreator Studio — Streamlined 4-Stage Workflow with Full Dark/Light Mode Re
 import datetime
 import importlib
 import json
+import os
 from pathlib import Path
 import sys
+import urllib.parse
+import urllib.request
 
 import streamlit as st
 import streamlit.components.v1 as components
@@ -62,6 +65,114 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
+# ============================================================================
+# GOOGLE ACCOUNT AUTHENTICATION GATE (JWALASHIVA@GMAIL.COM / TRADING TITANS)
+# ============================================================================
+ALLOWED_GOOGLE_EMAILS = {
+    e.strip().lower()
+    for e in os.environ.get(
+        "ALLOWED_GOOGLE_EMAILS",
+        "jwalashiva@gmail.com,jwalasinghekcrore@gmail.com",
+    ).split(",")
+    if e.strip()
+}
+STUDIO_ACCESS_CODE = os.environ.get("STUDIO_ACCESS_CODE", "TradingTitans2026").strip()
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "").strip()
+GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
+GOOGLE_OAUTH_REDIRECT_URI = os.environ.get(
+    "GOOGLE_OAUTH_REDIRECT_URI",
+    "https://omnicreator-407429854548.asia-south1.run.app",
+).strip()
+
+# Handle Google OAuth 2.0 callback if `code` is in query_params
+if "code" in st.query_params and GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET:
+    try:
+        oauth_code = st.query_params["code"]
+        token_data = urllib.parse.urlencode(
+            {
+                "code": oauth_code,
+                "client_id": GOOGLE_OAUTH_CLIENT_ID,
+                "client_secret": GOOGLE_OAUTH_CLIENT_SECRET,
+                "redirect_uri": GOOGLE_OAUTH_REDIRECT_URI,
+                "grant_type": "authorization_code",
+            }
+        ).encode("utf-8")
+        req = urllib.request.Request(
+            "https://oauth2.googleapis.com/token",
+            data=token_data,
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            tok = json.loads(resp.read().decode("utf-8"))
+        u_req = urllib.request.Request(
+            "https://www.googleapis.com/oauth2/v2/userinfo",
+            headers={"Authorization": f"Bearer {tok['access_token']}"},
+        )
+        with urllib.request.urlopen(u_req, timeout=10) as u_resp:
+            u_info = json.loads(u_resp.read().decode("utf-8"))
+        verified_email = u_info.get("email", "").strip().lower()
+        if verified_email in ALLOWED_GOOGLE_EMAILS:
+            st.session_state["authenticated_google_user"] = verified_email
+            st.query_params.clear()
+            st.rerun()
+        else:
+            st.error(f"⛔ Access Denied: `{verified_email}` is not an authorized Google account for OmniCreator Studio.")
+    except Exception as exc:
+        st.warning(f"Google OAuth verification notice: {exc}")
+
+if "authenticated_google_user" not in st.session_state:
+    st.session_state["authenticated_google_user"] = None
+
+if not st.session_state["authenticated_google_user"]:
+    st.markdown(
+        """
+        <div style="max-width:520px;margin:60px auto;padding:32px;background:#111827;border:1px solid #334155;border-top:5px solid #00E676;border-radius:14px;color:#F8FAFC;font-family:'Segoe UI',sans-serif;">
+            <h2 style="margin-top:0;color:#F8FAFC;">🔐 OmniCreator Studio — Google Account Sign-In</h2>
+            <p style="color:#CBD5E1;font-size:0.96rem;">Restricted to authorized Google accounts (<b>jwalashiva@gmail.com</b> / <b>Trading Titans</b>).</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    login_col1, login_col2, login_col3 = st.columns([1, 2, 1])
+    with login_col2:
+        if GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET:
+            auth_url = (
+                "https://accounts.google.com/o/oauth2/v2/auth?"
+                + urllib.parse.urlencode(
+                    {
+                        "client_id": GOOGLE_OAUTH_CLIENT_ID,
+                        "redirect_uri": GOOGLE_OAUTH_REDIRECT_URI,
+                        "response_type": "code",
+                        "scope": "openid email profile",
+                        "prompt": "select_account",
+                    }
+                )
+            )
+            st.link_button("🔵 Sign in with Google (OAuth 2.0)", auth_url, use_container_width=True, type="primary")
+            st.divider()
+
+        with st.form("google_owner_login_form"):
+            login_email = st.text_input(
+                "Authorized Google Account Email:",
+                value="jwalashiva@gmail.com",
+                placeholder="jwalashiva@gmail.com",
+            )
+            login_code = st.text_input(
+                "Studio Security Passcode:",
+                type="password",
+                placeholder="Enter your studio passcode...",
+            )
+            submit_login = st.form_submit_button("🔓 Sign In with Google Account", type="primary", use_container_width=True)
+            if submit_login:
+                clean_email = login_email.strip().lower()
+                if clean_email in ALLOWED_GOOGLE_EMAILS and login_code.strip() == STUDIO_ACCESS_CODE:
+                    st.session_state["authenticated_google_user"] = clean_email
+                    st.success(f"Welcome, {clean_email}!")
+                    st.rerun()
+                else:
+                    st.error("⛔ Invalid Google Account email or Studio Security Passcode. Access is restricted to jwalashiva@gmail.com.")
+    st.stop()
+
 niches_cfg = load_niches_config()
 identities_cfg = load_identities_config()
 channels_reg = load_niche_channels_registry()
@@ -74,26 +185,34 @@ niche_options = {
     for n in niches_cfg["niches"]
 }
 
-# Pre-loaded default workspace & branding bundle for India channel Trading Titans (@jwalashiva)
+def _load_portable_json(path: Path):
+    if not path.exists():
+        return None
+    data = json.loads(path.read_text(encoding="utf-8"))
+    root_posix = ROOT_DIR.as_posix()
+
+    def _norm(v):
+        if isinstance(v, str) and ("OmniCreator_Studio" in v):
+            idx = v.find("OmniCreator_Studio")
+            suffix = v[idx + len("OmniCreator_Studio") :].replace("\\", "/")
+            return root_posix + suffix
+        if isinstance(v, dict):
+            return {k: _norm(val) for k, val in v.items()}
+        if isinstance(v, list):
+            return [_norm(x) for x in v]
+        return v
+
+    return _norm(data)
+
+
+# Pre-loaded default workspace & branding bundle for India channel Trading Titans
 _default_proj = ROOT_DIR / "workspaces" / "wealth_investing" / "first-1-crore-math-trap-india"
-_default_pkg = (
-    json.loads((_default_proj / "stage3_ctr_packaging.json").read_text(encoding="utf-8"))
-    if (_default_proj / "stage3_ctr_packaging.json").exists()
-    else None
-)
-_default_draft = (
-    json.loads((_default_proj / "stage4_draft_state.json").read_text(encoding="utf-8"))
-    if (_default_proj / "stage4_draft_state.json").exists()
-    else None
-)
+_default_pkg = _load_portable_json(_default_proj / "stage3_ctr_packaging.json")
+_default_draft = _load_portable_json(_default_proj / "stage4_draft_state.json")
 _default_branding_file = (
     ROOT_DIR / "workspaces" / "wealth_investing" / "_channel_branding_trading-titans" / "channel_branding_bundle.json"
 )
-_default_branding = (
-    json.loads(_default_branding_file.read_text(encoding="utf-8"))
-    if _default_branding_file.exists()
-    else None
-)
+_default_branding = _load_portable_json(_default_branding_file)
 
 default_custom_links = [
     {
@@ -146,6 +265,10 @@ host_profile = get_host_identity(is_india=is_india_active)
 # ============================================================================
 with st.sidebar:
     st.markdown("### 🎬 OmniCreator Studio")
+    st.caption(f"🟢 Signed in: `{st.session_state['authenticated_google_user']}`")
+    if st.button("🔒 Lock / Sign Out", key="signout_sidebar_btn", use_container_width=True):
+        st.session_state["authenticated_google_user"] = None
+        st.rerun()
     ui_mode = st.radio(
         "🎨 Appearance (Dark / Light Mode):",
         options=["🌙 Dark Mode (High Contrast)", "☀️ Light Mode (High Contrast)"],
@@ -196,6 +319,16 @@ with st.sidebar:
     if uploaded_face is not None:
         avatar_img_path.write_bytes(uploaded_face.read())
         st.success("Updated locked channel face reference!")
+
+    st.divider()
+    st.markdown("#### ☁️ Google Drive Backup & Cloud Hub")
+    st.markdown(
+        "- 📁 [**OmniCreator_Studio_Trading_Titans (Root)**](https://drive.google.com/drive/folders/1vJh5qXFnEnkEcetL2qXeyYh_FWMMNHR1)\n"
+        "- 💻 [**01_Source_Code_and_Deployment**](https://drive.google.com/drive/folders/1fVGZeh4W3-ZbqrcWbMgnDgpdrpDW8yG-)\n"
+        "- 🖼️ [**02_Channel_Branding_and_Avatars**](https://drive.google.com/drive/folders/1CnbPsQYheLs8ZZ9Ixsyvc2rIgoXSPCfF)\n"
+        "- 🎬 [**03_Videos_Thumbnails_and_Reels**](https://drive.google.com/drive/folders/1Mt9LxiBaiVOO6zYpreN3Y1fD2jF6FFLQ)\n"
+        "- 📝 [**04_Scripts_SEO_and_Blueprints**](https://drive.google.com/drive/folders/1rCYEbNtPDFmIvIQQoWHDc6ZGBNWfcnuU)"
+    )
 
 # ============================================================================
 # DYNAMIC DARK & LIGHT MODE HIGH-CONTRAST CSS (100% READABLE IN BOTH MODES)
