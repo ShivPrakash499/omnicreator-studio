@@ -5,3 +5,5 @@ __pycache__/
 venv/
 config/google_accounts/*/client_secret.json
 config/google_accounts/*/token.json
+config/credentials/
+workspaces/*.db

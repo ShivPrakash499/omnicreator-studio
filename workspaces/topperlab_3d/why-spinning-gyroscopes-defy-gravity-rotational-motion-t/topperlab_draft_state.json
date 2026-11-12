@@ -1,0 +1,91 @@
+{
+  "topic_title": "Why Spinning Gyroscopes Defy Gravity — Rotational Motion & Torque Explained in 3D",
+  "pillar_id": "3d_concept_visualizer",
+  "exam_track": "All High-Schoolers (Class 9–12 • Boards • JEE & NEET)",
+  "voice_mode": "Clean Indian-English (en-IN)",
+  "visual_theme_key": "3D_DARK_LAB_CUTAWAY",
+  "project_dir": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t",
+  "title_variations": [
+    "Why Spinning Gyroscopes Defy Gravity — Rotational Motion & Torque Explained in 3D",
+    "How Gyroscopes Cheat Gravity in 3D | Class 11, JEE & Physics Visualized",
+    "Understand Torque & Angular Momentum in 90 Seconds (3D Lab Simulation)"
+  ],
+  "thumb_hook_3words": "DEFIES GRAVITY?!",
+  "short_hook_3words": "3X MEMORY LOOP",
+  "thumbnail_16x9_path": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\thumbnail_16x9.jpg",
+  "short_cover_9x16_path": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\short_cover_9x16.jpg",
+  "thumbnail_16x9_prompt": "Photorealistic 8k 3D render of a gleaming brass and neon-cyan gyroscope spinning rapidly balanced horizontally on a steel needle tip inside a dark obsidian physics lab, glowing yellow Angular Momentum vector L and cyan Torque vector tau, bold 3D text 'DEFIES GRAVITY?!', zero human faces.",
+  "scenes": [
+    {
+      "scene_id": 1,
+      "headline": "DEFIES GRAVITY?!",
+      "concept_takeaway": "Spinning wheel stays horizontal on a needle tip instead of falling",
+      "narration": "Drop a heavy metal wheel balanced on the tip of a thin needle, and gravity slams it straight down in half a second. Now spin that exact same wheel at three thousand revolutions per minute—and suddenly it floats sideways in mid-air, seemingly defying gravity. Textbooks bury this magic under dry equations, so let us step inside 3D space and actually see the invisible vectors holding it up.",
+      "image_3d_prompt": "Photorealistic 8k 3D render of a gleaming brass and neon-cyan gyroscope spinning rapidly balanced horizontally on a steel needle tip inside a dark obsidian physics lab, glowing yellow Angular Momentum vector L and cyan Torque vector tau, bold 3D text 'DEFIES GRAVITY?!', zero human faces.",
+      "google_flow_veo_prompt": "Cinematic 8k 3D slow-motion physics simulation: a glowing brass and cyan precision gyroscope wheel spinning rapidly on a sharp needle pivot, orbiting smoothly horizontally in mid-air with luminous golden angular momentum vector arrows, dark obsidian lab, subtle mechanical hum SFX.",
+      "fallback_plate": "scene_01_16x9.jpg",
+      "motion_source": "3D Camera Push-In (Nano Banana Plate)",
+      "duration_sec": 28.63,
+      "img_16x9": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_01_16x9.jpg",
+      "img_9x16": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_01_9x16.jpg",
+      "audio_wav": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_01_voice.wav",
+      "mp4_16x9": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_01_16x9.mp4",
+      "mp4_9x16": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_01_9x16.mp4"
+    },
+    {
+      "scene_id": 2,
+      "headline": "TORQUE AT 90°",
+      "concept_takeaway": "τ = r × mg points perpendicular to both position r and gravity mg",
+      "narration": "First, freeze the frame and trace the two real forces. Position vector r points straight out along the axle from the pivot, while gravity pulls straight down with force m g. When you curl your right-hand fingers from r toward downward gravity, the cross product torque tau equals r cross F shoots horizontally at a perfect ninety-degree angle—not downward!",
+      "image_3d_prompt": "Minimalist 3Blue1Brown meets Veritasium 3D physics stage on matte-black grid: glowing golden position vector r and vertical red force vector mg meeting at pivot, producing perpendicular glowing cyan torque vector tau = r x F at 90 degrees, zero human faces.",
+      "google_flow_veo_prompt": "3Blue1Brown style 3D mathematical animation on a dark space grid: a golden vector r and downward red gravity vector mg sweep together to spawn a glowing cyan perpendicular torque arrow at 90 degrees, smooth orbital camera dolly.",
+      "fallback_plate": "scene_02_16x9.jpg",
+      "motion_source": "3D Camera Push-In (Nano Banana Plate)",
+      "duration_sec": 25.56,
+      "img_16x9": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_02_16x9.jpg",
+      "img_9x16": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_02_9x16.jpg",
+      "audio_wav": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_02_voice.wav",
+      "mp4_16x9": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_02_16x9.mp4",
+      "mp4_9x16": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_02_9x16.mp4"
+    },
+    {
+      "scene_id": 3,
+      "headline": "PRECESSION LOOP",
+      "concept_takeaway": "ΔL = τ · Δt swings the spinning Angular Momentum vector sideways in a circle",
+      "narration": "When the wheel is not spinning, its initial angular momentum L is zero, so that sideways torque simply tips the wheel over. But when spinning fast, the wheel already carries a huge horizontal angular momentum vector L. Because torque equals the rate of change of angular momentum, delta L pulls the tip of L sideways—forcing the entire axle to orbit smoothly in a horizontal circle called gyroscopic precession!",
+      "image_3d_prompt": "Photorealistic 8k 3D cutaway simulation inside dark physics lab: a glowing spinning 3D wheel suspended from one end of its axle, orbiting horizontally in a luminous golden circular precession path with cyan dL arrows, zero human faces.",
+      "google_flow_veo_prompt": "Photorealistic 3D physics lab simulation: a fast-spinning illuminated wheel hanging from a single cable orbits smoothly in a glowing golden horizontal circle without falling, glowing vector trails tracing the circular precession ring.",
+      "fallback_plate": "scene_03_16x9.jpg",
+      "motion_source": "3D Camera Push-In (Nano Banana Plate)",
+      "duration_sec": 29.06,
+      "img_16x9": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_03_16x9.jpg",
+      "img_9x16": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_03_9x16.jpg",
+      "audio_wav": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_03_voice.wav",
+      "mp4_16x9": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_03_16x9.mp4",
+      "mp4_9x16": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_03_9x16.mp4"
+    },
+    {
+      "scene_id": 4,
+      "headline": "4-MARK EXAM RULE",
+      "concept_takeaway": "Precession speed Ω = mgr / (Iω) — faster spin ω means slower precession!",
+      "narration": "Here is the exact four-mark JEE and Class 11 takeaway: precession angular speed Omega equals m g r divided by rotational inertia I times spin speed omega. Notice the inverse relationship—the faster the wheel spins, the slower and steadier it precesses! Grab the free one-page 3D Rotational Motion formula sheet linked in the description below, and subscribe to TopperLab 3D to see your entire syllabus in 3D.",
+      "image_3d_prompt": "Futuristic dark obsidian 3D study desk with a floating luminous holographic 3D blueprint card displaying clean glowing cyan physics diagrams of a gyroscope and rotational inertia ring, crisp 3D header '1-PAGE FORMULA SHEET', zero human faces.",
+      "google_flow_veo_prompt": "Sleek futuristic 3D dark glass study desk where a glowing cyan holographic 1-page physics formula blueprint rises and rotates gently in volumetric golden light, crisp 3D vectors.",
+      "fallback_plate": "scene_04_16x9.jpg",
+      "motion_source": "3D Camera Push-In (Nano Banana Plate)",
+      "duration_sec": 30.17,
+      "img_16x9": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_04_16x9.jpg",
+      "img_9x16": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_04_9x16.jpg",
+      "audio_wav": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_04_voice.wav",
+      "mp4_16x9": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_04_16x9.mp4",
+      "mp4_9x16": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\scenes\\scene_04_9x16.mp4"
+    }
+  ],
+  "renders": {
+    "long_16x9_mp4": "workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\renders\\TOPPERLAB_LONG_16x9.mp4",
+    "short_9x16_mp4": "workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\renders\\TOPPERLAB_SHORT_9x16.mp4",
+    "long_duration_sec": 113.4,
+    "short_duration_sec": 58.8
+  },
+  "rendered_at": "2026-11-12T21:41:33"
+}

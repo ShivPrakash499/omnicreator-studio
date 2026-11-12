@@ -1,0 +1,121 @@
+{
+  "pillars": [
+    {
+      "id": "3d_concept_visualizer",
+      "name": "🔬 Pillar 1: 3D Syllabus & Concept Visualizer (Physics • Chem • Bio • Maths)",
+      "short_label": "3D Concept Visualizer",
+      "description": "Turns abstract Class 9–12, JEE & NEET chapters into jaw-dropping 3D visual cutaways so students understand in 6 minutes what 2D textbooks fail to show in 6 hours.",
+      "default_visual_theme": "3D_DARK_LAB_CUTAWAY",
+      "starter_topics": [
+        {
+          "title": "Why Spinning Gyroscopes Defy Gravity — Rotational Motion & Torque Explained in 3D",
+          "exam_track": "Class 11–12 + JEE Physics & General Curiosity",
+          "thumb_hook": "DEFIES GRAVITY?!",
+          "short_hook": "99% MISREAD TORQUE",
+          "why_viral": "Combines counter-intuitive physics mystery with core Class 11 Rotational Motion (hardest JEE chapter)."
+        },
+        {
+          "title": "Inside Electromagnetic Induction & Lenz's Law in 3D: See Invisible Magnetic Flux",
+          "exam_track": "Class 10 & Class 12 Boards + JEE / NEET Physics",
+          "thumb_hook": "INVISIBLE FLUX!",
+          "short_hook": "LENZ LAW IN 3D",
+          "why_viral": "Right-hand/left-hand rule confusion drives massive search traffic every board & entrance season."
+        },
+        {
+          "title": "SN1 vs SN2 Reaction Mechanisms at 10,000,000x Zoom in 3D (Organic Chemistry Unlocked)",
+          "exam_track": "Class 12 Boards + JEE & NEET Organic Chemistry",
+          "thumb_hook": "SEE THE COLLISION",
+          "short_hook": "SN1 VS SN2 IN 3D",
+          "why_viral": "Steric hindrance & backside inversion make instant sense once seen as colliding 3D molecules."
+        },
+        {
+          "title": "How Human DNA Replicates at 50 Letters Per Second — 3D Molecular Machine Breakdown",
+          "exam_track": "Class 12 Boards + NEET UG Biology",
+          "thumb_hook": "DNA MACHINE 3D",
+          "short_hook": "LEADING VS LAGGING",
+          "why_viral": "Helicase, Okazaki fragments & 5'-to-3' directionality are top high-weightage NEET/Board visuals."
+        },
+        {
+          "title": "Bernoulli's Principle & Fluid Mechanics in 3D: Why Fast Air Creates Low Pressure",
+          "exam_track": "Class 11 Physics + JEE / NEET",
+          "thumb_hook": "FAST = LOW PRESSURE?",
+          "short_hook": "BERNOULLI MYTH!",
+          "why_viral": "Busts the #1 textbook misconception on airplane lift and Venturi tubes using 3D particle flow."
+        }
+      ]
+    },
+    {
+      "id": "topper_brain_strategy",
+      "name": "🧠 Pillar 2: Topper Memory Science & 99%ile Exam Strategy",
+      "short_label": "Topper Brain & Strategy",
+      "description": "Neuroscience-backed memory systems, active recall loops, and 90-day revision architectures illustrated with 3D brain cutaways and holographic blueprints.",
+      "default_visual_theme": "TOPPER_NEURO_DESK_3D",
+      "starter_topics": [
+        {
+          "title": "Why 95% of Students Blank Out in the Exam Hall — The 3X Active Recall Loop in 3D",
+          "exam_track": "All High-Schoolers (Class 9–12, Boards, JEE & NEET)",
+          "thumb_hook": "3X MEMORY LOOP",
+          "short_hook": "STOP RE-READING!",
+          "why_viral": "Universal student pain point; high shareability and strong conversion for revision tracker sheets."
+        },
+        {
+          "title": "The 1-3-7-21 Spaced Repetition Blueprint: How Toppers Lock 500 Formulas Permanently",
+          "exam_track": "All High-Schoolers (Class 9–12, Boards, JEE & NEET)",
+          "thumb_hook": "NEVER FORGET!",
+          "short_hook": "1-3-7-21 RULE",
+          "why_viral": "Visualizes Ebbinghaus forgetting curve in 3D and hands students an actionable daily system."
+        },
+        {
+          "title": "The 90-Day 3-Layer NCERT & PYQ Comeback System (Data-Backed Exam Strategy)",
+          "exam_track": "Class 10 & Class 12 Boards + JEE / NEET",
+          "thumb_hook": "90-DAY COMEBACK",
+          "short_hook": "3-LAYER SYSTEM",
+          "why_viral": "Explodes in views every exam quarter from students seeking a realistic structured recovery plan."
+        },
+        {
+          "title": "Feynman Technique in 3D: How Explaining Out Loud Rewires Weak Neural Pathways",
+          "exam_track": "All High-Schoolers (Class 9–12, Boards, JEE & NEET)",
+          "thumb_hook": "REWIRE YOUR BRAIN",
+          "short_hook": "FEYNMAN HACK 3D",
+          "why_viral": "Bridges global study science with Indian board & competitive exam preparation."
+        }
+      ]
+    },
+    {
+      "id": "pyq_exam_traps_shorts",
+      "name": "⚡ Pillar 3: 60-Second Exam Traps, Formula Hacks & Visual Quizzes",
+      "short_label": "60s Exam Traps & Quizzes",
+      "description": "Ultra-punchy problem traps, sign-convention fixes, and 5-second visual quizzes engineered to rack up millions of Shorts views and rapid subscribers.",
+      "default_visual_theme": "HOLOGRAPHIC_CONCEPT_CORE",
+      "starter_topics": [
+        {
+          "title": "The Friction Direction Trap That Costs 4 Marks in Rolling Motion Every Year (3D Proof)",
+          "exam_track": "Class 11 Physics + JEE / NEET",
+          "thumb_hook": "-1 MARK TRAP!",
+          "short_hook": "WHICH WAY FRICTION?",
+          "why_viral": "Triggers massive debate in student comments (boosting YouTube Shorts algorithmic push)."
+        },
+        {
+          "title": "90% Confuse Mitosis vs Meiosis Chromosome & DNA Counts — Master Both in 60 Seconds",
+          "exam_track": "Class 11 Biology + NEET UG",
+          "thumb_hook": "2N OR 4C TRAP!",
+          "short_hook": "MITOSIS VS MEIOSIS",
+          "why_viral": "Classic NEET negative-marking trap solved permanently with one 3D chromosome split visual."
+        },
+        {
+          "title": "Why Zero Factorial Equals One (0! = 1) — Visualized in 3D Permutations",
+          "exam_track": "Class 11 Maths + General STEM Curiosity",
+          "thumb_hook": "WHY IS 0! = 1?",
+          "short_hook": "0! = 1 IN 3D",
+          "why_viral": "Broad global + Indian student appeal — captures international English STEM RPM alongside India."
+        }
+      ]
+    }
+  ],
+  "exam_tracks": [
+    "All High-Schoolers (Class 9–12 • Boards • JEE & NEET)",
+    "Class 11–12 + JEE Mains & Advanced (Physics • Chem • Maths)",
+    "Class 11–12 + NEET UG (Biology • Physics • Chemistry)",
+    "Class 9–10 CBSE / ICSE Board Foundation"
+  ]
+}

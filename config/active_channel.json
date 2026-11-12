@@ -1,0 +1,63 @@
+{
+  "channel_name": "TopperLab 3D",
+  "channel_handle": "@TopperLab3D",
+  "youtube_channel_id": "UCuYzy1OoXmzldjRP8cgUmRw",
+  "youtube_channel_url": "https://www.youtube.com/channel/UCuYzy1OoXmzldjRP8cgUmRw",
+  "owner_google_email": "jwalashiva@gmail.com",
+  "cohort": "India High-School Students (Ages 14–18 • Class 9–12 • CBSE/ICSE • JEE & NEET)",
+  "positioning_tagline": "See What Textbooks Can't Show — 3D Science Concepts & Scientific Topper Memory Systems",
+  "faceless_mode": true,
+  "default_voice_mode": "Clean Indian-English (en-IN)",
+  "voice_presets": {
+    "Clean Indian-English (en-IN)": {
+      "edge_voice": "en-IN-PrabhatNeural",
+      "rate": "+6%",
+      "pitch": "+0Hz",
+      "language_code": "en-IN",
+      "script_instruction": "Write in crisp, energetic, clear Indian-English (Veritasium meets 3Blue1Brown tone) tailored for Indian Class 9–12, CBSE/ICSE, JEE, and NEET students. Use vivid visual cues ('Watch closely as the 3D vector tilts...') and clear scientific precision without textbook dryness."
+    },
+    "Clean Indian-English — Expressive Female (en-IN)": {
+      "edge_voice": "en-IN-NeerjaExpressiveNeural",
+      "rate": "+5%",
+      "pitch": "+0Hz",
+      "language_code": "en-IN",
+      "script_instruction": "Write in crisp, clear, warm Indian-English tailored for Indian Class 9–12, CBSE, JEE, and NEET students with strong visual storytelling hooks."
+    },
+    "Hinglish — Youth Topper Flow (hi-IN)": {
+      "edge_voice": "hi-IN-MadhurNeural",
+      "rate": "+6%",
+      "pitch": "+0Hz",
+      "language_code": "hi-IN",
+      "script_instruction": "Write in natural conversational Hinglish (Roman script mixing exact English STEM terms like Torque, Angular Momentum, Active Recall, NCERT, JEE/NEET with natural Hindi connectors) tailored for Indian Class 9–12 students."
+    }
+  },
+  "visual_themes": {
+    "3D_DARK_LAB_CUTAWAY": {
+      "label": "🔬 3D Dark Obsidian Lab Cutaway (Veritasium / Zack D. Films Style)",
+      "style_prompt": "Ultra-crisp 8k Octane 3D scientific cutaway render inside a dark obsidian glass physics and molecular laboratory, glowing cyan and electric-gold vector arrows, volumetric studio lighting, razor-sharp depth of field, zero human faces, no clutter."
+    },
+    "HOLOGRAPHIC_CONCEPT_CORE": {
+      "label": "⚛️ Holographic 3Blue1Brown Vector & Formula Stage",
+      "style_prompt": "Minimalist deep-space matte black 3D mathematical and scientific visualization stage inspired by 3Blue1Brown, luminous sapphire-cyan and golden geometric vectors, glowing 3D graphs and crystal structures, zero human faces."
+    },
+    "TOPPER_NEURO_DESK_3D": {
+      "label": "🧠 3D Glass Brain & Topper Study Blueprint Stage",
+      "style_prompt": "Cinematic 3D render of a translucent glowing sapphire-blue 3D glass brain cutaway with golden synaptic pathways above a sleek futuristic dark study desk with floating holographic revision cards, Octane 3D render, zero human faces."
+    }
+  },
+  "default_visual_theme": "3D_DARK_LAB_CUTAWAY",
+  "channel_seo_description": "Welcome to TopperLab 3D (@TopperLab3D) — where Class 9–12, CBSE/ICSE, JEE, and NEET concepts come alive in crystal-clear 3D!\n\nTextbooks flatten 3D physics, chemistry, biology, and mathematics onto dead 2D pages. At TopperLab 3D, we break open every tough chapter, competitive exam trap, and neuroscience-backed Topper memory system using high-precision 3D visual simulations.\n\n🔬 New 3D Deep-Dives & 60-Second Concept Shorts Every Week!\n📄 Grab Free 1-Page Formula Sheets & Active-Recall Trackers in Every Video Description.",
+  "channel_keywords": "TopperLab 3D, 3D Physics India, Class 11 Class 12 3D Science, JEE Mains 3D Concepts, NEET Biology 3D Animation, CBSE Board Exam Strategy, Active Recall Topper Study Hacks, Visual NCERT Concepts, How Things Work 3D Science",
+  "default_resource_links": [
+    {
+      "category": "📄 1-Page 3D Formula & Concept Cheat Sheet (PDF)",
+      "label": "Download Free 1-Page Formula & 3D Vector Summary Sheet (PDF)",
+      "url": "https://drive.google.com/drive/folders/1vJh5qXFnEnkEcetL2qXeyYh_FWMMNHR1"
+    },
+    {
+      "category": "📊 99%iler Active-Recall & Spaced-Repetition Tracker (Sheet)",
+      "label": "Free NCERT / JEE / NEET Revision & Mock-Test Tracker (Google Sheet)",
+      "url": "https://docs.google.com/spreadsheets/"
+    }
+  ]
+}
