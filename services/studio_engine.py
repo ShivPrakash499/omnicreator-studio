@@ -51,6 +51,46 @@ def load_studio_env() -> None:
 load_studio_env()
 
 
+def to_portable_path(p: str | Path) -> str:
+    """Convert any workspace/asset path to a forward-slash relative path portable across Linux & Windows."""
+    raw = str(p or "").replace("\\", "/").strip()
+    if not raw:
+        return ""
+    try:
+        rel = Path(p).resolve().relative_to(ROOT_DIR.resolve())
+        return rel.as_posix()
+    except Exception:
+        pass
+    for marker in ("workspaces/", "assets/", "config/"):
+        idx = raw.find(marker)
+        if idx != -1:
+            return raw[idx:]
+    return raw
+
+
+def resolve_workspace_path(p: str | Path | None) -> Path:
+    """Resolve any Windows backslash, POSIX relative, or absolute path safely on both Linux Cloud & Windows."""
+    raw = str(p or "").replace("\\", "/").strip()
+    if not raw:
+        return ROOT_DIR / "__missing__"
+    for marker in ("workspaces/", "assets/", "config/"):
+        idx = raw.find(marker)
+        if idx != -1:
+            return ROOT_DIR / raw[idx:]
+    cand = Path(raw)
+    if cand.is_absolute():
+        return cand
+    return ROOT_DIR / raw
+
+
+def sanitize_api_error(err: Any) -> str:
+    """Redact API keys, OAuth tokens, and query secrets from error strings."""
+    msg = str(err or "")
+    msg = re.sub(r"([?&](?:key|api_key|access_token)=)[^&\s'\"]+", r"\1[REDACTED]", msg, flags=re.IGNORECASE)
+    msg = re.sub(r"\b(AIza[0-9A-Za-z\-_]{20,}|AQ\.[0-9A-Za-z\-_.]{20,}|ya29\.[0-9A-Za-z\-_.]+|GOCSPX-[0-9A-Za-z\-_]+)\b", "[REDACTED_KEY]", msg)
+    return msg
+
+
 def slugify(text: str) -> str:
     s = re.sub(r"[^a-zA-Z0-9]+", "-", (text or "").lower()).strip("-")
     return s[:56] or "topperlab-episode"
@@ -91,20 +131,129 @@ def load_pillars_config() -> Dict[str, Any]:
 # ============================================================================
 # 2. GEMINI 2.5 + NANO BANANA / IMAGEN 3 + VEO 3.1 HELPERS
 # ============================================================================
+def _saved_gemini_key_file() -> Path:
+    CREDS_DIR.mkdir(parents=True, exist_ok=True)
+    return CREDS_DIR / "gemini_api_key.txt"
+
+
+def set_runtime_gemini_api_key(api_key: str) -> None:
+    clean = (api_key or "").strip()
+    if clean:
+        os.environ["RUNTIME_GEMINI_API_KEY"] = clean
+        os.environ["GEMINI_API_KEY"] = clean
+        try:
+            _saved_gemini_key_file().write_text(clean, encoding="utf-8")
+        except Exception:
+            pass
+
+
 def get_gemini_api_key() -> str:
-    for key_name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
-        val = os.environ.get(key_name, "").strip()
-        if val:
-            return val
+    rt = os.environ.get("RUNTIME_GEMINI_API_KEY", "").strip()
+    if rt:
+        return rt
+    saved_file = _saved_gemini_key_file()
+    if saved_file.exists():
+        try:
+            file_val = saved_file.read_text(encoding="utf-8").strip()
+            if file_val:
+                return file_val
+        except Exception:
+            pass
     try:
         import streamlit as st
 
         for key_name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
             if key_name in st.secrets:
-                return str(st.secrets[key_name]).strip()
+                sval = str(st.secrets[key_name]).strip()
+                if sval:
+                    return sval
     except Exception:
         pass
+    for key_name in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        val = os.environ.get(key_name, "").strip()
+        if val:
+            return val
     return ""
+
+
+def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
+    key = (api_key if api_key is not None else get_gemini_api_key()).strip()
+    if not key:
+        return {
+            "ok": False,
+            "code": "MISSING",
+            "summary": "No Gemini API Key Set (Free Built-In 3D Video Renderer Still Works!)",
+            "detail": (
+                "To enable live Gemini AI scripts & 3D image generation, open https://aistudio.google.com/apikey "
+                "signed in as jwala4work@gmail.com, click 'Create API key' (₹0 Free Tier), and paste it below."
+            ),
+        }
+    try:
+        from google import genai
+        from google.genai import types
+
+        client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=12000))
+        last_err = ""
+        for probe_model in ("gemini-3.8-flash", "gemini-2.5-flash"):
+            try:
+                if hasattr(client, "interactions"):
+                    inter = client.interactions.create(model=probe_model, input="Reply with OK")
+                    if getattr(inter, "output_text", None):
+                        return {
+                            "ok": True,
+                            "code": "ACTIVE",
+                            "summary": "Gemini AI Key Active & Healthy",
+                            "detail": f"Verified live on {probe_model}.",
+                        }
+                resp = client.models.generate_content(model=probe_model, contents="Reply OK")
+                if getattr(resp, "text", None):
+                    return {
+                        "ok": True,
+                        "code": "ACTIVE",
+                        "summary": "Gemini AI Key Active & Healthy",
+                        "detail": f"Verified live on {probe_model}.",
+                    }
+            except Exception as exc:
+                last_err = sanitize_api_error(exc)
+                low = last_err.lower()
+                if "outstanding balance" in low or "billing account" in low:
+                    return {
+                        "ok": False,
+                        "code": "BILLING_HOLD",
+                        "summary": "Old GCP Key Paused (Billing Hold on Previous Project)",
+                        "detail": (
+                            "The active key belongs to your older jwalashiva@gmail.com Cloud project whose billing account has a balance hold. "
+                            "Fix in 30s for ₹0: open https://aistudio.google.com/apikey while signed into jwala4work@gmail.com, "
+                            "click 'Create API key' (Free Tier), and paste the new AIza... key below!"
+                        ),
+                    }
+                if "api_key_invalid" in low or "api key not valid" in low:
+                    return {
+                        "ok": False,
+                        "code": "INVALID_KEY",
+                        "summary": "Invalid Gemini API Key",
+                        "detail": "Please generate a fresh AIza... key at https://aistudio.google.com/apikey (signed into jwala4work@gmail.com) and paste it below.",
+                    }
+        if "429" in last_err or "resource_exhausted" in last_err.lower():
+            return {
+                "ok": False,
+                "code": "QUOTA",
+                "summary": "Gemini Rate Limit Reached (Built-In 3D Renderer Active)",
+                "detail": last_err[:240],
+            }
+        return {
+            "ok": False,
+            "code": "ERROR",
+            "summary": "Gemini Key Needs Refresh",
+            "detail": last_err[:260] or "Create a fresh Free-Tier key at https://aistudio.google.com/apikey under jwala4work@gmail.com.",
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "code": "ERROR",
+            "summary": "Gemini Key Check Notice",
+            "detail": sanitize_api_error(exc)[:240],
+        }
 
 
 def call_gemini_json(prompt: str, fallback: Any) -> Any:
@@ -226,47 +375,59 @@ def generate_veo_clip_via_api(
     aspect_ratio: str = "16:9",
 ) -> Dict[str, Any]:
     """
-    Attempts direct Veo video generation via google-genai SDK if enabled on the user's API key.
+    Attempts direct AI motion clip generation via google-genai SDK (gemini-omni-1.2-flash) if enabled on the user's API key.
     """
     api_key = get_gemini_api_key()
     if not api_key:
         return {
             "ok": False,
-            "message": "Set GEMINI_API_KEY in .env / Streamlit Secrets, or paste the Flow prompt into Google Flow (labs.google/fx/tools/flow) and upload the MP4 clip.",
+            "message": (
+                "No GEMINI_API_KEY set yet — paste a free key in the left Sidebar (from aistudio.google.com/apikey), "
+                "or use the '🎬 Generate / Re-Render Master Videos' button at the top of Step 3 (100% free built-in 3D motion!)."
+            ),
         }
+    clean_prompt = f"{veo_prompt.strip()} Faceless 3D scientific animation, zero human faces."
     try:
-        import time
         from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
-        for veo_model in ("veo-3.0-generate-preview", "veo-2.0-generate-001"):
+        client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=300000))
+        last_err = ""
+        if hasattr(client, "interactions"):
             try:
-                op = client.models.generate_videos(
-                    model=veo_model,
-                    prompt=f"{veo_prompt} Faceless 3D scientific animation, zero human faces.",
-                    config=types.GenerateVideosConfig(aspect_ratio=aspect_ratio),
+                interaction = client.interactions.create(
+                    model="gemini-omni-1.2-flash",
+                    input=[{"type": "text", "text": clean_prompt}],
+                    response_format={"type": "video", "delivery": "uri", "aspect_ratio": aspect_ratio},
                 )
-                for _ in range(36):
-                    if getattr(op, "done", False):
-                        break
-                    time.sleep(5)
-                    op = client.operations.get(op)
-                if getattr(op, "done", False) and getattr(op, "response", None):
-                    vids = getattr(op.response, "generated_videos", [])
-                    if vids:
-                        output_mp4.parent.mkdir(parents=True, exist_ok=True)
-                        client.files.download(file=vids[0].video)
-                        vids[0].video.save(str(output_mp4))
-                        return {"ok": True, "path": str(output_mp4), "model": veo_model}
-            except Exception:
-                continue
+                out_vid = getattr(interaction, "output_video", None)
+                if out_vid and getattr(out_vid, "uri", None):
+                    video_bytes = client.files.download(file=out_vid.uri)
+                    output_mp4.parent.mkdir(parents=True, exist_ok=True)
+                    output_mp4.write_bytes(video_bytes)
+                    return {"ok": True, "path": to_portable_path(output_mp4), "model": "gemini-omni-1.2-flash"}
+            except Exception as exc:
+                last_err = sanitize_api_error(exc)
+
+        low = last_err.lower()
+        if "outstanding balance" in low or "billing account" in low:
+            return {
+                "ok": False,
+                "message": (
+                    "API Key Billing Hold: Your current key belongs to the older jwalashiva@gmail.com project with a paused billing balance. "
+                    "Create a fresh ₹0 Free-Tier key under jwala4work@gmail.com at https://aistudio.google.com/apikey and paste it in the Sidebar — "
+                    "or use the Free Built-In 3D Master Video Renderer at the top of Step 3 (or drop a Google Flow MP4 clip below)!"
+                ),
+            }
         return {
             "ok": False,
-            "message": "Direct Veo API quota is not active on this API key — use your Google AI Ultra Flow tab with the scene prompt and drop the exported MP4 clip here!",
+            "message": (
+                "Direct paid video API quota isn't enabled on this key — your Master 16:9 + 9:16 Videos already render 100% FREE via "
+                "our built-in 3D camera engine above, or you can paste this scene prompt into Google Flow (labs.google/fx/tools/flow) and drop the MP4 clip!"
+            ),
         }
     except Exception as exc:
-        return {"ok": False, "message": f"Veo notice: {exc}"}
+        return {"ok": False, "message": f"Video API notice: {sanitize_api_error(exc)[:220]}"}
 
 
 # ============================================================================
@@ -311,8 +472,8 @@ def generate_topperlab_branding(
     )
 
     return {
-        "banner_path": str(banner_path),
-        "logo_path": str(logo_path),
+        "banner_path": to_portable_path(banner_path),
+        "logo_path": to_portable_path(logo_path),
         "seo_description": ch.get("channel_seo_description", ""),
         "channel_keywords": ch.get("channel_keywords", ""),
     }
@@ -776,12 +937,12 @@ def generate_dual_script_and_thumbnails(
         "exam_track": exam_track,
         "voice_mode": voice_mode,
         "visual_theme_key": visual_theme_key,
-        "project_dir": str(project_dir),
+        "project_dir": to_portable_path(project_dir),
         "title_variations": blueprint.get("title_variations", fallback_blueprint["title_variations"]),
         "thumb_hook_3words": blueprint.get("thumb_hook_3words", "SEE IT IN 3D!"),
         "short_hook_3words": blueprint.get("short_hook_3words", "3X MEMORY LOOP"),
-        "thumbnail_16x9_path": str(thumb_path),
-        "short_cover_9x16_path": str(short_cover_path),
+        "thumbnail_16x9_path": to_portable_path(thumb_path),
+        "short_cover_9x16_path": to_portable_path(short_cover_path),
         "thumbnail_16x9_prompt": final_t_prompt,
         "scenes": blueprint["scenes"],
     }
@@ -997,16 +1158,16 @@ def render_faceless_scene_media(
         scene["motion_source"] = "3D Camera Push-In (Nano Banana Plate)"
 
     scene["duration_sec"] = dur_sec
-    scene["img_16x9"] = str(img_16x9)
-    scene["img_9x16"] = str(img_9x16)
-    scene["audio_wav"] = str(wav_path)
-    scene["mp4_16x9"] = str(mp4_16x9)
-    scene["mp4_9x16"] = str(mp4_9x16)
+    scene["img_16x9"] = to_portable_path(img_16x9)
+    scene["img_9x16"] = to_portable_path(img_9x16)
+    scene["audio_wav"] = to_portable_path(wav_path)
+    scene["mp4_16x9"] = to_portable_path(mp4_16x9)
+    scene["mp4_9x16"] = to_portable_path(mp4_9x16)
     return scene
 
 
 def stitch_master_videos(project_dir: Path, scenes: List[Dict[str, Any]], short_max_scenes: int = 4) -> Dict[str, Any]:
-    renders_dir = project_dir / "renders"
+    renders_dir = resolve_workspace_path(project_dir) / "renders"
     renders_dir.mkdir(parents=True, exist_ok=True)
     ffmpeg_bin = get_ffmpeg_exe()
 
@@ -1025,8 +1186,14 @@ def stitch_master_videos(project_dir: Path, scenes: List[Dict[str, Any]], short_
 
     long_txt = renders_dir / "concat_16x9.txt"
     short_txt = renders_dir / "concat_9x16.txt"
-    long_txt.write_text("\n".join(f"file '{Path(s['mp4_16x9']).as_posix()}'" for s in scenes) + "\n", encoding="utf-8")
-    short_txt.write_text("\n".join(f"file '{Path(s['mp4_9x16']).as_posix()}'" for s in short_scenes) + "\n", encoding="utf-8")
+    long_txt.write_text(
+        "\n".join(f"file '{resolve_workspace_path(s['mp4_16x9']).resolve().as_posix()}'" for s in scenes) + "\n",
+        encoding="utf-8",
+    )
+    short_txt.write_text(
+        "\n".join(f"file '{resolve_workspace_path(s['mp4_9x16']).resolve().as_posix()}'" for s in short_scenes) + "\n",
+        encoding="utf-8",
+    )
 
     out_long = renders_dir / "TOPPERLAB_LONG_16x9.mp4"
     out_short = renders_dir / "TOPPERLAB_SHORT_9x16.mp4"
@@ -1039,8 +1206,8 @@ def stitch_master_videos(project_dir: Path, scenes: List[Dict[str, Any]], short_
         )
 
     return {
-        "long_16x9_mp4": str(out_long),
-        "short_9x16_mp4": str(out_short),
+        "long_16x9_mp4": to_portable_path(out_long),
+        "short_9x16_mp4": to_portable_path(out_short),
         "long_duration_sec": round(sum(float(s.get("duration_sec", 12.0)) for s in scenes), 1),
         "short_duration_sec": round(sum(float(s.get("duration_sec", 12.0)) for s in short_scenes), 1),
     }
@@ -1048,7 +1215,7 @@ def stitch_master_videos(project_dir: Path, scenes: List[Dict[str, Any]], short_
 
 def render_full_topperlab_project(blueprint: Dict[str, Any], short_max_scenes: int = 4) -> Dict[str, Any]:
     ch = load_active_channel()
-    project_dir = Path(blueprint["project_dir"])
+    project_dir = resolve_workspace_path(blueprint["project_dir"])
     voice_mode = blueprint.get("voice_mode", ch["default_voice_mode"])
     theme_key = blueprint.get("visual_theme_key", ch["default_visual_theme"])
     voice_preset = ch["voice_presets"].get(voice_mode, ch["voice_presets"][ch["default_voice_mode"]])
@@ -1061,6 +1228,7 @@ def render_full_topperlab_project(blueprint: Dict[str, Any], short_max_scenes: i
     renders = stitch_master_videos(project_dir, scenes, short_max_scenes=short_max_scenes)
     draft_state = {
         **blueprint,
+        "project_dir": to_portable_path(project_dir),
         "scenes": scenes,
         "renders": renders,
         "rendered_at": datetime.datetime.now().isoformat(timespec="seconds"),
@@ -1081,7 +1249,7 @@ def update_single_faceless_scene(
     uploaded_motion_bytes: bytes | None = None,
 ) -> Dict[str, Any]:
     ch = load_active_channel()
-    project_dir = Path(draft_state["project_dir"])
+    project_dir = resolve_workspace_path(draft_state["project_dir"])
     voice_mode = draft_state.get("voice_mode", ch["default_voice_mode"])
     theme_key = draft_state.get("visual_theme_key", ch["default_visual_theme"])
     voice_preset = ch["voice_presets"].get(voice_mode, ch["voice_presets"][ch["default_voice_mode"]])
@@ -1394,8 +1562,8 @@ def publish_or_schedule_deliverable(
     thumbnail_path: str | None = None,
     public_mp4_url_for_ig: str = "",
 ) -> Dict[str, Any]:
-    vpath = Path(video_path)
-    tpath = Path(thumbnail_path) if thumbnail_path else None
+    vpath = resolve_workspace_path(video_path)
+    tpath = resolve_workspace_path(thumbnail_path) if thumbnail_path else None
     sched_str = scheduled_ist_dt.strftime("%Y-%m-%d %H:%M IST")
 
     status = "QUEUED_READY_TO_EXPORT"
@@ -1496,3 +1664,67 @@ def list_publish_queue() -> List[Dict[str, Any]]:
     ]
     conn.close()
     return rows
+
+
+def fetch_live_youtube_channel_videos(max_results: int = 10) -> List[Dict[str, Any]]:
+    """Fetch actual uploaded & cloud-scheduled videos directly from the connected YouTube channel via Data API v3."""
+    access_token = get_valid_youtube_access_token()
+    if not access_token:
+        return []
+    headers = {"Authorization": f"Bearer {access_token}"}
+    try:
+        ch_r = requests.get(
+            "https://www.googleapis.com/youtube/v3/channels",
+            params={"part": "contentDetails", "mine": "true"},
+            headers=headers,
+            timeout=15,
+        )
+        if ch_r.status_code != 200 or not ch_r.json().get("items"):
+            return []
+        uploads_id = ch_r.json()["items"][0]["contentDetails"]["relatedPlaylists"]["uploads"]
+        pl_r = requests.get(
+            "https://www.googleapis.com/youtube/v3/playlistItems",
+            params={"part": "contentDetails", "playlistId": uploads_id, "maxResults": max_results},
+            headers=headers,
+            timeout=15,
+        )
+        vid_ids = [it["contentDetails"]["videoId"] for it in pl_r.json().get("items", [])]
+        if not vid_ids:
+            return []
+        v_r = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={"part": "snippet,status,contentDetails,processingDetails", "id": ",".join(vid_ids)},
+            headers=headers,
+            timeout=15,
+        )
+        ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+        out = []
+        for it in v_r.json().get("items", []):
+            vid_id = it["id"]
+            st_obj = it.get("status", {})
+            cd_obj = it.get("contentDetails", {})
+            sn_obj = it.get("snippet", {})
+            pub_at = st_obj.get("publishAt", "")
+            sched_ist = "Immediate / Public"
+            if pub_at:
+                try:
+                    dt_utc = datetime.datetime.fromisoformat(pub_at.replace("Z", "+00:00"))
+                    sched_ist = dt_utc.astimezone(ist_tz).strftime("%Y-%m-%d %I:%M %p IST")
+                except Exception:
+                    sched_ist = pub_at
+            is_short = "#shorts" in sn_obj.get("title", "").lower() or cd_obj.get("duration", "").startswith("PT5")
+            out.append(
+                {
+                    "Video ID": vid_id,
+                    "Type": "9:16 Short" if is_short else "16:9 Long-Form",
+                    "Title": sn_obj.get("title", ""),
+                    "Duration": cd_obj.get("duration", "").replace("PT", ""),
+                    "Privacy / Schedule": f"SCHEDULED ({sched_ist})" if pub_at else st_obj.get("privacyStatus", "").upper(),
+                    "Custom Thumb": "✅ Yes" if cd_obj.get("hasCustomThumbnail") else "Auto Frame",
+                    "Processing": f"{st_obj.get('uploadStatus', '')} ({cd_obj.get('definition', '').upper()})",
+                    "Studio Edit URL": f"https://studio.youtube.com/video/{vid_id}/edit",
+                }
+            )
+        return out
+    except Exception:
+        return []

@@ -4,7 +4,7 @@
   "exam_track": "All High-Schoolers (Class 9–12 • Boards • JEE & NEET)",
   "voice_mode": "Clean Indian-English (en-IN)",
   "visual_theme_key": "3D_DARK_LAB_CUTAWAY",
-  "project_dir": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t",
+  "project_dir": "workspaces/topperlab_3d/why-spinning-gyroscopes-defy-gravity-rotational-motion-t",
   "title_variations": [
     "Why Spinning Gyroscopes Defy Gravity — Rotational Motion & Torque Explained in 3D",
     "How Gyroscopes Cheat Gravity in 3D | Class 11, JEE & Physics Visualized",
@@ -12,8 +12,8 @@
   ],
   "thumb_hook_3words": "DEFIES GRAVITY?!",
   "short_hook_3words": "3X MEMORY LOOP",
-  "thumbnail_16x9_path": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\thumbnail_16x9.jpg",
-  "short_cover_9x16_path": "C:\\OmniCreator_Studio\\workspaces\\topperlab_3d\\why-spinning-gyroscopes-defy-gravity-rotational-motion-t\\short_cover_9x16.jpg",
+  "thumbnail_16x9_path": "workspaces/topperlab_3d/why-spinning-gyroscopes-defy-gravity-rotational-motion-t/thumbnail_16x9.jpg",
+  "short_cover_9x16_path": "workspaces/topperlab_3d/why-spinning-gyroscopes-defy-gravity-rotational-motion-t/short_cover_9x16.jpg",
   "thumbnail_16x9_prompt": "Photorealistic 8k 3D render of a gleaming brass and neon-cyan gyroscope spinning rapidly balanced horizontally on a steel needle tip inside a dark obsidian physics lab, glowing yellow Angular Momentum vector L and cyan Torque vector tau, bold 3D text 'DEFIES GRAVITY?!', zero human faces.",
   "scenes": [
     {

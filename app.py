@@ -30,12 +30,15 @@ importlib.reload(studio_engine)
 
 from studio_engine import (
     build_youtube_auth_url,
+    check_gemini_api_key_health,
     exchange_youtube_auth_code,
+    fetch_live_youtube_channel_videos,
     generate_dual_script_and_thumbnails,
     generate_student_seo_bundle,
     generate_topperlab_branding,
     generate_veo_clip_via_api,
     generate_viral_highschool_topics,
+    get_gemini_api_key,
     get_youtube_oauth_status,
     list_publish_queue,
     load_active_channel,
@@ -43,9 +46,11 @@ from studio_engine import (
     load_pillars_config,
     publish_or_schedule_deliverable,
     render_full_topperlab_project,
+    resolve_workspace_path,
     save_active_channel,
     save_meta_credentials,
     save_youtube_client_secret,
+    set_runtime_gemini_api_key,
     update_single_faceless_scene,
 )
 
@@ -183,14 +188,11 @@ def _load_portable_json(path: Path):
     if not path.exists():
         return None
     raw_obj = json.loads(path.read_text(encoding="utf-8"))
-    root_str = ROOT_DIR.as_posix()
 
     def _fix(val):
-        if isinstance(val, str) and "workspaces" in val and ("topperlab_3d" in val or "OmniCreator_Studio" in val):
-            norm = val.replace("\\", "/")
-            idx = norm.find("/workspaces/")
-            if idx != -1:
-                return root_str + norm[idx:]
+        if isinstance(val, str) and ("workspaces" in val or "assets" in val):
+            resolved = resolve_workspace_path(val)
+            return resolved.as_posix()
         elif isinstance(val, dict):
             return {k: _fix(v) for k, v in val.items()}
         elif isinstance(val, list):
@@ -237,7 +239,7 @@ meta_creds = load_meta_credentials()
 # SIDEBAR: SINGLE-CHANNEL CONTROL BAR (100% FACELESS — ZERO MULTI-CHANNEL CLUTTER)
 # ============================================================================
 with st.sidebar:
-    logo_file = Path(branding_assets["logo_path"])
+    logo_file = resolve_workspace_path(branding_assets["logo_path"])
     if logo_file.exists():
         _, c_logo, _ = st.columns([0.5, 2, 0.5])
         with c_logo:
@@ -253,6 +255,35 @@ with st.sidebar:
         st.success(f"🟢 YouTube API Connected (`{yt_status.get('channel_title', 'TopperLab 3D')}`)")
     else:
         st.info("⚪ YouTube API: Not Authorized Yet (Connect in Step 1)")
+
+    active_gem_key = get_gemini_api_key()
+    key_fp = f"{len(active_gem_key)}:{active_gem_key[:6]}:{active_gem_key[-4:]}" if active_gem_key else "empty"
+    if st.session_state.get("gemini_health_fp") != key_fp:
+        st.session_state["gemini_health_cache"] = check_gemini_api_key_health(active_gem_key)
+        st.session_state["gemini_health_fp"] = key_fp
+    gem_health = st.session_state["gemini_health_cache"]
+
+    if gem_health.get("ok"):
+        st.success(f"🟢 {gem_health['summary']}")
+    else:
+        st.warning(f"🟠 {gem_health['summary']}")
+
+    with st.expander("🔑 Gemini AI Key (Fix / Update)", expanded=not gem_health.get("ok")):
+        st.caption(gem_health.get("detail", ""))
+        st.link_button(
+            "✨ Get Free Key (jwala4work@gmail.com)",
+            "https://aistudio.google.com/apikey",
+            use_container_width=True,
+        )
+        new_gem_key = st.text_input(
+            "Paste Fresh Gemini API Key (`AIza...`):",
+            type="password",
+            placeholder="AIzaSy...",
+        )
+        if st.button("💾 Apply & Verify Gemini Key", use_container_width=True) and new_gem_key.strip():
+            set_runtime_gemini_api_key(new_gem_key.strip())
+            st.session_state["gemini_health_fp"] = ""
+            st.rerun()
 
     st.divider()
     st.markdown("#### 🎙️ Voice & 3D Style Lock")
@@ -378,7 +409,7 @@ with tab1:
     bcol1, bcol2 = st.columns([2.2, 1])
     with bcol1:
         st.subheader("🖼️ YouTube Safe-Zone Banner (`2560 x 1440`)")
-        bpath = Path(branding_assets["banner_path"])
+        bpath = resolve_workspace_path(branding_assets["banner_path"])
         if bpath.exists():
             st.image(str(bpath), use_container_width=True)
             st.download_button(
@@ -390,7 +421,7 @@ with tab1:
             )
     with bcol2:
         st.subheader("🔵 3D Profile Icon (`800 x 800`)")
-        lpath = Path(branding_assets["logo_path"])
+        lpath = resolve_workspace_path(branding_assets["logo_path"])
         if lpath.exists():
             st.image(str(lpath), width=230)
             st.download_button(
@@ -597,7 +628,7 @@ with tab2:
         t_col1, t_col2 = st.columns([2.1, 1])
         with t_col1:
             st.subheader("🖥️ `16:9` Pure 3D YouTube Thumbnail")
-            tp = Path(bp["thumbnail_16x9_path"])
+            tp = resolve_workspace_path(bp["thumbnail_16x9_path"])
             if tp.exists():
                 st.image(str(tp), use_container_width=True)
                 st.download_button(
@@ -608,7 +639,7 @@ with tab2:
                 )
         with t_col2:
             st.subheader("📱 `9:16` Short / Reel Cover")
-            sp = Path(bp["short_cover_9x16_path"])
+            sp = resolve_workspace_path(bp["short_cover_9x16_path"])
             if sp.exists():
                 st.image(str(sp), width=230)
                 st.download_button(
@@ -646,14 +677,51 @@ with tab2:
 # ============================================================================
 with tab3:
     st.markdown('<span class="step-badge">STEP 3 • PREVIEW MASTER VIDEOS, EDIT SCENES & DROP IN GOOGLE FLOW / VEO 3.1 CLIPS</span>', unsafe_allow_html=True)
+
+    st.markdown(
+        '<div class="lab-card"><b>100% Free Built-In 3D Camera Motion + Clean Indian-English Voiceover</b><br/>'
+        'Render or re-render your full <code>16:9</code> Long Video and <code>9:16</code> Vertical Short anytime below with zero paid video API needed—or drop custom Google Flow / Omni clips per scene.</div>',
+        unsafe_allow_html=True,
+    )
+    if st.button(
+        "🎬 Generate / Re-Render Master `16:9` Long Video + `9:16` Short Now (Free Built-In 3D Engine)",
+        type="primary",
+        use_container_width=True,
+        key="step3_top_render_btn",
+    ):
+        with st.spinner("Building 3D scenes, Clean Indian-English (-14 LUFS) voiceover & stitching 16:9 + 9:16 MP4s..."):
+            active_bp = st.session_state.get("current_blueprint")
+            if not active_bp or active_bp.get("topic_title") != st.session_state["selected_topic_title"]:
+                active_bp = generate_dual_script_and_thumbnails(
+                    topic_title=st.session_state["selected_topic_title"],
+                    pillar_id=st.session_state["selected_pillar_id"],
+                    exam_track=st.session_state["selected_exam_track"],
+                    voice_mode=st.session_state["voice_mode"],
+                    visual_theme_key=st.session_state["visual_theme_key"],
+                    scene_count=4,
+                )
+                st.session_state["current_blueprint"] = active_bp
+            active_bp["voice_mode"] = st.session_state["voice_mode"]
+            active_bp["visual_theme_key"] = st.session_state["visual_theme_key"]
+            rendered_draft = render_full_topperlab_project(active_bp, short_max_scenes=4)
+            st.session_state["current_draft"] = rendered_draft
+            st.session_state["seo_bundle"] = generate_student_seo_bundle(
+                video_title=rendered_draft["topic_title"],
+                exam_track=rendered_draft["exam_track"],
+                scenes=rendered_draft["scenes"],
+                resource_links=st.session_state["resource_links"],
+            )
+        st.success("✅ Master `16:9` Long Video + `9:16` Vertical Short rendered and ready below!")
+        st.rerun()
+
     draft = st.session_state.get("current_draft")
     if not draft:
-        st.info("Click **Approve & Render** in Step 2 to generate your `16:9` Long Video and `9:16` Vertical Short.")
+        st.info("Click **🎬 Generate / Re-Render Master `16:9` Long Video + `9:16` Short Now** above to create both videos.")
     else:
         v1, v2 = st.columns([2.2, 1.2])
         with v1:
             st.subheader(f"🖥️ YouTube Long-Form (`16:9` • {draft['renders']['long_duration_sec']}s)")
-            long_mp4 = Path(draft["renders"]["long_16x9_mp4"])
+            long_mp4 = resolve_workspace_path(draft["renders"]["long_16x9_mp4"])
             if long_mp4.exists():
                 st.video(str(long_mp4))
                 st.download_button(
@@ -663,9 +731,11 @@ with tab3:
                     mime="video/mp4",
                     use_container_width=True,
                 )
+            else:
+                st.warning("Click **🎬 Generate / Re-Render** above to build this workspace's `16:9` MP4.")
         with v2:
             st.subheader(f"📱 YouTube Short / IG Reel (`9:16` • {draft['renders']['short_duration_sec']}s)")
-            short_mp4 = Path(draft["renders"]["short_9x16_mp4"])
+            short_mp4 = resolve_workspace_path(draft["renders"]["short_9x16_mp4"])
             if short_mp4.exists():
                 st.video(str(short_mp4))
                 st.download_button(
@@ -675,12 +745,14 @@ with tab3:
                     mime="video/mp4",
                     use_container_width=True,
                 )
+            else:
+                st.warning("Click **🎬 Generate / Re-Render** above to build this workspace's `9:16` Short MP4.")
 
         st.divider()
-        st.subheader("🧬 Scene-by-Scene 3D Editor + Google AI Ultra Flow (`Veo 3.1`) Integration")
+        st.subheader("🧬 Scene-by-Scene 3D Editor + Google AI Ultra Flow (`Veo / Omni`) Integration")
         st.caption(
-            "Want fluid 3D physics motion on a key scene? Copy the **Google Flow Prompt** below into [Google Flow](https://labs.google/fx/tools/flow) "
-            "(included in your Google AI Ultra plan) or click **Generate Veo Clip via API**, then drop the MP4 right into that scene!"
+            "Want custom AI physics motion on a specific scene? Copy the **Google Flow Prompt** below into [Google Flow](https://labs.google/fx/tools/flow) "
+            "and drop the `.mp4` clip into that scene (or test direct API generation if paid video quota is enabled)."
         )
 
         for sc in draft["scenes"]:
@@ -691,12 +763,12 @@ with tab3:
             ):
                 ec1, ec2 = st.columns([1.1, 1.9])
                 with ec1:
-                    img_p = Path(sc.get("img_16x9", ""))
+                    img_p = resolve_workspace_path(sc.get("img_16x9", ""))
                     if img_p.exists():
                         st.image(str(img_p), caption=f"Scene {sid:02d} Pure 3D Frame")
                     st.code(sc.get("google_flow_veo_prompt", ""), language="text")
-                    if st.button(f"⚡ Try Direct Veo API Clip (Scene {sid:02d})", key=f"veo_btn_{sid}", use_container_width=True):
-                        out_veo = Path(draft["project_dir"]) / "scenes" / f"scene_{sid:02d}_custom_motion.mp4"
+                    if st.button(f"⚡ Try Direct AI Motion Clip (Scene {sid:02d})", key=f"veo_btn_{sid}", use_container_width=True):
+                        out_veo = resolve_workspace_path(draft["project_dir"]) / "scenes" / f"scene_{sid:02d}_custom_motion.mp4"
                         with st.spinner(f"Requesting Veo 3D clip for Scene {sid:02d}..."):
                             vres = generate_veo_clip_via_api(sc.get("google_flow_veo_prompt", ""), out_veo)
                         if vres.get("ok"):
@@ -877,4 +949,11 @@ with tab4:
     if q_rows:
         st.dataframe(q_rows, use_container_width=True, hide_index=True)
     else:
-        st.caption("No videos dispatched yet.")
+        st.caption("No local dispatch rows in this session yet.")
+
+    if yt_status.get("connected"):
+        st.subheader("📺 Live `@TopperLab3D` Scheduled & Published Videos (Verified on YouTube)")
+        if st.button("🔄 Refresh Live YouTube Channel Uploads & Schedule", use_container_width=True) or "live_yt_vids" not in st.session_state:
+            st.session_state["live_yt_vids"] = fetch_live_youtube_channel_videos(max_results=10)
+        if st.session_state.get("live_yt_vids"):
+            st.dataframe(st.session_state["live_yt_vids"], use_container_width=True, hide_index=True)
