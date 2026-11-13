@@ -308,7 +308,7 @@ def _ordered_script_models(preferred: str | None = None) -> List[str]:
 def check_gemini_api_key_health(api_key: str | None = None, preferred_model: str | None = None) -> Dict[str, Any]:
     runtime_override = os.environ.get("RUNTIME_GEMINI_API_KEY", "").strip()
     effective_override = runtime_override if runtime_override else (None if has_vertex_adc() else (api_key if api_key else None))
-    client = build_genai_client(location="global", timeout_ms=60000, api_key_override=effective_override)
+    client = build_genai_client(location="global", timeout_ms=12000, api_key_override=effective_override)
     if client is None:
         return {
             "ok": False,
@@ -323,37 +323,41 @@ def check_gemini_api_key_health(api_key: str | None = None, preferred_model: str
         is_vertex = _is_vertex_client(client)
         candidates = _ordered_script_models(preferred_model)
         requested = candidates[0]
+        # Fast health probe: verify Vertex AI / Gemini 4 live via fast Hydrogen first if Argon is selected,
+        # while keeping Argon as primary in call_gemini_json so sidebar load never stalls!
+        probe_list = ["gemini-4-hydrogen"] + [m for m in candidates if m != "gemini-4-hydrogen"] if is_vertex else candidates
         last_err = ""
-        for probe_model in candidates:
+        for probe_model in probe_list:
             try:
                 if not is_vertex and hasattr(client, "interactions"):
                     inter = client.interactions.create(model=probe_model, input="Reply OK")
                     if getattr(inter, "output_text", None):
-                        short_lbl = SCRIPT_MODEL_SHORT_NAMES.get(probe_model, probe_model)
+                        short_lbl = SCRIPT_MODEL_SHORT_NAMES.get(requested, requested)
                         return {
                             "ok": True,
                             "code": "ACTIVE",
-                            "active_model": probe_model,
+                            "active_model": requested,
                             "summary": f"{short_lbl} Active (Gemini AI Key)",
-                            "detail": f"Verified live on {probe_model}.",
+                            "detail": f"Verified live ({probe_model}).",
                         }
                 resp = client.models.generate_content(model=probe_model, contents="Reply OK")
                 if getattr(resp, "text", None):
-                    short_lbl = SCRIPT_MODEL_SHORT_NAMES.get(probe_model, probe_model)
+                    display_model = "gemini-4-argon" if requested == "gemini-4-carbon" and is_vertex else requested
+                    short_lbl = SCRIPT_MODEL_SHORT_NAMES.get(display_model, display_model)
                     mode_lbl = "Vertex AI Cloud Credits" if is_vertex else "Gemini AI Studio Key"
                     fallback_note = (
-                        f" ({SCRIPT_MODEL_SHORT_NAMES.get(requested, requested)} auto-routed to {short_lbl} on Vertex AI)"
-                        if probe_model != requested
+                        " (Carbon auto-routes to Argon on Vertex AI)"
+                        if requested == "gemini-4-carbon" and is_vertex
                         else ""
                     )
                     return {
                         "ok": True,
                         "code": "ACTIVE",
-                        "active_model": probe_model,
+                        "active_model": display_model,
                         "summary": f"{short_lbl} + Nano Banana 3D Active ({mode_lbl})",
                         "detail": (
-                            f"Verified live on {probe_model}{fallback_note} "
-                            f"({project_label() if is_vertex else 'AI Studio'}) — scripts, 3D renders & Veo 3.1 ready!"
+                            f"Verified live on {project_label() if is_vertex else 'AI Studio'}{fallback_note} "
+                            f"— {short_lbl} scripts, 3D renders & Veo 3.1 ready!"
                         ),
                     }
             except Exception as exc:
@@ -687,6 +691,18 @@ def _parse_google_client_secret() -> Dict[str, Any]:
             "client_secret": csec.strip(),
             "redirect_uris": ["https://onebillionviews.streamlit.app", "http://localhost:8501"],
         }
+    tok_p = _yt_token_path()
+    if tok_p.exists():
+        try:
+            tok_raw = json.loads(tok_p.read_text(encoding="utf-8"))
+            if tok_raw.get("client_id") and tok_raw.get("client_secret"):
+                return {
+                    "client_id": tok_raw["client_id"].strip(),
+                    "client_secret": tok_raw["client_secret"].strip(),
+                    "redirect_uris": ["https://onebillionviews.streamlit.app", "http://localhost:8501"],
+                }
+        except Exception:
+            pass
     return {}
 
 
@@ -708,7 +724,11 @@ def build_youtube_auth_url(redirect_uri: str = "https://onebillionviews.streamli
         "client_id": cfg["client_id"],
         "redirect_uri": clean_redir,
         "response_type": "code",
-        "scope": "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
+        "scope": (
+            "https://www.googleapis.com/auth/youtube "
+            "https://www.googleapis.com/auth/youtube.upload "
+            "https://www.googleapis.com/auth/youtube.readonly"
+        ),
         "access_type": "offline",
         "prompt": "consent select_account",
         "state": "youtube_channel_connect",
@@ -1715,6 +1735,9 @@ def publish_or_schedule_deliverable(
     publish_now: bool = False,
     thumbnail_path: str | None = None,
     public_mp4_url_for_ig: str = "",
+    target_boards: List[str] | None = None,
+    target_class: str = "",
+    target_subject: str = "",
 ) -> Dict[str, Any]:
     vpath = resolve_workspace_path(video_path)
     tpath = resolve_workspace_path(thumbnail_path) if thumbnail_path else None
@@ -1737,7 +1760,18 @@ def publish_or_schedule_deliverable(
             )
             if res.get("ok"):
                 status = res["status"]
-                note = res["url"]
+                pl_suffix = ""
+                vid_id = res.get("video_id", "")
+                if vid_id and target_boards and target_class and target_subject:
+                    added_pls = auto_assign_video_to_curriculum_playlists(
+                        video_id=vid_id,
+                        boards=target_boards,
+                        class_name=target_class,
+                        subject=target_subject,
+                    )
+                    if added_pls:
+                        pl_suffix = f" | Added to: {', '.join(added_pls)}"
+                note = f"{res['url']}{pl_suffix}"
             else:
                 status = "API_NOTICE (SAVED LOCALLY)"
                 note = res.get("error", "")
@@ -1882,3 +1916,359 @@ def fetch_live_youtube_channel_videos(max_results: int = 10) -> List[Dict[str, A
         return out
     except Exception:
         return []
+
+
+# ============================================================================
+# 8. CBSE & ICSE (CLASS 8–12) PLAYLIST & CHANNEL HOMEPAGE SECTION ARCHITECT
+# ============================================================================
+CURRICULUM_BOARDS: List[str] = ["CBSE", "ICSE"]
+CURRICULUM_CLASSES: List[str] = ["Class 12", "Class 11", "Class 10", "Class 9", "Class 8"]
+CORE_STEM_SUBJECTS: List[str] = ["Physics", "Chemistry", "Mathematics", "Biology"]
+OPTIONAL_EXTRA_SUBJECTS: List[str] = [
+    "Computer Science & AI",
+    "History & Civics",
+    "Geography",
+    "Economics",
+    "English",
+]
+ALL_CURRICULUM_SUBJECTS: List[str] = CORE_STEM_SUBJECTS + OPTIONAL_EXTRA_SUBJECTS
+
+_YT_SCOPE_CACHE: Dict[str, bool] = {}
+
+
+def check_youtube_playlist_scope() -> bool:
+    """Returns True if the active YouTube OAuth token includes full `youtube` write scope for playlists & sections."""
+    access_token = get_valid_youtube_access_token()
+    if not access_token:
+        return False
+    if access_token in _YT_SCOPE_CACHE:
+        return _YT_SCOPE_CACHE[access_token]
+    try:
+        r = requests.get(
+            "https://oauth2.googleapis.com/tokeninfo",
+            params={"access_token": access_token},
+            timeout=10,
+        )
+        scopes = set((r.json().get("scope") or "").split())
+        has_full = (
+            "https://www.googleapis.com/auth/youtube" in scopes
+            or "https://www.googleapis.com/auth/youtube.force-ssl" in scopes
+        )
+        _YT_SCOPE_CACHE[access_token] = has_full
+        return has_full
+    except Exception:
+        return False
+
+
+def format_curriculum_playlist_title(board: str, class_name: str, subject: str) -> str:
+    b = board.strip().upper()
+    c = class_name.strip()
+    s = subject.strip()
+    if b == "CBSE":
+        tag = "3D NCERT & JEE/NEET" if c in ("Class 11", "Class 12") else "3D NCERT Concepts & Board Prep"
+        return f"CBSE {c} {s} | {tag}"
+    if c in ("Class 11", "Class 12"):
+        return f"ISC / ICSE {c} {s} | 3D Concepts & Board Prep"
+    return f"ICSE {c} {s} | 3D Concepts & Board Prep"
+
+
+def format_curriculum_playlist_description(board: str, class_name: str, subject: str) -> str:
+    b_lbl = "CBSE (NCERT)" if board.strip().upper() == "CBSE" else ("ISC / ICSE Council" if class_name in ("Class 11", "Class 12") else "ICSE")
+    return (
+        f"Complete {b_lbl} {class_name} {subject} 3D visual chapter series by TopperLab 3D (@TopperLab3D).\n\n"
+        f"See invisible vectors, mechanisms, derivations, and exam traps in crystal-clear 3D — engineered for "
+        f"{b_lbl} {class_name} board exams, olympiads, JEE, and NEET preparation.\n"
+        f"📄 Free 1-Page 3D Formula & Revision Sheets linked inside every video description!"
+    )
+
+
+def list_live_youtube_playlists() -> List[Dict[str, Any]]:
+    access_token = get_valid_youtube_access_token()
+    if not access_token:
+        return []
+    headers = {"Authorization": f"Bearer {access_token}"}
+    items: List[Dict[str, Any]] = []
+    page_token = ""
+    try:
+        for _ in range(5):
+            params: Dict[str, Any] = {"part": "snippet,contentDetails,status", "mine": "true", "maxResults": 50}
+            if page_token:
+                params["pageToken"] = page_token
+            r = requests.get("https://www.googleapis.com/youtube/v3/playlists", params=params, headers=headers, timeout=15)
+            if r.status_code != 200:
+                break
+            body = r.json()
+            for it in body.get("items", []):
+                items.append(
+                    {
+                        "id": it["id"],
+                        "title": it.get("snippet", {}).get("title", ""),
+                        "videos": it.get("contentDetails", {}).get("itemCount", 0),
+                        "privacy": it.get("status", {}).get("privacyStatus", "public"),
+                        "url": f"https://www.youtube.com/playlist?list={it['id']}",
+                    }
+                )
+            page_token = body.get("nextPageToken", "")
+            if not page_token:
+                break
+    except Exception:
+        pass
+    return items
+
+
+def add_video_to_youtube_playlist(video_id: str, playlist_id: str, access_token: str = "") -> bool:
+    tok = access_token or get_valid_youtube_access_token()
+    if not tok or not video_id or not playlist_id:
+        return False
+    headers = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json; charset=UTF-8"}
+    try:
+        chk = requests.get(
+            "https://www.googleapis.com/youtube/v3/playlistItems",
+            params={"part": "id", "playlistId": playlist_id, "videoId": video_id, "maxResults": 1},
+            headers={"Authorization": f"Bearer {tok}"},
+            timeout=12,
+        )
+        if chk.status_code == 200 and chk.json().get("items"):
+            return True
+        ins = requests.post(
+            "https://www.googleapis.com/youtube/v3/playlistItems?part=snippet",
+            headers=headers,
+            data=json.dumps(
+                {
+                    "snippet": {
+                        "playlistId": playlist_id,
+                        "resourceId": {"kind": "youtube#video", "videoId": video_id},
+                    }
+                }
+            ).encode("utf-8"),
+            timeout=15,
+        )
+        return ins.status_code in (200, 201)
+    except Exception:
+        return False
+
+
+def auto_assign_video_to_curriculum_playlists(
+    video_id: str,
+    boards: List[str],
+    class_name: str,
+    subject: str,
+) -> List[str]:
+    """Finds (or creates) matching Board+Class+Subject playlists and adds `video_id` to each."""
+    tok = get_valid_youtube_access_token()
+    if not tok or not check_youtube_playlist_scope():
+        return []
+    existing_by_title = {p["title"]: p["id"] for p in list_live_youtube_playlists()}
+    headers = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json; charset=UTF-8"}
+    added_titles: List[str] = []
+    for b in boards:
+        pl_title = format_curriculum_playlist_title(b, class_name, subject)
+        pl_id = existing_by_title.get(pl_title, "")
+        if not pl_id:
+            r = requests.post(
+                "https://www.googleapis.com/youtube/v3/playlists?part=snippet,status",
+                headers=headers,
+                data=json.dumps(
+                    {
+                        "snippet": {
+                            "title": pl_title,
+                            "description": format_curriculum_playlist_description(b, class_name, subject),
+                            "defaultLanguage": "en-IN",
+                        },
+                        "status": {"privacyStatus": "public"},
+                    }
+                ).encode("utf-8"),
+                timeout=15,
+            )
+            if r.status_code in (200, 201):
+                pl_id = r.json().get("id", "")
+                existing_by_title[pl_title] = pl_id
+        if pl_id and add_video_to_youtube_playlist(video_id, pl_id, access_token=tok):
+            added_titles.append(f"{b} {class_name} {subject}")
+    return added_titles
+
+
+def sync_cbse_icse_playlists_and_sections(
+    boards: List[str] | None = None,
+    classes: List[str] | None = None,
+    subjects: List[str] | None = None,
+    attach_existing_videos: bool = True,
+) -> Dict[str, Any]:
+    """
+    Idempotently creates all CBSE & ICSE (Class 8–12) subject-wise playlists on @TopperLab3D
+    AND organizes the YouTube Channel Homepage into clean Board + Class horizontal shelves (`channelSections`).
+    """
+    tok = get_valid_youtube_access_token()
+    if not tok:
+        return {"ok": False, "error": "YouTube OAuth is not connected yet. Authorize in Step 1 first."}
+    if not check_youtube_playlist_scope():
+        return {
+            "ok": False,
+            "needs_reauth": True,
+            "error": (
+                "Your current YouTube token only has Upload + Read permission. "
+                "Click 'Authorize @TopperLab3D (Unlock Playlist & Section Manager)' once above to grant Playlist & Homepage Section permission!"
+            ),
+        }
+
+    sel_boards = boards or CURRICULUM_BOARDS
+    sel_classes = classes or CURRICULUM_CLASSES
+    sel_subjects = subjects or CORE_STEM_SUBJECTS
+
+    headers = {"Authorization": f"Bearer {tok}", "Content-Type": "application/json; charset=UTF-8"}
+    existing_pls = list_live_youtube_playlists()
+    by_title: Dict[str, str] = {p["title"]: p["id"] for p in existing_pls}
+
+    created_count = 0
+    reused_count = 0
+    errors: List[str] = []
+    matrix_ids: Dict[tuple[str, str, str], str] = {}
+
+    for b in sel_boards:
+        for c in sel_classes:
+            for s in sel_subjects:
+                title = format_curriculum_playlist_title(b, c, s)
+                if title in by_title:
+                    matrix_ids[(b, c, s)] = by_title[title]
+                    reused_count += 1
+                    continue
+                resp = requests.post(
+                    "https://www.googleapis.com/youtube/v3/playlists?part=snippet,status",
+                    headers=headers,
+                    data=json.dumps(
+                        {
+                            "snippet": {
+                                "title": title,
+                                "description": format_curriculum_playlist_description(b, c, s),
+                                "defaultLanguage": "en-IN",
+                            },
+                            "status": {"privacyStatus": "public"},
+                        }
+                    ).encode("utf-8"),
+                    timeout=20,
+                )
+                if resp.status_code in (200, 201):
+                    pid = resp.json()["id"]
+                    by_title[title] = pid
+                    matrix_ids[(b, c, s)] = pid
+                    created_count += 1
+                else:
+                    errors.append(f"{title}: HTTP {resp.status_code} {sanitize_api_error(resp.text)[:140]}")
+                    if resp.status_code == 403 and "quota" in resp.text.lower():
+                        break
+            if errors and "quota" in errors[-1].lower():
+                break
+
+    # Attach existing Rotational Motion & Torque videos to Class 11 Physics (CBSE + ICSE) so shelves populate!
+    attached_videos = 0
+    if attach_existing_videos:
+        live_vids = fetch_live_youtube_channel_videos(max_results=10)
+        for v in live_vids:
+            t_low = v.get("Title", "").lower()
+            vid_id = v.get("Video ID", "")
+            if vid_id and ("gyroscope" in t_low or "rotational" in t_low or "torque" in t_low):
+                for b in ("CBSE", "ICSE"):
+                    pid = matrix_ids.get((b, "Class 11", "Physics"))
+                    if pid and add_video_to_youtube_playlist(vid_id, pid, access_token=tok):
+                        attached_videos += 1
+
+    # Organize Channel Homepage Sections (`multiplePlaylists`) — max 8 custom shelves + Shorts + Recent Uploads = 10
+    sections_created = 0
+    sections_updated = 0
+    try:
+        sec_r = requests.get(
+            "https://www.googleapis.com/youtube/v3/channelSections",
+            params={"part": "snippet,contentDetails", "mine": "true"},
+            headers={"Authorization": f"Bearer {tok}"},
+            timeout=15,
+        )
+        existing_secs = sec_r.json().get("items", []) if sec_r.status_code == 200 else []
+        existing_multi_by_title: Dict[str, Dict[str, Any]] = {}
+        for sec in existing_secs:
+            stype = (sec.get("snippet", {}).get("type") or "").lower()
+            stitle = sec.get("snippet", {}).get("title", "")
+            # Free up unused empty default shelves so YouTube's 10-shelf cap has room for CBSE + ICSE shelves
+            if stype in ("completedevents", "allplaylists", "upcomingevents", "liveevents"):
+                requests.delete(
+                    "https://www.googleapis.com/youtube/v3/channelSections",
+                    params={"id": sec["id"]},
+                    headers={"Authorization": f"Bearer {tok}"},
+                    timeout=12,
+                )
+            elif stype == "multipleplaylists" and stitle:
+                existing_multi_by_title[stitle] = sec
+
+        shelf_specs = [
+            ("📘 CBSE Class 12 — All Subjects (3D Visual Series)", "CBSE", ["Class 12"]),
+            ("📘 CBSE Class 11 — All Subjects (3D Visual Series)", "CBSE", ["Class 11"]),
+            ("📘 CBSE Class 9 & 10 — All Subjects (3D Board Prep)", "CBSE", ["Class 10", "Class 9"]),
+            ("📘 CBSE Class 8 — All Subjects (3D Foundation)", "CBSE", ["Class 8"]),
+            ("📗 ISC / ICSE Class 12 — All Subjects (3D Visual Series)", "ICSE", ["Class 12"]),
+            ("📗 ISC / ICSE Class 11 — All Subjects (3D Visual Series)", "ICSE", ["Class 11"]),
+            ("📗 ICSE Class 9 & 10 — All Subjects (3D Board Prep)", "ICSE", ["Class 10", "Class 9"]),
+            ("📗 ICSE Class 8 — All Subjects (3D Foundation)", "ICSE", ["Class 8"]),
+        ]
+
+        for shelf_title, board_key, cls_list in shelf_specs:
+            if board_key not in sel_boards:
+                continue
+            pids = [
+                matrix_ids[(board_key, c, s)]
+                for c in cls_list
+                for s in sel_subjects
+                if (board_key, c, s) in matrix_ids
+            ]
+            if not pids:
+                continue
+            if shelf_title in existing_multi_by_title:
+                sec_obj = existing_multi_by_title[shelf_title]
+                up_r = requests.put(
+                    "https://www.googleapis.com/youtube/v3/channelSections?part=snippet,contentDetails",
+                    headers=headers,
+                    data=json.dumps(
+                        {
+                            "id": sec_obj["id"],
+                            "snippet": {"type": "multiplePlaylists", "title": shelf_title},
+                            "contentDetails": {"playlists": pids[:25]},
+                        }
+                    ).encode("utf-8"),
+                    timeout=15,
+                )
+                if up_r.status_code in (200, 201):
+                    sections_updated += 1
+            else:
+                in_r = requests.post(
+                    "https://www.googleapis.com/youtube/v3/channelSections?part=snippet,contentDetails",
+                    headers=headers,
+                    data=json.dumps(
+                        {
+                            "snippet": {"type": "multiplePlaylists", "title": shelf_title},
+                            "contentDetails": {"playlists": pids[:25]},
+                        }
+                    ).encode("utf-8"),
+                    timeout=15,
+                )
+                if in_r.status_code in (200, 201):
+                    sections_created += 1
+    except Exception as exc:
+        errors.append(f"Section sync notice: {sanitize_api_error(exc)[:140]}")
+
+    catalog_out = {
+        "updated_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "playlists": {f"{b}|{c}|{s}": pid for (b, c, s), pid in matrix_ids.items()},
+    }
+    try:
+        (CONFIG_DIR / "playlists_catalog.json").write_text(json.dumps(catalog_out, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    return {
+        "ok": True,
+        "created_playlists": created_count,
+        "reused_playlists": reused_count,
+        "total_playlists_ready": len(matrix_ids),
+        "attached_video_links": attached_videos,
+        "sections_created": sections_created,
+        "sections_updated": sections_updated,
+        "errors": errors,
+    }

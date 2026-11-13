@@ -29,9 +29,14 @@ import studio_engine
 importlib.reload(studio_engine)
 
 from studio_engine import (
+    ALL_CURRICULUM_SUBJECTS,
+    CORE_STEM_SUBJECTS,
+    CURRICULUM_BOARDS,
+    CURRICULUM_CLASSES,
     SCRIPT_MODEL_PRESETS,
     build_youtube_auth_url,
     check_gemini_api_key_health,
+    check_youtube_playlist_scope,
     exchange_youtube_auth_code,
     fetch_live_youtube_channel_videos,
     generate_dual_script_and_thumbnails,
@@ -43,6 +48,7 @@ from studio_engine import (
     get_gemini_api_key,
     get_youtube_oauth_status,
     has_vertex_adc,
+    list_live_youtube_playlists,
     list_publish_queue,
     load_active_channel,
     load_meta_credentials,
@@ -55,6 +61,7 @@ from studio_engine import (
     save_youtube_client_secret,
     set_active_script_model,
     set_runtime_gemini_api_key,
+    sync_cbse_icse_playlists_and_sections,
     update_single_faceless_scene,
 )
 
@@ -108,6 +115,7 @@ if "code" in st.query_params and st.query_params.get("state") == "youtube_channe
     try:
         redir = st.session_state.get("yt_redirect_uri_input", "")
         tok_info = exchange_youtube_auth_code(st.query_params["code"], redirect_uri=redir)
+        st.session_state.pop("yt_pl_scope_cache", None)
         st.session_state["authenticated_google_user"] = st.session_state["authenticated_google_user"] or "jwala4work@gmail.com"
         st.session_state["yt_oauth_flash"] = (
             f"✅ Connected YouTube Channel: {tok_info.get('connected_channel_title', 'TopperLab 3D')} "
@@ -506,6 +514,7 @@ with tab1:
             if st.button("🔗 Verify Code & Save Permanent Refresh Token", use_container_width=True) and manual_code.strip():
                 try:
                     info = exchange_youtube_auth_code(manual_code.strip(), redirect_uri=redir_val)
+                    st.session_state.pop("yt_pl_scope_cache", None)
                     st.success(f"🟢 Connected `{info.get('connected_channel_title', 'TopperLab 3D')}`!")
                     st.rerun()
                 except Exception as exc:
@@ -518,6 +527,72 @@ with tab1:
             with st.expander("☁️ Optional: Keep Token Permanent Across Streamlit Cloud Restarts"):
                 st.caption("Paste this line into **Streamlit Cloud → Manage app → Settings → Secrets** so `@TopperLab3D` stays connected forever:")
                 st.code(f"YOUTUBE_OAUTH_TOKEN_JSON = '''{tok_disk.read_text(encoding='utf-8').strip()}'''", language="toml")
+
+    st.divider()
+    st.subheader("📚 CBSE & ICSE (Class 8–12) Subject Playlists + Channel Homepage Sections")
+    if yt_status.get("connected") and "yt_pl_scope_cache" not in st.session_state:
+        st.session_state["yt_pl_scope_cache"] = check_youtube_playlist_scope()
+    has_pl_scope = st.session_state.get("yt_pl_scope_cache", False) if yt_status.get("connected") else False
+    if has_pl_scope:
+        st.success("🟢 YouTube Playlist & Homepage Section Manager Unlocked (`@TopperLab3D`)")
+    else:
+        st.warning(
+            "🟠 **One 10-Second Step Required:** Your current YouTube token was created with Upload-Only permission. "
+            "Click **🔵 2. Sign In & Authorize @TopperLab3D** right above once (`jwala4work@gmail.com` → Allow) to unlock automatic Playlist & Homepage Section creation!"
+        )
+
+    pl_c1, pl_c2, pl_c3 = st.columns([1.0, 1.4, 2.0])
+    with pl_c1:
+        sel_pl_boards = st.multiselect("Boards:", options=CURRICULUM_BOARDS, default=CURRICULUM_BOARDS, key="arch_boards")
+    with pl_c2:
+        sel_pl_classes = st.multiselect("Classes (8–12):", options=CURRICULUM_CLASSES, default=CURRICULUM_CLASSES, key="arch_classes")
+    with pl_c3:
+        sel_pl_subjects = st.multiselect(
+            "Separate Subject Playlists (per Board & Class):",
+            options=ALL_CURRICULUM_SUBJECTS,
+            default=CORE_STEM_SUBJECTS,
+            key="arch_subjects",
+        )
+
+    planned_count = len(sel_pl_boards) * len(sel_pl_classes) * len(sel_pl_subjects)
+    st.caption(
+        f"Will create/verify **{planned_count} separate subject playlists** "
+        f"(`{len(sel_pl_boards)} Boards × {len(sel_pl_classes)} Classes × {len(sel_pl_subjects)} Subjects`) "
+        f"+ **8 Board & Class Horizontal Shelves** on `@TopperLab3D`'s Homepage, and auto-link existing videos."
+    )
+    if st.button(
+        f"🚀 Create / Sync All {planned_count} CBSE & ICSE Playlists + Homepage Sections on @TopperLab3D",
+        type="primary",
+        use_container_width=True,
+    ):
+        with st.spinner("Creating separate CBSE & ICSE Class 8–12 subject playlists and organizing @TopperLab3D homepage shelves..."):
+            st.session_state["yt_pl_scope_cache"] = check_youtube_playlist_scope()
+            sync_res = sync_cbse_icse_playlists_and_sections(
+                boards=sel_pl_boards,
+                classes=sel_pl_classes,
+                subjects=sel_pl_subjects,
+                attach_existing_videos=True,
+            )
+        if sync_res.get("ok"):
+            st.success(
+                f"✅ Done! Created **{sync_res['created_playlists']}** new playlists "
+                f"(reused **{sync_res['reused_playlists']}** existing • **{sync_res['total_playlists_ready']}** total ready) | "
+                f"Homepage Sections: **{sync_res['sections_created']}** created, **{sync_res['sections_updated']}** updated!"
+            )
+            if sync_res.get("errors"):
+                st.warning("Partial notices: " + " | ".join(sync_res["errors"][:3]))
+            st.session_state["live_yt_playlists"] = list_live_youtube_playlists()
+        else:
+            st.error(sync_res.get("error", "Could not sync playlists."))
+
+    if yt_status.get("connected"):
+        with st.expander("📋 View Live `@TopperLab3D` Playlists on YouTube"):
+            if st.button("🔄 Load / Refresh Live Playlists", key="btn_ref_pls"):
+                st.session_state["live_yt_playlists"] = list_live_youtube_playlists()
+            if st.session_state.get("live_yt_playlists"):
+                st.dataframe(st.session_state["live_yt_playlists"], use_container_width=True, hide_index=True)
+            else:
+                st.caption("Click 'Load / Refresh Live Playlists' above (or run the Create / Sync button first)!")
 
     with st.expander("📸 Optional: Connect Instagram Reels & Facebook Page (`Meta Graph API v21.0`)"):
         mc1, mc2, mc3 = st.columns(3)
@@ -901,6 +976,19 @@ with tab4:
             placeholder="https://...",
         )
 
+    plc1, plc2, plc3 = st.columns([1.2, 1.2, 1.6])
+    with plc1:
+        pub_boards = st.multiselect(
+            "📚 Auto-Add to Board Playlists:",
+            options=CURRICULUM_BOARDS,
+            default=CURRICULUM_BOARDS,
+            help="One video can live in BOTH CBSE and ICSE playlists simultaneously!",
+        )
+    with plc2:
+        pub_class = st.selectbox("🎓 Target Class:", options=CURRICULUM_CLASSES, index=1)
+    with plc3:
+        pub_subject = st.selectbox("🔬 Target Subject:", options=ALL_CURRICULUM_SUBJECTS, index=0)
+
     tc1, tc2, tc3 = st.columns(3)
     with tc1:
         pub_date = st.date_input("Publish Date (IST):", value=datetime.date.today() + datetime.timedelta(days=1))
@@ -959,6 +1047,9 @@ with tab4:
                         publish_now=is_now,
                         thumbnail_path=t_file,
                         public_mp4_url_for_ig=ig_pub_url,
+                        target_boards=pub_boards,
+                        target_class=pub_class,
+                        target_subject=pub_subject,
                     )
                     results.append(r)
 

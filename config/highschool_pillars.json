@@ -113,9 +113,10 @@
     }
   ],
   "exam_tracks": [
-    "All High-Schoolers (Class 9–12 • Boards • JEE & NEET)",
-    "Class 11–12 + JEE Mains & Advanced (Physics • Chem • Maths)",
-    "Class 11–12 + NEET UG (Biology • Physics • Chemistry)",
-    "Class 9–10 CBSE / ICSE Board Foundation"
+    "All Students (Class 8–12 • CBSE & ICSE/ISC • JEE & NEET)",
+    "CBSE & ISC Class 11–12 + JEE Mains & Advanced (Physics • Chem • Maths)",
+    "CBSE & ISC Class 11–12 + NEET UG (Biology • Physics • Chemistry)",
+    "CBSE Class 8, 9 & 10 (NCERT Science & Maths Foundation)",
+    "ICSE Class 8, 9 & 10 (Physics • Chemistry • Biology • Maths)"
   ]
 }
