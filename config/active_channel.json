@@ -5,59 +5,62 @@
   "youtube_channel_url": "https://www.youtube.com/channel/UCuYzy1OoXmzIdjRP8cgUmRw",
   "owner_google_email": "jwala4work@gmail.com",
   "gcp_project_email": "jwalashiva@gmail.com",
-  "cohort": "India High-School Students (Ages 13–18 • Class 8–12 • CBSE & ICSE/ISC • JEE & NEET)",
-  "positioning_tagline": "See What Textbooks Can't Show — 3D Science Concepts & Scientific Topper Memory Systems",
+  "cohort": "India High-School Students (Class 8–12 • Focus: Class 10 CBSE & ICSE • JEE & NEET)",
+  "positioning_tagline": "See Science in Friendly 3D — Animated Formulas, Topper Exam Hacks & Real-Life Models",
   "faceless_mode": true,
-  "default_voice_mode": "Clean Indian-English (en-IN)",
+  "default_voice_mode": "Energetic Indian Mentor — Expressive AI (en-IN)",
   "voice_presets": {
-    "Clean Indian-English (en-IN)": {
-      "edge_voice": "en-IN-PrabhatNeural",
-      "rate": "+6%",
-      "pitch": "+0Hz",
-      "language_code": "en-IN",
-      "script_instruction": "Write in crisp, energetic, clear Indian-English (Veritasium meets 3Blue1Brown tone) tailored for Indian Class 9–12, CBSE/ICSE, JEE, and NEET students. Use vivid visual cues ('Watch closely as the 3D vector tilts...') and clear scientific precision without textbook dryness."
-    },
-    "Clean Indian-English — Expressive Female (en-IN)": {
+    "Energetic Indian Mentor — Expressive AI (en-IN)": {
+      "gemini_voice": "Puck",
       "edge_voice": "en-IN-NeerjaExpressiveNeural",
-      "rate": "+5%",
-      "pitch": "+0Hz",
+      "rate": "+9%",
+      "pitch": "+3Hz",
       "language_code": "en-IN",
-      "script_instruction": "Write in crisp, clear, warm Indian-English tailored for Indian Class 9–12, CBSE, JEE, and NEET students with strong visual storytelling hooks."
+      "script_instruction": "Write like an excited, super-engaging favourite Indian science mentor talking directly to a Class 10 student! Open with a fun everyday real-life hook ('Wait a second—imagine spinning your cycle wheel...', 'Ever wondered why...'), use short punchy sentences, rhetorical questions, exclamation marks, dramatic pauses ('...'), and relatable Indian classroom examples (bicycles, cricket balls, ceiling fans, magnets, prisms). Zero dry textbook monotone!"
     },
-    "Hinglish — Youth Topper Flow (hi-IN)": {
-      "edge_voice": "hi-IN-MadhurNeural",
-      "rate": "+6%",
-      "pitch": "+0Hz",
+    "Warm Expressive Teacher — Female AI (en-IN)": {
+      "gemini_voice": "Aoede",
+      "edge_voice": "en-IN-NeerjaExpressiveNeural",
+      "rate": "+8%",
+      "pitch": "+2Hz",
+      "language_code": "en-IN",
+      "script_instruction": "Write with warm enthusiasm, curiosity, and vivid storytelling tailored for Indian Class 8–12 CBSE & ICSE students. Use relatable real-life examples, expressive questions, and celebratory 'aha!' moments."
+    },
+    "Hinglish — Energetic Topper Bhaiya/Didi (hi-IN)": {
+      "gemini_voice": "Puck",
+      "edge_voice": "hi-IN-SwaraNeural",
+      "rate": "+9%",
+      "pitch": "+2Hz",
       "language_code": "hi-IN",
-      "script_instruction": "Write in natural conversational Hinglish (Roman script mixing exact English STEM terms like Torque, Angular Momentum, Active Recall, NCERT, JEE/NEET with natural Hindi connectors) tailored for Indian Class 9–12 students."
+      "script_instruction": "Write in high-energy, friendly conversational Hinglish (Roman script mixing exact English STEM terms like Torque, Magnetic Field, Ohm's Law, NCERT, CBSE/ICSE with lively Hindi connectors like 'Ruko zara!', 'Socho agar...', 'Bas yahi 4-mark ka secret hai!') tailored for Class 9–12 students."
     }
   },
   "visual_themes": {
-    "3D_DARK_LAB_CUTAWAY": {
-      "label": "🔬 3D Dark Obsidian Lab Cutaway (Veritasium / Zack D. Films Style)",
-      "style_prompt": "Ultra-crisp 8k Octane 3D scientific cutaway render inside a dark obsidian glass physics and molecular laboratory, glowing cyan and electric-gold vector arrows, volumetric studio lighting, razor-sharp depth of field, zero human faces, no clutter."
+    "BRIGHT_CLASSROOM_3D_MODEL": {
+      "label": "🎒 Bright 3D Classroom & Real-Life Models (Best for Class 8–10 Students)",
+      "style_prompt": "Bright, colorful, friendly Pixar and Kurzgesagt-inspired 3D educational classroom model using relatable everyday objects (colorful bicycle wheel, cricket ball, red-and-blue bar magnet, battery and bulb circuit, glass rainbow prism, clear water pipes), sunny clean sky-blue and warm cream studio tabletop, bold color-coded 3D arrows in yellow, red, and royal blue, instantly understandable by a Class 10 student in 2 seconds, zero dark sci-fi alien machinery, zero human faces, zero text inside the 3D render."
     },
-    "HOLOGRAPHIC_CONCEPT_CORE": {
-      "label": "⚛️ Holographic 3Blue1Brown Vector & Formula Stage",
-      "style_prompt": "Minimalist deep-space matte black 3D mathematical and scientific visualization stage inspired by 3Blue1Brown, luminous sapphire-cyan and golden geometric vectors, glowing 3D graphs and crystal structures, zero human faces."
+    "COLORFUL_3D_SCIENCE_CUTAWAY": {
+      "label": "🧪 Colorful 3D School Lab Cutaway (Byju's / CrashCourse 3D Style)",
+      "style_prompt": "Vibrant, brightly lit 3D school science lab cutaway model on a clean bright workbench, glossy primary-colored 3D parts sliced open to show how things work inside, warm studio lighting, zero dark sci-fi gloom, zero human faces, zero text inside the 3D render."
     },
-    "TOPPER_NEURO_DESK_3D": {
-      "label": "🧠 3D Glass Brain & Topper Study Blueprint Stage",
-      "style_prompt": "Cinematic 3D render of a translucent glowing sapphire-blue 3D glass brain cutaway with golden synaptic pathways above a sleek futuristic dark study desk with floating holographic revision cards, Octane 3D render, zero human faces."
+    "CLEAN_3D_VECTOR_STAGE": {
+      "label": "📐 Clean 3D Formula & Vector Stage (Class 11–12 • JEE & NEET)",
+      "style_prompt": "Crisp royal-blue and warm-light 3D educational physics and geometry stage, bright color-coded yellow and crimson 3D arrows around clean everyday mechanical models, zero dark sci-fi clutter, zero human faces, zero text inside the 3D render."
     }
   },
-  "default_visual_theme": "3D_DARK_LAB_CUTAWAY",
-  "channel_seo_description": "Welcome to TopperLab 3D (@TopperLab3D) — where Class 9–12, CBSE/ICSE, JEE, and NEET concepts come alive in crystal-clear 3D!\n\nTextbooks flatten 3D physics, chemistry, biology, and mathematics onto dead 2D pages. At TopperLab 3D, we break open every tough chapter, competitive exam trap, and neuroscience-backed Topper memory system using high-precision 3D visual simulations.\n\n🔬 New 3D Deep-Dives & 60-Second Concept Shorts Every Week!\n📄 Grab Free 1-Page Formula Sheets & Active-Recall Trackers in Every Video Description.",
-  "channel_keywords": "TopperLab 3D, 3D Physics India, Class 11 Class 12 3D Science, JEE Mains 3D Concepts, NEET Biology 3D Animation, CBSE Board Exam Strategy, Active Recall Topper Study Hacks, Visual NCERT Concepts, How Things Work 3D Science",
+  "default_visual_theme": "BRIGHT_CLASSROOM_3D_MODEL",
+  "channel_seo_description": "Welcome to TopperLab 3D (@TopperLab3D) — where Class 8–12 CBSE, ICSE, JEE, and NEET concepts come alive as bright, easy-to-understand 3D models!\n\nBoring 2D textbook diagrams make simple science look scary. At TopperLab 3D, we turn every chapter into relatable 3D classroom models with animated Fly-In Formulas, Topper Quick Tips, and 4-Mark Board Exam Hacks.\n\n🎒 Special Series for CBSE & ICSE Class 8, 9, 10, 11 & 12!\n📄 Grab Free 1-Page Formula Sheets & Active-Recall Trackers in Every Video Description.",
+  "channel_keywords": "TopperLab 3D, Class 10 Science 3D, CBSE Class 10 Physics 3D, ICSE Class 10 Science, 3D NCERT Concepts, Board Exam Quick Tips, Science Formula Hacks, Class 9 Class 10 Maths Science, JEE NEET 3D Foundation",
   "default_resource_links": [
     {
-      "category": "📄 1-Page 3D Formula & Concept Cheat Sheet (PDF)",
-      "label": "Download Free 1-Page Formula & 3D Vector Summary Sheet (PDF)",
+      "category": "📄 1-Page 3D Formula & Quick-Tip Cheat Sheet (PDF)",
+      "label": "Download Free 1-Page Formula & Exam Hack Sheet (PDF)",
       "url": "https://drive.google.com/drive/folders/1vJh5qXFnEnkEcetL2qXeyYh_FWMMNHR1"
     },
     {
-      "category": "📊 99%iler Active-Recall & Spaced-Repetition Tracker (Sheet)",
-      "label": "Free NCERT / JEE / NEET Revision & Mock-Test Tracker (Google Sheet)",
+      "category": "📊 Topper Active-Recall & Board Exam Revision Tracker (Sheet)",
+      "label": "Free CBSE / ICSE / JEE / NEET Revision Tracker (Google Sheet)",
       "url": "https://docs.google.com/spreadsheets/"
     }
   ]

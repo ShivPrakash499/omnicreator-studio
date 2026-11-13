@@ -11,6 +11,7 @@ Clean-Slate Production Engine for TopperLab 3D (@TopperLab3D):
 """
 from __future__ import annotations
 
+from array import array
 import asyncio
 import datetime
 import json
@@ -27,7 +28,7 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import requests
-from PIL import Image, ImageOps
+from PIL import Image, ImageDraw, ImageFilter, ImageFont, ImageOps
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 CONFIG_DIR = ROOT_DIR / "config"
@@ -263,14 +264,12 @@ SCRIPT_MODEL_PRESETS: Dict[str, str] = {
     "gemini-4-argon": "Gemini 4 Argon ⭐ (Best STEM & JEE/NEET Reasoning)",
     "gemini-4-hydrogen": "Gemini 4 Hydrogen ⚡ (Fastest Gemini 4 Workhorse)",
     "gemini-4-carbon": "Gemini 4 Carbon 🧠 (Deepest Frontier — Auto-Fallback to Argon)",
-    "gemini-3.8-flash": "Gemini 3.8 Flash (Ultra-Light Fallback)",
 }
 
 SCRIPT_MODEL_SHORT_NAMES: Dict[str, str] = {
     "gemini-4-argon": "Gemini 4 Argon",
     "gemini-4-hydrogen": "Gemini 4 Hydrogen",
     "gemini-4-carbon": "Gemini 4 Carbon",
-    "gemini-3.8-flash": "Gemini 3.8 Flash",
 }
 
 
@@ -300,7 +299,7 @@ def set_active_script_model(model_id: str) -> None:
 def _ordered_script_models(preferred: str | None = None) -> List[str]:
     first = (preferred or get_active_script_model()).strip()
     ordered: List[str] = []
-    for m in (first, "gemini-4-argon", "gemini-4-hydrogen", "gemini-3.8-flash"):
+    for m in (first, "gemini-4-argon", "gemini-4-hydrogen"):
         if m and m not in ordered:
             ordered.append(m)
     return ordered
@@ -452,6 +451,276 @@ def _fit_and_save_image(src_img: Image.Image, output_path: Path, target_size: tu
     return output_path
 
 
+def _sanitize_drawable_text(text: str) -> str:
+    """Keep ASCII + standard Latin/Greek/Math/Arrow BMP symbols supported by DejaVuSans & Segoe UI; strip astral emojis."""
+    cleaned = []
+    for ch in str(text or ""):
+        code = ord(ch)
+        if code <= 0x25FF and ch not in ("\ufe0f", "\u200d"):
+            cleaned.append(ch)
+    return re.sub(r"\s+", " ", "".join(cleaned)).strip()
+
+
+def _load_studio_font(size: int, weight: str = "bold") -> ImageFont.FreeTypeFont | ImageFont.ImageFont:
+    if weight == "heavy":
+        candidates = [
+            r"C:\Windows\Fonts\impact.ttf",
+            r"C:\Windows\Fonts\arialbd.ttf",
+            r"C:\Windows\Fonts\segoeuib.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        ]
+    elif weight == "bold":
+        candidates = [
+            r"C:\Windows\Fonts\segoeuib.ttf",
+            r"C:\Windows\Fonts\arialbd.ttf",
+            r"C:\Windows\Fonts\calibrib.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf",
+        ]
+    else:
+        candidates = [
+            r"C:\Windows\Fonts\segoeui.ttf",
+            r"C:\Windows\Fonts\arial.ttf",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/truetype/liberation/LiberationSans-Regular.ttf",
+        ]
+    for fp in candidates:
+        if os.path.exists(fp):
+            try:
+                return ImageFont.truetype(fp, size=size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+
+def infer_class_badge_label(
+    exam_track: str = "",
+    topic_title: str = "",
+    class_override: str = "",
+    subject_override: str = "",
+) -> str:
+    cls = (class_override or "").strip().upper()
+    if not cls:
+        low = f"{exam_track} {topic_title}".lower()
+        if "class 10" in low:
+            cls = "CLASS 10"
+        elif "class 9" in low:
+            cls = "CLASS 9"
+        elif "class 8" in low:
+            cls = "CLASS 8"
+        elif "class 12" in low:
+            cls = "CLASS 12"
+        elif "class 11" in low:
+            cls = "CLASS 11"
+        else:
+            cls = "CLASS 10"
+
+    subj = (subject_override or "").strip().upper()
+    if not subj:
+        t_low = f"{topic_title} {exam_track}".lower()
+        if any(k in t_low for k in ("trig", "math", "factorial", "algebra", "geometry", "quadratic")):
+            subj = "MATHS 3D"
+        elif any(k in t_low for k in ("heart", "dna", "mitosis", "biology", "life process", "cell")):
+            subj = "BIOLOGY 3D"
+        elif any(k in t_low for k in ("sn1", "chemistry", "metal", "calcination", "acid", "carbon")):
+            subj = "CHEMISTRY 3D"
+        elif any(k in t_low for k in ("memory", "recall", "revision", "blank out", "score 95")):
+            subj = "TOPPER HACKS"
+        else:
+            subj = "SCIENCE 3D"
+    elif "3D" not in subj:
+        subj = f"{subj} 3D"
+    return f"{cls} • {subj}"
+
+
+def _split_hook_two_lines(hook_text: str) -> tuple[str, str]:
+    clean = _sanitize_drawable_text(hook_text).upper() or "SEE IT IN 3D!"
+    words = clean.split()
+    if len(words) == 1:
+        return words[0], "IN 3D!"
+    if len(words) == 2:
+        return words[0], words[1]
+    best_idx = 1
+    best_diff = 999
+    for idx in range(1, len(words)):
+        l1 = " ".join(words[:idx])
+        l2 = " ".join(words[idx:])
+        diff = abs(len(l1) - len(l2))
+        if diff < best_diff:
+            best_diff = diff
+            best_idx = idx
+    return " ".join(words[:best_idx]), " ".join(words[best_idx:])
+
+
+def _fit_font_for_width(
+    draw: ImageDraw.ImageDraw,
+    text: str,
+    max_w: int,
+    start_size: int,
+    min_size: int = 44,
+    weight: str = "heavy",
+):
+    sz = start_size
+    while sz >= min_size:
+        fnt = _load_studio_font(sz, weight=weight)
+        bbox = draw.textbbox((0, 0), text, font=fnt, stroke_width=8)
+        if (bbox[2] - bbox[0]) <= max_w:
+            return fnt
+        sz -= 6
+    return _load_studio_font(min_size, weight=weight)
+
+
+def apply_consistent_topperlab_thumbnail_branding(
+    image_path: Path,
+    hook_text: str,
+    class_badge_text: str = "CLASS 10 • SCIENCE 3D",
+    sub_tagline: str = "EASY 3D MODEL + EXAM HACK",
+    is_vertical: bool = False,
+) -> Path:
+    """
+    Applies 100% consistent, high-CTR TopperLab 3D branding across EVERY video thumbnail:
+      - Crimson Red Class Name Pill (e.g., ★ CLASS 10 • SCIENCE 3D)
+      - Giant Line 1 Heading in Electric Yellow (#FFD600) with thick black stroke
+      - Explosive Line 2 Vibrant Red Banner (#DC2626) with bold White/Yellow pop
+      - Electric Yellow outer frame accent while keeping the bright 3D model vivid and clear!
+    """
+    if not image_path.exists():
+        return image_path
+
+    base = Image.open(image_path).convert("RGBA")
+    W, H = base.size
+    overlay = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    odraw = ImageDraw.Draw(overlay)
+
+    if not is_vertical:
+        grad_w = int(W * 0.56)
+        for x in range(grad_w):
+            ratio = 1.0 - (x / float(grad_w))
+            alpha = int(224 * (ratio ** 1.45))
+            odraw.line([(x, 0), (x, H)], fill=(10, 18, 38, alpha))
+    else:
+        grad_h = int(H * 0.44)
+        for y in range(grad_h):
+            ratio = 1.0 - (y / float(grad_h))
+            alpha = int(220 * (ratio ** 1.35))
+            odraw.line([(0, y), (W, y)], fill=(10, 18, 38, alpha))
+
+    comp = Image.alpha_composite(base, overlay)
+    draw = ImageDraw.Draw(comp)
+
+    draw.rectangle([4, 4, W - 5, H - 5], outline=(255, 214, 0, 255), width=10)
+
+    badge_str = _sanitize_drawable_text(class_badge_text).upper()
+    line1, line2 = _split_hook_two_lines(hook_text)
+    sub_str = _sanitize_drawable_text(sub_tagline).upper()
+
+    if not is_vertical:
+        f_badge = _load_studio_font(38, weight="bold")
+        bb = draw.textbbox((0, 0), badge_str, font=f_badge)
+        bw, bh = (bb[2] - bb[0]) + 48, (bb[3] - bb[1]) + 28
+        bx, by = 56, 52
+        draw.rounded_rectangle([bx + 5, by + 6, bx + bw + 5, by + bh + 6], radius=18, fill=(0, 0, 0, 165))
+        draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=18, fill=(220, 38, 38, 255), outline=(255, 255, 255, 255), width=4)
+        draw.text((bx + 24, by + 11 - bb[1]), badge_str, font=f_badge, fill=(255, 255, 255, 255))
+
+        max_w = int(W * 0.47)
+        f_h1 = _fit_font_for_width(draw, line1, max_w=max_w, start_size=132, min_size=64, weight="heavy")
+        b1 = draw.textbbox((0, 0), line1, font=f_h1, stroke_width=10)
+        y1 = by + bh + 34
+        draw.text((64, y1 + 8 - b1[1]), line1, font=f_h1, fill=(0, 0, 0, 200), stroke_width=10, stroke_fill=(0, 0, 0, 200))
+        draw.text((56, y1 - b1[1]), line1, font=f_h1, fill=(255, 214, 0, 255), stroke_width=10, stroke_fill=(9, 13, 22, 255))
+
+        y2_box = y1 + (b1[3] - b1[1]) + 22
+        f_h2 = _fit_font_for_width(draw, line2, max_w=max_w - 44, start_size=122, min_size=60, weight="heavy")
+        b2 = draw.textbbox((0, 0), line2, font=f_h2, stroke_width=7)
+        r_w = (b2[2] - b2[0]) + 56
+        r_h = (b2[3] - b2[1]) + 34
+        draw.rounded_rectangle([64, y2_box + 8, 64 + r_w, y2_box + r_h + 8], radius=22, fill=(0, 0, 0, 185))
+        draw.rounded_rectangle(
+            [56, y2_box, 56 + r_w, y2_box + r_h],
+            radius=22,
+            fill=(220, 38, 38, 255),
+            outline=(255, 214, 0, 255),
+            width=5,
+        )
+        draw.text(
+            (56 + 28, y2_box + 15 - b2[1]),
+            line2,
+            font=f_h2,
+            fill=(255, 255, 255, 255),
+            stroke_width=7,
+            stroke_fill=(69, 10, 10, 255),
+        )
+
+        y3 = y2_box + r_h + 28
+        f_sub = _load_studio_font(31, weight="bold")
+        bs = draw.textbbox((0, 0), sub_str, font=f_sub)
+        sw, sh = (bs[2] - bs[0]) + 40, (bs[3] - bs[1]) + 22
+        if y3 + sh < H - 135:
+            draw.rounded_rectangle(
+                [56, y3, 56 + sw, y3 + sh],
+                radius=14,
+                fill=(15, 23, 42, 235),
+                outline=(56, 189, 248, 255),
+                width=3,
+            )
+            draw.text((56 + 20, y3 + 9 - bs[1]), sub_str, font=f_sub, fill=(253, 224, 71, 255))
+
+        stamp_txt = "TOPPERLAB 3D • CBSE & ICSE"
+        f_st = _load_studio_font(28, weight="bold")
+        bst = draw.textbbox((0, 0), stamp_txt, font=f_st)
+        stw, sth = (bst[2] - bst[0]) + 36, (bst[3] - bst[1]) + 20
+        sy = H - sth - 44
+        draw.rounded_rectangle([56, sy, 56 + stw, sy + sth], radius=12, fill=(255, 214, 0, 255), outline=(15, 23, 42, 255), width=3)
+        draw.text((56 + 18, sy + 8 - bst[1]), stamp_txt, font=f_st, fill=(15, 23, 42, 255))
+    else:
+        f_badge = _load_studio_font(38, weight="bold")
+        bb = draw.textbbox((0, 0), badge_str, font=f_badge)
+        bw, bh = (bb[2] - bb[0]) + 48, (bb[3] - bb[1]) + 26
+        bx, by = (W - bw) // 2, 86
+        draw.rounded_rectangle([bx, by, bx + bw, by + bh], radius=18, fill=(220, 38, 38, 255), outline=(255, 255, 255, 255), width=4)
+        draw.text((bx + 24, by + 11 - bb[1]), badge_str, font=f_badge, fill=(255, 255, 255, 255))
+
+        max_w = W - 110
+        f_h1 = _fit_font_for_width(draw, line1, max_w=max_w, start_size=118, min_size=56, weight="heavy")
+        b1 = draw.textbbox((0, 0), line1, font=f_h1, stroke_width=9)
+        w1 = b1[2] - b1[0]
+        x1 = (W - w1) // 2
+        y1 = by + bh + 30
+        draw.text((x1 + 6, y1 + 7 - b1[1]), line1, font=f_h1, fill=(0, 0, 0, 200), stroke_width=9, stroke_fill=(0, 0, 0, 200))
+        draw.text((x1, y1 - b1[1]), line1, font=f_h1, fill=(255, 214, 0, 255), stroke_width=9, stroke_fill=(9, 13, 22, 255))
+
+        y2_box = y1 + (b1[3] - b1[1]) + 20
+        f_h2 = _fit_font_for_width(draw, line2, max_w=max_w - 50, start_size=112, min_size=54, weight="heavy")
+        b2 = draw.textbbox((0, 0), line2, font=f_h2, stroke_width=7)
+        r_w = (b2[2] - b2[0]) + 56
+        r_h = (b2[3] - b2[1]) + 32
+        rx = (W - r_w) // 2
+        draw.rounded_rectangle(
+            [rx, y2_box, rx + r_w, y2_box + r_h],
+            radius=22,
+            fill=(220, 38, 38, 255),
+            outline=(255, 214, 0, 255),
+            width=5,
+        )
+        draw.text(
+            (rx + 28, y2_box + 14 - b2[1]),
+            line2,
+            font=f_h2,
+            fill=(255, 255, 255, 255),
+            stroke_width=7,
+            stroke_fill=(69, 10, 10, 255),
+        )
+
+    out_rgb = comp.convert("RGB")
+    if image_path.suffix.lower() in (".jpg", ".jpeg"):
+        out_rgb.save(image_path, format="JPEG", quality=94, optimize=True)
+    else:
+        out_rgb.save(image_path, format="PNG", optimize=True)
+    return image_path
+
+
 def generate_pure_3d_image(
     prompt: str,
     output_path: Path,
@@ -460,17 +729,18 @@ def generate_pure_3d_image(
     force_live: bool = False,
 ) -> Path:
     """
-    Generates a 100% pure 3D faceless render (zero PIL ImageDraw boxes).
+    Generates a bright, student-friendly 100% faceless 3D educational model render.
     Uses Vertex AI / Gemini Nano Banana 2.1 when active, otherwise uses
-    clean pre-rendered TopperLab 3D plates in assets/topperlab_3d/.
+    pre-rendered TopperLab 3D plates in assets/topperlab_3d/.
     """
     if output_path.exists() and not force_live:
         return output_path
 
     clean_prompt = (
         f"{prompt.strip()} "
-        "100% faceless 3D scientific studio visualization, zero human faces, zero people, "
-        "high-contrast Octane 3D render, crisp volumetric lighting."
+        "100% faceless bright colorful 3D educational classroom cutaway model, "
+        "easy for a Class 10 school student to understand immediately, clean bright studio lighting, "
+        "zero dark alien sci-fi clutter, zero human faces, zero people, zero text or letters inside the 3D scene."
     )
 
     client = build_genai_client(location="global", timeout_ms=90000)
@@ -513,9 +783,8 @@ def generate_pure_3d_image(
         img = Image.open(fallback_file)
         return _fit_and_save_image(img, output_path, target_size)
 
-    blank = Image.new("RGB", target_size, (11, 15, 25))
+    blank = Image.new("RGB", target_size, (224, 242, 254))
     return _fit_and_save_image(blank, output_path, target_size)
-
 
 def generate_veo_clip_via_api(
     veo_prompt: str,
@@ -921,64 +1190,99 @@ def generate_viral_highschool_topics(
     return res if isinstance(res, list) and len(res) > 0 else fallback_topics
 
 
+def _resolve_voice_preset(ch: Dict[str, Any], voice_mode: str) -> Dict[str, Any]:
+    presets = ch.get("voice_presets", {})
+    if voice_mode in presets:
+        return presets[voice_mode]
+    low = (voice_mode or "").lower()
+    if "hinglish" in low or "hi-in" in low:
+        for k, v in presets.items():
+            if v.get("language_code") == "hi-IN":
+                return v
+    if "female" in low or "teacher" in low:
+        for k, v in presets.items():
+            if "female" in k.lower() or v.get("gemini_voice") == "Aoede":
+                return v
+    return presets.get(ch.get("default_voice_mode", ""), next(iter(presets.values())))
+
+
+def _resolve_visual_theme(ch: Dict[str, Any], visual_theme_key: str) -> Dict[str, Any]:
+    themes = ch.get("visual_themes", {})
+    if visual_theme_key in themes:
+        return themes[visual_theme_key]
+    return themes.get(ch.get("default_visual_theme", ""), next(iter(themes.values())))
+
+
 def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> List[Dict[str, Any]]:
-    if "gyroscope" in topic_title.lower() or "rotational" in topic_title.lower():
+    t_low = topic_title.lower()
+    if "gyroscope" in t_low or "rotational" in t_low or "bicycle" in t_low or "wheel" in t_low:
         return [
             {
                 "scene_id": 1,
-                "headline": "DEFIES GRAVITY?!",
-                "concept_takeaway": "Spinning wheel stays horizontal on a needle tip instead of falling",
+                "headline": "CYCLE WHEEL MYSTERY!",
+                "concept_takeaway": "A fast-spinning bicycle wheel stays upright on one rope instead of falling!",
+                "formula_badge": "Angular Momentum (L) = I × ω  (Mass Spread × Spin Speed)",
+                "quick_tip": "Try it in class: Stationary cycle wheel falls instantly — spinning wheel balances!",
                 "narration": (
-                    "Drop a heavy metal wheel balanced on the tip of a thin needle, and gravity slams it straight down in half a second. "
-                    "Now spin that exact same wheel at three thousand revolutions per minute—and suddenly it floats sideways in mid-air, seemingly defying gravity. "
-                    "Textbooks bury this magic under dry equations, so let us step inside 3D space and actually see the invisible vectors holding it up."
+                    "Hold on—imagine hanging a real bicycle wheel from just one rope on one side of its axle! "
+                    "If the wheel isn't spinning, boom—gravity slams it straight down! "
+                    "But give that exact same cycle wheel a super-fast spin... and wait—why is it floating sideways in mid-air without falling?! Let's see the simple 3D secret!"
                     if not is_hinglish
-                    else "Agar aap ek heavy metal wheel ko patli needle par chhod dein, toh gravity usse turant neeche gira degi. Lekin usi wheel ko 3000 RPM par spin kijiye—aur woh hawa mein horizontal float karne lagta hai! Chaliye 3D space mein dekhte hain ki Torque aur Angular Momentum ise kaise sambhalte hain."
+                    else "Ruko zara! Socho agar aap ek normal cycle ke wheel ko sirf ek side ki rassi se latka dein! Bina spin kiye chhodoge, toh dhadam se neeche girega! Lekin usi wheel ko zor se spin kijiye... arey wah—yeh hawa mein seedha kaise tair raha hai?! Chaliye 3D model mein iska secret dekhte hain!"
                 ),
-                "image_3d_prompt": "Photorealistic 8k 3D render of a gleaming brass and neon-cyan gyroscope spinning rapidly balanced horizontally on a steel needle tip inside a dark obsidian physics lab, glowing yellow Angular Momentum vector L and cyan Torque vector tau, bold 3D text 'DEFIES GRAVITY?!', zero human faces.",
-                "google_flow_veo_prompt": "Cinematic 8k 3D slow-motion physics simulation: a glowing brass and cyan precision gyroscope wheel spinning rapidly on a sharp needle pivot, orbiting smoothly horizontally in mid-air with luminous golden angular momentum vector arrows, dark obsidian lab, subtle mechanical hum SFX.",
+                "image_3d_prompt": "Bright sunny Pixar-style 3D classroom tabletop demonstration: a colorful red-and-yellow school bicycle wheel spinning fast while hanging horizontally from one bright white rope attached to one side of its axle, bold yellow 3D spin arrows around the tire and a bright blue balance arrow along the axle, warm sky-blue classroom background, super clear for Class 10 students, zero text, zero faces.",
+                "google_flow_veo_prompt": "Bright colorful Pixar-style 3D science classroom model: a red and yellow bicycle wheel hanging from a single rope spins rapidly and glides smoothly in a horizontal circle without falling, bright yellow and blue 3D arrows.",
                 "fallback_plate": "scene_01_16x9.jpg",
             },
             {
                 "scene_id": 2,
-                "headline": "TORQUE AT 90°",
-                "concept_takeaway": "τ = r × mg points perpendicular to both position r and gravity mg",
+                "headline": "DOOR & SPANNER RULE",
+                "concept_takeaway": "Turning effect (Torque) = Force × Distance from the hinge or pivot!",
+                "formula_badge": "Torque (τ) = Force (F) × Perpendicular Distance (r)",
+                "quick_tip": "Board Exam Hack: Door handles are placed FAR from hinges so small push gives HUGE Torque!",
                 "narration": (
-                    "First, freeze the frame and trace the two real forces. Position vector r points straight out along the axle from the pivot, while gravity pulls straight down with force m g. "
-                    "When you curl your right-hand fingers from r toward downward gravity, the cross product torque tau equals r cross F shoots horizontally at a perfect ninety-degree angle—not downward!"
+                    "First, think about pushing your heavy classroom door! Why is the handle always on the far edge—never right next to the hinges? "
+                    "Because turning power, called Torque, equals Force times Distance! "
+                    "On our cycle wheel, gravity pulls down at a distance from the rope—creating a sideways twist instead of a straight drop!"
                     if not is_hinglish
-                    else "Sabse pehle frame ko freeze karke vectors dekhiye. Pivot se bahar ki taraf jaata hai position vector r, aur neeche pull karta hai gravity vector mg. Right-hand rule lagaiye—r cross mg se banne wala Torque vector neeche nahi, balki 90 degree sideways point karta hai!"
+                    else "Sabse pehle apne classroom ke darwaze ko socho! Handle hamesha kabze se door kyun laga hota hai? Kyunki ghumane wali taqat—yaani Torque—hota hai Force guna Distance! Cycle wheel par bhi gravity rassi se thodi door neeche kheenchti hai, jo wheel ko sideways twist deti hai!"
                 ),
-                "image_3d_prompt": "Minimalist 3Blue1Brown meets Veritasium 3D physics stage on matte-black grid: glowing golden position vector r and vertical red force vector mg meeting at pivot, producing perpendicular glowing cyan torque vector tau = r x F at 90 degrees, zero human faces.",
-                "google_flow_veo_prompt": "3Blue1Brown style 3D mathematical animation on a dark space grid: a golden vector r and downward red gravity vector mg sweep together to spawn a glowing cyan perpendicular torque arrow at 90 degrees, smooth orbital camera dolly.",
+                "image_3d_prompt": "Friendly colorful 3D classroom comparison model on a bright clean desk: a bright wooden toy door with hinges and a yellow spanner turning a large silver nut, vivid green Distance arrow (r) and red Push Force arrow (F) creating a bright golden turning arrow, sunlit studio backdrop, zero text, zero faces.",
+                "google_flow_veo_prompt": "Colorful 3D educational classroom animation: a bright yellow spanner turns a bolt easily when pushed at the long handle end, glowing red force arrow and green distance arrow.",
                 "fallback_plate": "scene_02_16x9.jpg",
             },
             {
                 "scene_id": 3,
-                "headline": "PRECESSION LOOP",
-                "concept_takeaway": "ΔL = τ · Δt swings the spinning Angular Momentum vector sideways in a circle",
+                "headline": "SIDEWAYS STEERING!",
+                "concept_takeaway": "Spin + Gravity Twist steers the wheel smoothly in a horizontal circle!",
+                "formula_badge": "Change in Spin Direction (ΔL) = Torque (τ) × Time (Δt)",
+                "quick_tip": "Right-Hand Thumb Trick: Curl fingers with wheel spin → Your thumb points along the axle!",
                 "narration": (
-                    "When the wheel is not spinning, its initial angular momentum L is zero, so that sideways torque simply tips the wheel over. "
-                    "But when spinning fast, the wheel already carries a huge horizontal angular momentum vector L. Because torque equals the rate of change of angular momentum, delta L pulls the tip of L sideways—forcing the entire axle to orbit smoothly in a horizontal circle called gyroscopic precession!"
+                    "Here comes the magic moment! When you ride a bicycle fast, spinning wheels resist tipping over! "
+                    "Instead of letting gravity knock the wheel down, that sideways Torque gently steers the spinning axle around in a smooth horizontal merry-go-round circle! "
+                    "Scientists call this cool circular glide precession!"
                     if not is_hinglish
-                    else "Jab wheel spin nahi kar raha hota, tab Angular Momentum L zero hota hai aur wheel gir jaata hai. Lekin fast spin mein ek bada horizontal vector L maujood hota hai. Sideways torque is L vector ki tip ko lagataar sideways ghumaata hai—jise hum Gyroscopic Precession kehte hain!"
+                    else "Ab dekhiye asli jaadu! Jaise chalti hui cycle kabhi nahi girti, waise hi fast spinning wheel neeche girne se mana kar deta hai! Sideways Torque us ghoomte hue axle ko gol-gol horizontal circle mein steer karta rehta hai—jise kehte hain Precession!"
                 ),
-                "image_3d_prompt": "Photorealistic 8k 3D cutaway simulation inside dark physics lab: a glowing spinning 3D wheel suspended from one end of its axle, orbiting horizontally in a luminous golden circular precession path with cyan dL arrows, zero human faces.",
-                "google_flow_veo_prompt": "Photorealistic 3D physics lab simulation: a fast-spinning illuminated wheel hanging from a single cable orbits smoothly in a glowing golden horizontal circle without falling, glowing vector trails tracing the circular precession ring.",
+                "image_3d_prompt": "Bright colorful Kurzgesagt-meets-Pixar 3D classroom model: a glossy blue-and-yellow spinning bicycle wheel and a colorful toy spinning top orbiting smoothly along a dotted golden circular path above a bright wooden lab table, clear red and yellow 3D directional arrows, sunny sky backdrop, zero text, zero faces.",
+                "google_flow_veo_prompt": "Sunny colorful 3D classroom model: a spinning blue-and-yellow bicycle wheel and colorful spinning top trace a smooth golden circular path above a wooden table.",
                 "fallback_plate": "scene_03_16x9.jpg",
             },
             {
                 "scene_id": 4,
-                "headline": "4-MARK EXAM RULE",
-                "concept_takeaway": "Precession speed Ω = mgr / (Iω) — faster spin ω means slower precession!",
+                "headline": "FASTER SPIN = STEADIER!",
+                "concept_takeaway": "Faster wheel spin (ω) keeps your cycle & gyroscope super steady — 4 Marks Locked!",
+                "formula_badge": "Balance Rule: Faster Spin (↑ ω) → Slower Wobble (↓ Ω)",
+                "quick_tip": "Topper Shortcut: Heavy rim + Fast spin = Maximum stability (Used in satellites & bikes)!",
                 "narration": (
-                    "Here is the exact four-mark JEE and Class 11 takeaway: precession angular speed Omega equals m g r divided by rotational inertia I times spin speed omega. "
-                    "Notice the inverse relationship—the faster the wheel spins, the slower and steadier it precesses! Grab the free one-page 3D Rotational Motion formula sheet linked in the description below, and subscribe to TopperLab 3D to see your entire syllabus in 3D."
+                    "Boom—here is your guaranteed exam takeaway! The faster a wheel spins, and the heavier its outer tire rim, the steadier it stays! "
+                    "That's the exact same science keeping your bicycle upright and spacecraft pointed straight! "
+                    "Grab the free one-page 3D Formula and Hack Sheet in the description below, and hit subscribe for your next chapter!"
                     if not is_hinglish
-                    else "Ab yaad rakhiye woh 4-mark exam formula: Precession speed Omega barabar hota hai mgr divided by I into omega. Yaani wheel jitna tez spin karega, precession utna slow aur stable hoga! Description mein diye free 1-page 3D Formula Sheet ko abhi download karein aur TopperLab 3D ko subscribe karein."
+                    else "Boom—ab lock kar lijiye pakke exam marks! Wheel jitna tez ghoomega aur uska bahari rim jitna bhaari hoga, balance utna hi rock-solid rahega! Yahi science aapki cycle aur satellites dono ko seedha rakhti hai! Description se free 1-page Formula Sheet download karein aur TopperLab 3D ko subscribe karein!"
                 ),
-                "image_3d_prompt": "Futuristic dark obsidian 3D study desk with a floating luminous holographic 3D blueprint card displaying clean glowing cyan physics diagrams of a gyroscope and rotational inertia ring, crisp 3D header '1-PAGE FORMULA SHEET', zero human faces.",
-                "google_flow_veo_prompt": "Sleek futuristic 3D dark glass study desk where a glowing cyan holographic 1-page physics formula blueprint rises and rotates gently in volumetric golden light, crisp 3D vectors.",
+                "image_3d_prompt": "Bright cheerful 3D student study desk in sunlit classroom: a miniature colorful 3D bicycle model, a spinning toy top, a golden star trophy, and an open colorful 3D science model kit with neat color-coded arrows, warm inviting Pixar educational style, zero text, zero faces.",
+                "google_flow_veo_prompt": "Cheerful sunlit 3D student desk with a miniature spinning bicycle wheel model, colorful magnets, and a golden trophy rotating gently.",
                 "fallback_plate": "scene_04_16x9.jpg",
             },
         ]
@@ -986,38 +1290,46 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
     return [
         {
             "scene_id": 1,
-            "headline": "THE 2D TEXTBOOK TRAP",
-            "concept_takeaway": f"Why 90% struggle with {topic_title} on flat 2D pages",
-            "narration": f"Look at how most students study {topic_title}: staring at flat 2D black-and-white diagrams while trying to memorize disconnected formulas. Within forty-eight hours, brain recall drops below twenty percent. Let us rebuild {topic_title} inside 3D space so your brain locks it in permanently.",
-            "image_3d_prompt": f"Dramatic 8k Octane 3D scientific cutaway visualization introducing '{topic_title}' inside a dark obsidian glass laboratory with glowing cyan and golden 3D vectors, zero human faces.",
-            "google_flow_veo_prompt": f"Cinematic 8k 3D camera push-in through a dark obsidian STEM lab onto a glowing holographic 3D model illustrating '{topic_title}' with luminous golden energy pathways.",
+            "headline": "REAL-LIFE MYSTERY!",
+            "concept_takeaway": f"See how {topic_title.split('—')[0].strip()} works in everyday life in 3D!",
+            "formula_badge": f"Core Concept: {topic_title.split('—')[0].strip()[:44]}",
+            "quick_tip": "Visual Memory Trick: Picture the real-life 3D object first — never cram blind words!",
+            "narration": f"Wait a second! Have you ever wondered why {topic_title.split('—')[0].strip()} confuses almost everyone in flat black-and-white textbook diagrams? Because real science happens in three dimensions! Let's build a super-simple, colourful 3D classroom model right now so you understand it in ten seconds flat!",
+            "image_3d_prompt": f"Bright colorful Pixar-style 3D classroom tabletop cutaway model illustrating '{topic_title}' using everyday real-life student objects and bold red, yellow, and blue 3D arrows, sunny sky-blue backdrop, zero text, zero faces.",
+            "google_flow_veo_prompt": f"Bright colorful 3D classroom model camera zoom onto an everyday real-life 3D demonstration of '{topic_title}'.",
             "fallback_plate": "scene_01_16x9.jpg",
         },
         {
             "scene_id": 2,
-            "headline": "CORE 3D MECHANISM",
-            "concept_takeaway": f"Step-by-step 3D vector & structural breakdown of {topic_title}",
-            "narration": f"When we isolate the core mechanism of {topic_title} in three dimensions, every cause-and-effect arrow lines up logically. Instead of cramming sign conventions blindly, watch how the primary variables interact along perpendicular 3D axes.",
-            "image_3d_prompt": f"3Blue1Brown meets Veritasium 3D mathematical and scientific diagram of '{topic_title}' on a deep matte-black grid with glowing cyan and gold vector arrows, zero human faces.",
-            "google_flow_veo_prompt": f"Smooth 3Blue1Brown style 3D orbital camera motion around glowing geometric vectors and molecular/physics mechanisms demonstrating '{topic_title}'.",
+            "headline": "HOW IT WORKS IN 3D",
+            "concept_takeaway": f"Step-by-step colorful 3D model of {topic_title.split('—')[0].strip()}",
+            "formula_badge": "Direct Rule: Cause Arrow (Red) → 3D Action (Yellow)",
+            "quick_tip": "Board Exam Tip: Always draw neat labelled arrows in your answer sheet for full marks!",
+            "narration": f"Look closely at our colorful 3D model! When we open it up from the side, every moving part connects like simple Lego blocks. Follow the bright yellow arrow from start to finish—no scary jargon, just pure common sense!",
+            "image_3d_prompt": f"Vibrant well-lit 3D school science lab cutaway model of '{topic_title}' on a clean bright desk, primary-colored red, yellow, and royal-blue parts sliced open clearly, zero text, zero faces.",
+            "google_flow_veo_prompt": f"Smooth orbital 3D camera around a colorful classroom model demonstrating '{topic_title}'.",
             "fallback_plate": "scene_02_16x9.jpg",
         },
         {
             "scene_id": 3,
-            "headline": "THE EXAM TRAP",
-            "concept_takeaway": "Fixing the #1 negative-marking mistake tested in Boards, JEE & NEET",
-            "narration": f"Now watch where ninety percent of exam-takers lose four marks on {topic_title}: they apply the standard shortcut without checking the boundary condition. In 3D, you can immediately spot why that shortcut flips direction under extreme cases.",
-            "image_3d_prompt": f"High-contrast 8k 3D split comparison simulation showing the common misconception versus the true 3D physical pathway for '{topic_title}', glowing sapphire and gold highlights, zero human faces.",
-            "google_flow_veo_prompt": f"Dynamic 3D laboratory simulation showing glowing golden pathways locking into place to solve the classic exam trap in '{topic_title}'.",
+            "headline": "#1 BOARD EXAM TRAP!",
+            "concept_takeaway": "Spot and fix the #1 silly mistake students make in the exam hall!",
+            "formula_badge": "Check Units & +/- Signs Before Final Step!",
+            "quick_tip": "Topper Hack: Circle the asked unit in the question before writing your formula!",
+            "narration": f"Hold on—here is where ninety percent of students lose easy marks in the exam hall! They rush the sign or mix up the two directions. Look at the green check model versus the red mistake model—once you see this in 3D, you will never fall for that trap again!",
+            "image_3d_prompt": f"Bright colorful 3D side-by-side classroom model comparing the wrong vs right setup for '{topic_title}' using vivid emerald green and crimson red 3D indicators on a sunny tabletop, zero text, zero faces.",
+            "google_flow_veo_prompt": f"Colorful 3D classroom demonstration locking bright green parts together for '{topic_title}'.",
             "fallback_plate": "scene_03_16x9.jpg",
         },
         {
             "scene_id": 4,
-            "headline": "3X RECALL SHEET",
-            "concept_takeaway": "1-Page 3D Summary + Active Recall Check in Description",
-            "narration": f"Test yourself right now without looking back: can you visualize all three stages of {topic_title} with your eyes closed? Download the free one-page 3D visual cheat sheet and revision tracker from the description below, and subscribe to TopperLab 3D for your next chapter.",
-            "image_3d_prompt": f"Futuristic dark obsidian 3D study desk with a floating luminous holographic 1-page formula & 3D diagram summary card for '{topic_title}', zero human faces.",
-            "google_flow_veo_prompt": "Cinematic slow zoom onto a glowing holographic 3D 1-page revision sheet floating above a dark obsidian desk with golden light particles.",
+            "headline": "FULL MARKS LOCKED!",
+            "concept_takeaway": "1-Minute 3D Recap + Free 1-Page Formula & Hack Sheet in Description!",
+            "formula_badge": "1-3-7 Recall Rule: Revise Today • Day 3 • Day 7",
+            "quick_tip": "Quick Test: Pause for 3 seconds and picture the 3D model with your eyes closed!",
+            "narration": f"Awesome job! Close your eyes for two seconds—can you still see the colorful 3D model clearly? Boom, that means your brain just locked in full marks! Download the free one-page Formula and Quick-Tip Sheet linked below, and subscribe to TopperLab 3D!",
+            "image_3d_prompt": f"Cheerful sunlit 3D student desk with a colorful miniature 3D science model of '{topic_title}', a bright golden star trophy, and colourful study markers, Pixar educational style, zero text, zero faces.",
+            "google_flow_veo_prompt": "Bright cheerful 3D student desk with miniature science models and a golden star trophy.",
             "fallback_plate": "scene_04_16x9.jpg",
         },
     ]
@@ -1032,51 +1344,67 @@ def generate_dual_script_and_thumbnails(
     scene_count: int = 4,
     custom_thumb_prompt: str = "",
     force_regenerate_thumbs: bool = False,
+    target_class_label: str = "Class 10",
+    target_subject_label: str = "",
 ) -> Dict[str, Any]:
     ch = load_active_channel()
     project_slug = slugify(topic_title)
     project_dir = WORKSPACES_DIR / project_slug
     project_dir.mkdir(parents=True, exist_ok=True)
 
-    voice_cfg = ch["voice_presets"].get(voice_mode, ch["voice_presets"][ch["default_voice_mode"]])
-    theme_cfg = ch["visual_themes"].get(visual_theme_key, ch["visual_themes"][ch["default_visual_theme"]])
+    voice_cfg = _resolve_voice_preset(ch, voice_mode)
+    theme_cfg = _resolve_visual_theme(ch, visual_theme_key)
     is_hinglish = voice_cfg.get("language_code") == "hi-IN"
+    class_badge_text = infer_class_badge_label(
+        exam_track=exam_track,
+        topic_title=topic_title,
+        class_override=target_class_label,
+        subject_override=target_subject_label,
+    )
 
     default_scenes = _default_gyroscope_scenes(topic_title, is_hinglish=is_hinglish)
+    is_wheel = any(w in topic_title.lower() for w in ("gyroscope", "rotational", "bicycle", "wheel"))
     fallback_blueprint = {
         "title_variations": [
             topic_title,
-            f"{topic_title.split('—')[0].strip()} — See What 2D Textbooks Hide (3D Breakdown)",
-            f"Master {topic_title.split('—')[0].strip()} in 3D | Boards, JEE & NEET Visual Guide",
+            f"{topic_title.split('—')[0].strip()} — Easy 3D Classroom Model + Exam Hacks!",
+            f"{class_badge_text.split('•')[0].strip()} {topic_title.split('—')[0].strip()} in 3D | Formula Tricks & Quick Tips",
         ],
-        "thumb_hook_3words": "DEFIES GRAVITY?!" if "gyroscope" in topic_title.lower() else "SEE IT IN 3D!",
-        "short_hook_3words": "3X MEMORY LOOP" if "memory" in topic_title.lower() or "blank" in topic_title.lower() else "99% MISS THIS!",
+        "thumb_hook_3words": "WHY NO FALL?!" if is_wheel else "SEE IT IN 3D!",
+        "short_hook_3words": "CYCLE WHEEL MAGIC!" if is_wheel else "3-MARK HACK!",
+        "thumb_sub_tagline": "EASY 3D MODEL + FORMULA HACKS",
         "thumbnail_16x9_prompt": custom_thumb_prompt.strip()
         or (
-            f"High-CTR 16:9 3D science YouTube thumbnail in Veritasium and Zack D. Films 3D style for '{topic_title}'. "
-            f"{theme_cfg['style_prompt']} Bold 3D yellow impact text in top-left (max 3 words)."
+            f"Bright, exciting, colorful Pixar-style 16:9 3D classroom science model for '{topic_title}' positioned prominently on the RIGHT half of the frame, "
+            f"leaving clean sunlit sky-blue studio space on the left side for title overlay. "
+            f"{theme_cfg['style_prompt']} Everyday relatable objects a Class 10 student loves, vivid red, yellow, and royal-blue 3D parts, zero text inside the raw 3D render."
         ),
         "short_cover_9x16_prompt": (
-            f"High-retention 9:16 vertical 3D YouTube Short cover for '{topic_title}'. "
-            f"{theme_cfg['style_prompt']} Bold 3D yellow-white headline in upper-middle safe zone (max 3 words)."
+            f"Bright, exciting vertical 9:16 3D classroom science model for '{topic_title}' positioned in the lower-center two-thirds of the frame, "
+            f"leaving clean studio space at the top for headline overlay. {theme_cfg['style_prompt']} Zero text inside the raw 3D render."
         ),
         "scenes": default_scenes,
     }
 
     ai_prompt = (
-        f"Create a complete faceless 3D video production blueprint for TopperLab 3D (@TopperLab3D).\n"
+        f"Create an exciting, super-clear faceless 3D educational video blueprint for TopperLab 3D (@TopperLab3D).\n"
         f"Topic: {topic_title}\n"
-        f"Target Indian Audience: {exam_track}\n"
-        f"Voice Instruction: {voice_cfg['script_instruction']}\n"
-        f"Visual Theme: {theme_cfg['style_prompt']}\n"
-        f"Number of Scenes: {scene_count} (Scene 1 = Counter-intuitive 3D Hook, middle scenes = 3D step-by-step scientific/memory breakdown + exam trap, final scene = 4-mark summary + CTA to download free 1-Page 3D Formula Sheet in description).\n"
+        f"Target Student Level: {class_badge_text} ({exam_track}) — MUST be effortlessly understandable by a 15-year-old Class 10 student!\n"
+        f"Expressive Narration Style: {voice_cfg['script_instruction']}\n"
+        f"Friendly 3D Model Style (NO dark sci-fi!): {theme_cfg['style_prompt']}\n"
+        f"Number of Scenes: {scene_count} (Scene 1 = Surprising everyday real-life 3D hook, middle scenes = bright relatable 3D cutaway model + formula + board exam mistake hack, final scene = quick recall test + CTA for free 1-Page Formula Sheet).\n"
+        f"IMPORTANT RULES:\n"
+        f"1. Every `image_3d_prompt` MUST describe bright, colorful, everyday classroom/real-life 3D models (bicycles, cricket balls, magnets, batteries, prisms, water pipes, heart pumps, toy gears) on a bright studio desk — NEVER dark obsidian sci-fi labs, and ZERO text/words inside the 3D render.\n"
+        f"2. Every `narration` (35–50 words) MUST be super expressive, lively, conversational, with questions ('Wait—why does...?!'), exclamations, and everyday analogies — NEVER flat textbook monotone!\n"
+        f"3. Every scene MUST include a concise `formula_badge` (related formula or core equation/rule, max 52 chars) AND a punchy `quick_tip` (shortcut, mnemonic, or exam hack, max 68 chars) that will fly in and fly out on screen!\n"
         f"Return JSON with keys:\n"
-        f"- title_variations (array of 3 high-CTR student titles)\n"
-        f"- thumb_hook_3words (max 3 bold words)\n"
-        f"- short_hook_3words (max 3 bold words)\n"
-        f"- thumbnail_16x9_prompt (detailed pure 3D prompt, zero human faces)\n"
-        f"- short_cover_9x16_prompt (detailed vertical 9:16 3D prompt, zero human faces)\n"
-        f"- scenes: array of {scene_count} objects each having keys: scene_id (1..{scene_count}), headline (max 3 words), concept_takeaway, narration (35-55 words spoken script), image_3d_prompt (pure 3D render prompt, zero human faces), google_flow_veo_prompt (8-second cinematic 3D motion prompt for Google Veo 3.1 / Flow)."
+        f"- title_variations (array of 3 exciting student titles)\n"
+        f"- thumb_hook_3words (2 to 3 punchy words for the Yellow+Red thumbnail heading, e.g. 'WHY NO FALL?!' or 'LEFT HAND HACK!')\n"
+        f"- short_hook_3words (2 to 3 punchy words for 9:16 cover)\n"
+        f"- thumb_sub_tagline (3 to 5 words, e.g. 'EASY 3D + EXAM HACKS')\n"
+        f"- thumbnail_16x9_prompt (bright 3D model positioned on RIGHT half of 16:9 frame, clean left side, zero raw text, zero faces)\n"
+        f"- short_cover_9x16_prompt (bright 3D model positioned in lower-center of 9:16 frame, clean top area, zero raw text, zero faces)\n"
+        f"- scenes: array of {scene_count} objects with keys: scene_id, headline (max 3 words), concept_takeaway (max 72 chars), formula_badge (max 52 chars), quick_tip (max 68 chars), narration (35-50 expressive spoken words), image_3d_prompt, google_flow_veo_prompt."
     )
     blueprint = call_gemini_json(ai_prompt, fallback_blueprint)
     if not isinstance(blueprint, dict) or not blueprint.get("scenes"):
@@ -1086,36 +1414,71 @@ def generate_dual_script_and_thumbnails(
     for idx, sc in enumerate(blueprint["scenes"]):
         sc["scene_id"] = idx + 1
         sc.setdefault("fallback_plate", plate_cycle[idx % len(plate_cycle)])
+        def_sc = default_scenes[idx % len(default_scenes)]
+        if not str(sc.get("formula_badge", "")).strip():
+            sc["formula_badge"] = def_sc["formula_badge"]
+        if not str(sc.get("quick_tip", "")).strip():
+            sc["quick_tip"] = def_sc["quick_tip"]
+        if not str(sc.get("concept_takeaway", "")).strip():
+            sc["concept_takeaway"] = def_sc["concept_takeaway"]
 
+    raw_thumb_16x9 = project_dir / "thumbnail_16x9_raw.jpg"
+    raw_short_9x16 = project_dir / "short_cover_9x16_raw.jpg"
     thumb_path = project_dir / "thumbnail_16x9.jpg"
     short_cover_path = project_dir / "short_cover_9x16.jpg"
     final_t_prompt = custom_thumb_prompt.strip() or blueprint.get("thumbnail_16x9_prompt", fallback_blueprint["thumbnail_16x9_prompt"])
 
     generate_pure_3d_image(
         prompt=final_t_prompt,
-        output_path=thumb_path,
+        output_path=raw_thumb_16x9,
         target_size=(1920, 1080),
         fallback_plate="sample_thumb_16x9.jpg",
-        force_live=force_regenerate_thumbs or bool(custom_thumb_prompt.strip()),
+        force_live=force_regenerate_thumbs or bool(custom_thumb_prompt.strip()) or not raw_thumb_16x9.exists(),
     )
     generate_pure_3d_image(
         prompt=blueprint.get("short_cover_9x16_prompt", fallback_blueprint["short_cover_9x16_prompt"]),
-        output_path=short_cover_path,
+        output_path=raw_short_9x16,
         target_size=(1080, 1920),
         fallback_plate="sample_reel_9x16.jpg",
-        force_live=force_regenerate_thumbs,
+        force_live=force_regenerate_thumbs or not raw_short_9x16.exists(),
+    )
+
+    shutil.copyfile(raw_thumb_16x9, thumb_path)
+    shutil.copyfile(raw_short_9x16, short_cover_path)
+
+    hook_16x9 = blueprint.get("thumb_hook_3words") or fallback_blueprint["thumb_hook_3words"]
+    hook_9x16 = blueprint.get("short_hook_3words") or hook_16x9
+    sub_tag = blueprint.get("thumb_sub_tagline") or "EASY 3D MODEL + EXAM HACK"
+
+    apply_consistent_topperlab_thumbnail_branding(
+        image_path=thumb_path,
+        hook_text=hook_16x9,
+        class_badge_text=class_badge_text,
+        sub_tagline=sub_tag,
+        is_vertical=False,
+    )
+    apply_consistent_topperlab_thumbnail_branding(
+        image_path=short_cover_path,
+        hook_text=hook_9x16,
+        class_badge_text=class_badge_text,
+        sub_tagline=sub_tag,
+        is_vertical=True,
     )
 
     pkg = {
         "topic_title": topic_title,
         "pillar_id": pillar_id,
         "exam_track": exam_track,
+        "target_class_label": target_class_label,
+        "target_subject_label": target_subject_label,
+        "class_badge_text": class_badge_text,
         "voice_mode": voice_mode,
         "visual_theme_key": visual_theme_key,
         "project_dir": to_portable_path(project_dir),
         "title_variations": blueprint.get("title_variations", fallback_blueprint["title_variations"]),
-        "thumb_hook_3words": blueprint.get("thumb_hook_3words", "SEE IT IN 3D!"),
-        "short_hook_3words": blueprint.get("short_hook_3words", "3X MEMORY LOOP"),
+        "thumb_hook_3words": hook_16x9,
+        "short_hook_3words": hook_9x16,
+        "thumb_sub_tagline": sub_tag,
         "thumbnail_16x9_path": to_portable_path(thumb_path),
         "short_cover_9x16_path": to_portable_path(short_cover_path),
         "thumbnail_16x9_prompt": final_t_prompt,
@@ -1126,47 +1489,115 @@ def generate_dual_script_and_thumbnails(
 
 
 # ============================================================================
-# 5. STEP 3: FACELESS 3D SCENE RENDERER, CLEAN VOICEOVER & VEO/FLOW STITCHER
+# 5. STEP 3: EXPRESSIVE VOICE, BGM + SFX, ANIMATED FLY-IN FORMULAS & RENDERER
 # ============================================================================
 def _write_fallback_wav(wav_path: Path, duration_sec: float = 12.0) -> float:
     sample_rate = 44100
     n_samples = int(sample_rate * duration_sec)
     wav_path.parent.mkdir(parents=True, exist_ok=True)
-    with wave.open(str(wav_path), "w") as wf:
-        wf.setnchannels(1)
+    buf = array("h", [0] * (n_samples * 2))
+    for i in range(n_samples):
+        env = min(1.0, i / 2000.0, (n_samples - i) / 2000.0)
+        val = int(env * 450 * math.sin(2.0 * math.pi * 220.0 * (i / sample_rate)))
+        buf[2 * i] = val
+        buf[2 * i + 1] = val
+    with wave.open(str(wav_path), "wb") as wf:
+        wf.setnchannels(2)
         wf.setsampwidth(2)
         wf.setframerate(sample_rate)
-        frames = bytearray()
-        for i in range(n_samples):
-            env = min(1.0, i / 2000.0, (n_samples - i) / 2000.0)
-            val = int(env * 450 * math.sin(2.0 * math.pi * 196.0 * (i / sample_rate)))
-            frames.extend(struct.pack("<h", val))
-        wf.writeframes(bytes(frames))
+        wf.writeframes(buf.tobytes())
     return duration_sec
 
 
 def _probe_wav_duration(wav_path: Path) -> float:
     try:
         with wave.open(str(wav_path), "rb") as wf:
-            return max(3.0, round(wf.getnframes() / float(wf.getframerate()), 2))
+            return max(3.5, round(wf.getnframes() / float(wf.getframerate()), 2))
     except Exception:
         return 12.0
 
 
 def synthesize_scene_voiceover(narration: str, out_wav: Path, voice_preset: Dict[str, Any]) -> float:
+    """
+    Synthesizes expressive, lively Indian-student mentor narration:
+      1. Primary: Vertex AI / Gemini `gemini-3.8-flash-tts` expressive AI voice acting (Puck / Aoede)
+      2. Fallback: Microsoft `en-IN-NeerjaExpressiveNeural` / `hi-IN-SwaraNeural` with dynamic prosody
+      Normalized cleanly to -14 LUFS at 44.1 kHz stereo.
+    """
     out_wav.parent.mkdir(parents=True, exist_ok=True)
+    raw_tts_wav = out_wav.with_name(out_wav.stem + "_raw_tts.wav")
     mp3_tmp = out_wav.with_suffix(".mp3")
     ffmpeg_bin = get_ffmpeg_exe()
 
+    clean_spoken = re.sub(r"[*_#`]+", "", (narration or "")).strip()
+
+    # 1. Primary Expressive Voice: Gemini 3.8 Flash TTS (Vertex AI credits or AI Studio)
+    client = build_genai_client(location="global", timeout_ms=42000)
+    if client is not None and clean_spoken:
+        try:
+            from google.genai import types
+
+            gem_voice = voice_preset.get("gemini_voice", "Puck")
+            resp = client.models.generate_content(
+                model="gemini-3.8-flash-tts",
+                contents=clean_spoken,
+                config=types.GenerateContentConfig(
+                    response_modalities=["AUDIO"],
+                    speech_config=types.SpeechConfig(
+                        voice_config=types.VoiceConfig(
+                            prebuilt_voice_config=types.PrebuiltVoiceConfig(voice_name=gem_voice)
+                        )
+                    ),
+                ),
+            )
+            for part in getattr(resp.candidates[0].content, "parts", []):
+                inline = getattr(part, "inline_data", None)
+                if inline and getattr(inline, "data", None):
+                    raw_bytes = inline.data
+                    if raw_bytes[:4] == b"RIFF":
+                        raw_tts_wav.write_bytes(raw_bytes)
+                    else:
+                        with wave.open(str(raw_tts_wav), "wb") as wf:
+                            wf.setnchannels(1)
+                            wf.setsampwidth(2)
+                            wf.setframerate(24000)
+                            wf.writeframes(raw_bytes)
+                    subprocess.run(
+                        [
+                            ffmpeg_bin,
+                            "-y",
+                            "-i",
+                            str(raw_tts_wav),
+                            "-af",
+                            "highpass=f=75,equalizer=f=3100:t=q:w=1.2:g=2.0,loudnorm=I=-14:TP=-1.5:LRA=11",
+                            "-ar",
+                            "44100",
+                            "-ac",
+                            "2",
+                            str(out_wav),
+                        ],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        check=True,
+                    )
+                    try:
+                        raw_tts_wav.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    return _probe_wav_duration(out_wav)
+        except Exception:
+            pass
+
+    # 2. Expressive Neural Fallback: edge-tts (`en-IN-NeerjaExpressiveNeural`)
     try:
         import edge_tts
 
         async def _run_tts() -> None:
             comm = edge_tts.Communicate(
-                text=narration,
-                voice=voice_preset.get("edge_voice", "en-IN-PrabhatNeural"),
-                rate=voice_preset.get("rate", "+6%"),
-                pitch=voice_preset.get("pitch", "+0Hz"),
+                text=clean_spoken,
+                voice=voice_preset.get("edge_voice", "en-IN-NeerjaExpressiveNeural"),
+                rate=voice_preset.get("rate", "+9%"),
+                pitch=voice_preset.get("pitch", "+3Hz"),
             )
             await comm.save(str(mp3_tmp))
 
@@ -1179,7 +1610,7 @@ def synthesize_scene_voiceover(narration: str, out_wav: Path, voice_preset: Dict
                     "-i",
                     str(mp3_tmp),
                     "-af",
-                    "loudnorm=I=-14:TP=-1.5:LRA=11",
+                    "highpass=f=75,equalizer=f=3100:t=q:w=1.2:g=2.0,loudnorm=I=-14:TP=-1.5:LRA=11",
                     "-ar",
                     "44100",
                     "-ac",
@@ -1190,13 +1621,381 @@ def synthesize_scene_voiceover(narration: str, out_wav: Path, voice_preset: Dict
                 stderr=subprocess.PIPE,
                 check=True,
             )
+            try:
+                mp3_tmp.unlink(missing_ok=True)
+            except Exception:
+                pass
             return _probe_wav_duration(out_wav)
     except Exception:
         pass
 
-    words = max(8, len((narration or "").split()))
-    est_sec = round(max(6.0, words / 2.6), 1)
+    words = max(8, len(clean_spoken.split()))
+    est_sec = round(max(6.0, words / 2.7), 1)
     return _write_fallback_wav(out_wav, duration_sec=est_sec)
+
+
+def _add_pluck_note(
+    buf_l: List[float],
+    buf_r: List[float],
+    sr: int,
+    start_sec: float,
+    freq: float,
+    dur_sec: float = 0.30,
+    amp: float = 0.25,
+    pan: float = 0.5,
+) -> None:
+    n_total = len(buf_l)
+    i0 = max(0, int(start_sec * sr))
+    n_len = min(int(dur_sec * sr), n_total - i0)
+    if n_len <= 0:
+        return
+    gain_l = amp * math.sqrt(max(0.0, 1.0 - pan))
+    gain_r = amp * math.sqrt(min(1.0, pan))
+    two_pi_f = 2.0 * math.pi * freq / sr
+    for k in range(n_len):
+        t = k / float(sr)
+        att = min(1.0, t / 0.005)
+        dec = math.exp(-7.8 * t)
+        wave_v = (
+            math.sin(two_pi_f * k)
+            + 0.34 * math.sin(2.0 * two_pi_f * k) * math.exp(-15.0 * t)
+            + 0.11 * math.sin(3.0 * two_pi_f * k) * math.exp(-24.0 * t)
+        )
+        s = att * dec * wave_v
+        idx = i0 + k
+        buf_l[idx] += s * gain_l
+        buf_r[idx] += s * gain_r
+
+
+def _add_swept_whoosh(
+    buf_l: List[float],
+    buf_r: List[float],
+    sr: int,
+    start_sec: float,
+    dur_sec: float = 0.30,
+    f_start: float = 210.0,
+    f_end: float = 590.0,
+    amp: float = 0.32,
+) -> None:
+    n_total = len(buf_l)
+    i0 = max(0, int(start_sec * sr))
+    n_len = min(int(dur_sec * sr), n_total - i0)
+    if n_len <= 0:
+        return
+    phase = 0.0
+    noise_state = 1337
+    for k in range(n_len):
+        u = k / float(n_len)
+        env = math.sin(math.pi * u) ** 1.3
+        freq = f_start + (f_end - f_start) * (u ** 0.85)
+        phase += 2.0 * math.pi * freq / sr
+        noise_state = (1103515245 * noise_state + 12345) & 0x7FFFFFFF
+        n_val = ((noise_state / 1073741824.0) - 1.0) * 0.28
+        val = env * amp * (0.72 * math.sin(phase) + n_val)
+        pan = 0.25 + 0.5 * u
+        idx = i0 + k
+        buf_l[idx] += val * (1.0 - 0.35 * pan)
+        buf_r[idx] += val * (0.65 + 0.35 * pan)
+
+
+def build_scene_master_audio(
+    voice_wav: Path,
+    out_mix_wav: Path,
+    duration_sec: float,
+    formula_in_sec: float,
+    formula_out_sec: float,
+    hack_in_sec: float,
+    hack_out_sec: float,
+    scene_id: int = 1,
+    bgm_enabled: bool = True,
+) -> Path:
+    """
+    Mixes the expressive -14 LUFS narration with:
+      1. Lively, copyright-safe Curiosity Marimba + Warm Bass + Soft Shaker BGM (auto-ducked under voice!)
+      2. Crisp Scene-Transition Whoosh + Formula Fly-In Bell Chime + Quick-Tip Sparkle Ding SFX!
+    """
+    if not bgm_enabled or not voice_wav.exists():
+        if voice_wav.exists() and voice_wav.resolve() != out_mix_wav.resolve():
+            shutil.copyfile(voice_wav, out_mix_wav)
+        return out_mix_wav
+
+    try:
+        with wave.open(str(voice_wav), "rb") as wf:
+            sr = wf.getframerate()
+            n_ch = wf.getnchannels()
+            n_frames = wf.getnframes()
+            raw_v = wf.readframes(n_frames)
+        v_samples = array("h")
+        v_samples.frombytes(raw_v)
+        if n_ch == 1:
+            stereo_v = array("h", [0] * (n_frames * 2))
+            for i in range(n_frames):
+                stereo_v[2 * i] = v_samples[i]
+                stereo_v[2 * i + 1] = v_samples[i]
+            v_samples = stereo_v
+    except Exception:
+        if voice_wav.exists():
+            shutil.copyfile(voice_wav, out_mix_wav)
+        return out_mix_wav
+
+    n_total = len(v_samples) // 2
+    sr = 44100
+    bgm_l = [0.0] * n_total
+    bgm_r = [0.0] * n_total
+    sfx_l = [0.0] * n_total
+    sfx_r = [0.0] * n_total
+
+    # 1. Cheerful 116-BPM Student Curiosity Groove (Cadd9 -> Am7 -> Fmaj7 -> G6)
+    bpm = 116.0
+    beat_sec = 60.0 / bpm
+    eighth_sec = beat_sec / 2.0
+    bars = [
+        (130.81, [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 587.33, 523.25]),
+        (110.00, [220.00, 261.63, 329.63, 440.00, 392.00, 329.63, 523.25, 440.00]),
+        (87.31, [174.61, 261.63, 329.63, 440.00, 523.25, 440.00, 329.63, 261.63]),
+        (98.00, [196.00, 246.94, 293.66, 392.00, 493.88, 392.00, 329.63, 293.66]),
+    ]
+    bar_offset = (scene_id - 1) % len(bars)
+    total_eighths = int(duration_sec / eighth_sec) + 2
+
+    for step in range(total_eighths):
+        t0 = step * eighth_sec
+        bar_idx = (bar_offset + (step // 8)) % len(bars)
+        bass_f, arp_notes = bars[bar_idx]
+        note_f = arp_notes[step % 8]
+        pan = 0.30 if (step % 2 == 0) else 0.70
+        _add_pluck_note(bgm_l, bgm_r, sr, t0, note_f, dur_sec=0.31, amp=0.34, pan=pan)
+
+        # Warm bass pulse every quarter beat
+        if step % 2 == 0:
+            _add_pluck_note(bgm_l, bgm_r, sr, t0, bass_f, dur_sec=0.48, amp=0.36, pan=0.5)
+        # Soft upbeat shaker on off-beats
+        if step % 2 == 1:
+            sh_i0 = int(t0 * sr)
+            sh_len = min(int(0.032 * sr), n_total - sh_i0)
+            st_seed = 4242 + step * 97
+            for k in range(max(0, sh_len)):
+                st_seed = (1103515245 * st_seed + 12345) & 0x7FFFFFFF
+                nv = ((st_seed / 1073741824.0) - 1.0) * math.exp(-95.0 * (k / float(sr))) * 0.08
+                bgm_l[sh_i0 + k] += nv
+                bgm_r[sh_i0 + k] += nv
+
+    # 2. Synced Attention-Catching SFX (Transition Whoosh + Formula Chime + Quick-Tip Sparkle Ding)
+    _add_swept_whoosh(sfx_l, sfx_r, sr, 0.02, dur_sec=0.30, f_start=190.0, f_end=560.0, amp=0.30)
+
+    # Formula Fly-In ascending crystal bell chime
+    _add_pluck_note(sfx_l, sfx_r, sr, max(0.1, formula_in_sec), 587.33, dur_sec=0.26, amp=0.38, pan=0.25)
+    _add_pluck_note(sfx_l, sfx_r, sr, max(0.1, formula_in_sec + 0.07), 880.00, dur_sec=0.32, amp=0.40, pan=0.35)
+    _add_pluck_note(sfx_l, sfx_r, sr, max(0.1, formula_in_sec + 0.14), 1174.66, dur_sec=0.38, amp=0.36, pan=0.45)
+
+    # Formula Fly-Out soft breeze
+    if formula_out_sec < duration_sec - 0.3:
+        _add_swept_whoosh(sfx_l, sfx_r, sr, formula_out_sec, dur_sec=0.18, f_start=460.0, f_end=210.0, amp=0.16)
+
+    # Quick-Tip / Hack Fly-In bright double-sparkle ding
+    _add_pluck_note(sfx_l, sfx_r, sr, max(0.2, hack_in_sec), 659.25, dur_sec=0.25, amp=0.38, pan=0.75)
+    _add_pluck_note(sfx_l, sfx_r, sr, max(0.2, hack_in_sec + 0.07), 987.77, dur_sec=0.30, amp=0.42, pan=0.68)
+    _add_pluck_note(sfx_l, sfx_r, sr, max(0.2, hack_in_sec + 0.14), 1318.51, dur_sec=0.38, amp=0.38, pan=0.60)
+
+    if hack_out_sec < duration_sec - 0.15:
+        _add_swept_whoosh(sfx_l, sfx_r, sr, hack_out_sec, dur_sec=0.18, f_start=480.0, f_end=220.0, amp=0.16)
+
+    # 3. Auto-Ducked Envelope Mix (50ms window so BGM breathes up in pauses and ducks cleanly under words!)
+    win = 2205
+    n_wins = (n_total + win - 1) // win
+    bgm_gains = [0.22] * n_wins
+    for w_idx in range(n_wins):
+        s0 = w_idx * win
+        s1 = min(n_total, s0 + win)
+        peak = 0
+        for j in range(s0, s1, 8):
+            av = abs(v_samples[2 * j])
+            if av > peak:
+                peak = av
+        # Duck to 0.21 during active speech; swell gently to 0.36 in speech pauses
+        bgm_gains[w_idx] = 0.21 if peak > 1800 else 0.36
+
+    # Smooth gain transitions
+    for w_idx in range(1, n_wins):
+        bgm_gains[w_idx] = 0.65 * bgm_gains[w_idx - 1] + 0.35 * bgm_gains[w_idx]
+
+    out_samples = array("h", [0] * (n_total * 2))
+    scale_pcm = 26000.0
+    fade_samples = min(int(0.25 * sr), n_total // 4)
+
+    for i in range(n_total):
+        g_bgm = bgm_gains[i // win]
+        end_fade = min(1.0, (n_total - i) / float(max(1, fade_samples)))
+        vl = v_samples[2 * i]
+        vr = v_samples[2 * i + 1]
+        ml = int(vl + end_fade * scale_pcm * (g_bgm * bgm_l[i] + 0.44 * sfx_l[i]))
+        mr = int(vr + end_fade * scale_pcm * (g_bgm * bgm_r[i] + 0.44 * sfx_r[i]))
+        out_samples[2 * i] = 32200 if ml > 32200 else (-32200 if ml < -32200 else ml)
+        out_samples[2 * i + 1] = 32200 if mr > 32200 else (-32200 if mr < -32200 else mr)
+
+    out_mix_wav.parent.mkdir(parents=True, exist_ok=True)
+    with wave.open(str(out_mix_wav), "wb") as wf:
+        wf.setnchannels(2)
+        wf.setsampwidth(2)
+        wf.setframerate(sr)
+        wf.writeframes(out_samples.tobytes())
+    return out_mix_wav
+
+
+def _wrap_text_pixels(draw: ImageDraw.ImageDraw, text: str, font: Any, max_px: int, max_lines: int = 2) -> List[str]:
+    words = _sanitize_drawable_text(text).split()
+    if not words:
+        return [""]
+    lines: List[str] = []
+    cur = words[0]
+    for w in words[1:]:
+        cand = f"{cur} {w}"
+        bb = draw.textbbox((0, 0), cand, font=font)
+        if (bb[2] - bb[0]) <= max_px:
+            cur = cand
+        else:
+            lines.append(cur)
+            cur = w
+    lines.append(cur)
+    if len(lines) > max_lines:
+        kept = lines[: max_lines - 1]
+        tail = " ".join(lines[max_lines - 1 :])
+        while len(tail) > 8:
+            bb = draw.textbbox((0, 0), tail + "...", font=font)
+            if (bb[2] - bb[0]) <= max_px:
+                break
+            tail = tail[:-2].rstrip()
+        kept.append(tail + "...")
+        return kept
+    return lines
+
+
+def _build_flyin_card_png(
+    out_png: Path,
+    card_size: tuple[int, int],
+    ribbon_label: str,
+    body_text: str,
+    ribbon_bg: tuple[int, int, int, int],
+    ribbon_fg: tuple[int, int, int, int],
+    border_col: tuple[int, int, int, int],
+    body_fg: tuple[int, int, int, int],
+    body_font_size: int = 33,
+) -> Path:
+    cw, ch = card_size
+    img = Image.new("RGBA", (cw, ch), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(img)
+
+    # Drop shadow + high-contrast dark slate card body
+    draw.rounded_rectangle([8, 10, cw - 2, ch - 2], radius=24, fill=(0, 0, 0, 145))
+    draw.rounded_rectangle(
+        [2, 2, cw - 10, ch - 10],
+        radius=24,
+        fill=(15, 23, 42, 244),
+        outline=border_col,
+        width=4,
+    )
+
+    # Top header ribbon inside card
+    f_rib = _load_studio_font(25, weight="bold")
+    rib_clean = _sanitize_drawable_text(ribbon_label).upper()
+    rb = draw.textbbox((0, 0), rib_clean, font=f_rib)
+    rw, rh = (rb[2] - rb[0]) + 34, (rb[3] - rb[1]) + 16
+    draw.rounded_rectangle([24, 18, 24 + rw, 18 + rh], radius=12, fill=ribbon_bg)
+    draw.text((24 + 17, 18 + 7 - rb[1]), rib_clean, font=f_rib, fill=ribbon_fg)
+
+    # Crisp wrapped body formula / hack text
+    f_body = _load_studio_font(body_font_size, weight="bold")
+    lines = _wrap_text_pixels(draw, body_text, f_body, max_px=cw - 64, max_lines=2)
+    y_cur = 18 + rh + 16
+    for ln in lines:
+        lb = draw.textbbox((0, 0), ln, font=f_body)
+        draw.text((26, y_cur - lb[1]), ln, font=f_body, fill=body_fg)
+        y_cur += (lb[3] - lb[1]) + 10
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    img.save(out_png, format="PNG")
+    return out_png
+
+
+def _build_scene_hud_png(
+    out_png: Path,
+    frame_size: tuple[int, int],
+    class_badge_text: str,
+    scene_id: int,
+    headline: str,
+    concept_takeaway: str,
+    is_vertical: bool = False,
+) -> Path:
+    W, H = frame_size
+    hud = Image.new("RGBA", (W, H), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(hud)
+
+    cls_clean = _sanitize_drawable_text(class_badge_text).upper()
+    sc_clean = f"SCENE {scene_id:02d} • {_sanitize_drawable_text(headline).upper()}"
+    take_clean = _sanitize_drawable_text(concept_takeaway)
+
+    if not is_vertical:
+        # Top-left Class Pill + Scene Headline Pill
+        f_top = _load_studio_font(26, weight="bold")
+        b_cls = draw.textbbox((0, 0), cls_clean, font=f_top)
+        cw = (b_cls[2] - b_cls[0]) + 34
+        ch_h = 52
+        draw.rounded_rectangle([42, 28, 42 + cw, 28 + ch_h], radius=14, fill=(220, 38, 38, 248), outline=(255, 255, 255, 245), width=3)
+        draw.text((42 + 17, 28 + 12 - b_cls[1]), cls_clean, font=f_top, fill=(255, 255, 255, 255))
+
+        b_sc = draw.textbbox((0, 0), sc_clean, font=f_top)
+        sw = (b_sc[2] - b_sc[0]) + 36
+        sx = 42 + cw + 12
+        draw.rounded_rectangle([sx, 28, sx + sw, 28 + ch_h], radius=14, fill=(15, 23, 42, 236), outline=(255, 214, 0, 235), width=3)
+        draw.text((sx + 18, 28 + 12 - b_sc[1]), sc_clean, font=f_top, fill=(255, 214, 0, 255))
+
+        # Bottom High-Readability Takeaway Strip
+        f_bot = _load_studio_font(32, weight="bold")
+        lines = _wrap_text_pixels(draw, take_clean, f_bot, max_px=W - 240, max_lines=2)
+        bar_h = 68 if len(lines) == 1 else 108
+        by = H - bar_h - 32
+        bx0, bx1 = 76, W - 76
+        draw.rounded_rectangle([bx0 + 4, by + 6, bx1 + 4, by + bar_h + 6], radius=18, fill=(0, 0, 0, 140))
+        draw.rounded_rectangle([bx0, by, bx1, by + bar_h], radius=18, fill=(15, 23, 42, 238), outline=(56, 189, 248, 220), width=3)
+        draw.rounded_rectangle([bx0, by, bx0 + 14, by + bar_h], radius=8, fill=(255, 214, 0, 255))
+
+        yc = by + 16
+        for ln in lines:
+            lb = draw.textbbox((0, 0), ln, font=f_bot)
+            draw.text((bx0 + 34, yc - lb[1]), ln, font=f_bot, fill=(248, 250, 252, 255))
+            yc += (lb[3] - lb[1]) + 8
+    else:
+        # Vertical 9:16 Safe Zones (Top y=68..195, Bottom y=1465..1625 above Shorts UI!)
+        f_top = _load_studio_font(29, weight="bold")
+        b_cls = draw.textbbox((0, 0), cls_clean, font=f_top)
+        cw = (b_cls[2] - b_cls[0]) + 40
+        cx = (W - cw) // 2
+        draw.rounded_rectangle([cx, 66, cx + cw, 120], radius=15, fill=(220, 38, 38, 248), outline=(255, 255, 255, 245), width=3)
+        draw.text((cx + 20, 78 - b_cls[1]), cls_clean, font=f_top, fill=(255, 255, 255, 255))
+
+        f_sc = _load_studio_font(27, weight="bold")
+        b_sc = draw.textbbox((0, 0), sc_clean, font=f_sc)
+        sw = min(W - 80, (b_sc[2] - b_sc[0]) + 38)
+        sx = (W - sw) // 2
+        draw.rounded_rectangle([sx, 130, sx + sw, 182], radius=14, fill=(15, 23, 42, 236), outline=(255, 214, 0, 235), width=3)
+        draw.text((sx + 19, 142 - b_sc[1]), sc_clean, font=f_sc, fill=(255, 214, 0, 255))
+
+        f_bot = _load_studio_font(33, weight="bold")
+        lines = _wrap_text_pixels(draw, take_clean, f_bot, max_px=W - 150, max_lines=2)
+        bar_h = 80 if len(lines) == 1 else 126
+        by = 1480
+        bx0, bx1 = 46, W - 46
+        draw.rounded_rectangle([bx0, by, bx1, by + bar_h], radius=20, fill=(15, 23, 42, 240), outline=(255, 214, 0, 235), width=3)
+        yc = by + 18
+        for ln in lines:
+            lb = draw.textbbox((0, 0), ln, font=f_bot)
+            lx = (W - (lb[2] - lb[0])) // 2
+            draw.text((lx, yc - lb[1]), ln, font=f_bot, fill=(255, 255, 255, 255))
+            yc += (lb[3] - lb[1]) + 10
+
+    out_png.parent.mkdir(parents=True, exist_ok=True)
+    hud.save(out_png, format="PNG")
+    return out_png
 
 
 def render_faceless_scene_media(
@@ -1206,6 +2005,8 @@ def render_faceless_scene_media(
     visual_theme_prompt: str,
     force_live_image: bool = False,
     custom_motion_mp4: Path | None = None,
+    class_badge_text: str = "CLASS 10 • SCIENCE 3D",
+    bgm_enabled: bool = True,
 ) -> Dict[str, Any]:
     sid = int(scene["scene_id"])
     scenes_dir = project_dir / "scenes"
@@ -1213,7 +2014,8 @@ def render_faceless_scene_media(
 
     img_16x9 = scenes_dir / f"scene_{sid:02d}_16x9.jpg"
     img_9x16 = scenes_dir / f"scene_{sid:02d}_9x16.jpg"
-    wav_path = scenes_dir / f"scene_{sid:02d}_voice.wav"
+    wav_voice = scenes_dir / f"scene_{sid:02d}_voice.wav"
+    wav_master = scenes_dir / f"scene_{sid:02d}_master_audio.wav"
     mp4_16x9 = scenes_dir / f"scene_{sid:02d}_16x9.mp4"
     mp4_9x16 = scenes_dir / f"scene_{sid:02d}_9x16.mp4"
 
@@ -1227,10 +2029,9 @@ def render_faceless_scene_media(
         fallback_plate=plate_16x9,
         force_live=force_live_image,
     )
-    # Build vertical 9:16 pure 3D frame (live if key present & forced, else center-fitted from pure 3D render or vertical plate)
-    if force_live_image and get_gemini_api_key():
+    if force_live_image and (has_vertex_adc() or get_gemini_api_key()):
         generate_pure_3d_image(
-            prompt=f"Vertical 9:16 composition: {full_img_prompt}",
+            prompt=f"Vertical 9:16 bright classroom 3D model composition: {full_img_prompt}",
             output_path=img_9x16,
             target_size=(1080, 1920),
             fallback_plate="sample_reel_9x16.jpg",
@@ -1240,7 +2041,92 @@ def render_faceless_scene_media(
         src_for_vert = Image.open(img_16x9)
         _fit_and_save_image(src_for_vert, img_9x16, (1080, 1920))
 
-    dur_sec = synthesize_scene_voiceover(scene["narration"], wav_path, voice_preset)
+    dur_sec = synthesize_scene_voiceover(scene["narration"], wav_voice, voice_preset)
+
+    # Compute smooth Fly-In / Fly-Out windows so Formula (1st half) & Quick-Tip/Hack (2nd half) never collide!
+    f_in = 0.55
+    f_hold = round(min(f_in + 0.48, dur_sec * 0.20), 2)
+    f_out = round(max(f_hold + 1.1, dur_sec * 0.44), 2)
+    f_end = round(min(dur_sec * 0.50, f_out + 0.44), 2)
+
+    h_in = round(max(f_end + 0.12, dur_sec * 0.51), 2)
+    h_hold = round(min(h_in + 0.48, dur_sec * 0.65), 2)
+    h_out = round(max(h_hold + 1.1, dur_sec - 0.58), 2)
+    h_end = round(min(dur_sec - 0.08, h_out + 0.44), 2)
+
+    build_scene_master_audio(
+        voice_wav=wav_voice,
+        out_mix_wav=wav_master,
+        duration_sec=dur_sec,
+        formula_in_sec=f_in,
+        formula_out_sec=f_out,
+        hack_in_sec=h_in,
+        hack_out_sec=h_out,
+        scene_id=sid,
+        bgm_enabled=bgm_enabled,
+    )
+
+    formula_txt = scene.get("formula_badge") or f"Core Concept: {scene.get('headline', '3D Rule')}"
+    hack_txt = scene.get("quick_tip") or scene.get("concept_takeaway", "Remember the 3D direction in your exam!")
+    takeaway_txt = scene.get("concept_takeaway") or scene.get("headline", "")
+
+    # Build crisp RGBA PNG overlays for 16:9 and 9:16
+    hud_16 = scenes_dir / f"scene_{sid:02d}_hud_16x9.png"
+    form_16 = scenes_dir / f"scene_{sid:02d}_formula_16x9.png"
+    hack_16 = scenes_dir / f"scene_{sid:02d}_hack_16x9.png"
+
+    hud_9 = scenes_dir / f"scene_{sid:02d}_hud_9x16.png"
+    form_9 = scenes_dir / f"scene_{sid:02d}_formula_9x16.png"
+    hack_9 = scenes_dir / f"scene_{sid:02d}_hack_9x16.png"
+
+    _build_scene_hud_png(hud_16, (1920, 1080), class_badge_text, sid, scene.get("headline", ""), takeaway_txt, is_vertical=False)
+    _build_flyin_card_png(
+        form_16,
+        (750, 198),
+        "KEY FORMULA",
+        formula_txt,
+        ribbon_bg=(255, 214, 0, 255),
+        ribbon_fg=(15, 23, 42, 255),
+        border_col=(255, 214, 0, 255),
+        body_fg=(254, 240, 138, 255),
+        body_font_size=33,
+    )
+    _build_flyin_card_png(
+        hack_16,
+        (750, 206),
+        "QUICK TIP & EXAM HACK",
+        hack_txt,
+        ribbon_bg=(220, 38, 38, 255),
+        ribbon_fg=(255, 255, 255, 255),
+        border_col=(244, 63, 94, 255),
+        body_fg=(255, 255, 255, 255),
+        body_font_size=31,
+    )
+
+    _build_scene_hud_png(hud_9, (1080, 1920), class_badge_text, sid, scene.get("headline", ""), takeaway_txt, is_vertical=True)
+    _build_flyin_card_png(
+        form_9,
+        (960, 218),
+        "KEY FORMULA",
+        formula_txt,
+        ribbon_bg=(255, 214, 0, 255),
+        ribbon_fg=(15, 23, 42, 255),
+        border_col=(255, 214, 0, 255),
+        body_fg=(254, 240, 138, 255),
+        body_font_size=35,
+    )
+    _build_flyin_card_png(
+        hack_9,
+        (960, 226),
+        "QUICK TIP & EXAM HACK",
+        hack_txt,
+        ribbon_bg=(220, 38, 38, 255),
+        ribbon_fg=(255, 255, 255, 255),
+        border_col=(244, 63, 94, 255),
+        body_fg=(255, 255, 255, 255),
+        body_font_size=33,
+    )
+
     ffmpeg_bin = get_ffmpeg_exe()
     frames_total = max(50, int(math.ceil(dur_sec * 25)))
 
@@ -1249,93 +2135,87 @@ def render_faceless_scene_media(
         if Path(custom_motion_mp4).resolve() != saved_motion.resolve():
             shutil.copyfile(custom_motion_mp4, saved_motion)
 
-    if saved_motion.exists():
-        # Stitch real Google Flow / Veo 3D motion clip looped/trimmed to exact narration duration
-        for target_mp4, vf_scale in [
-            (mp4_16x9, "scale=1920:1080:force_original_aspect_ratio=increase,crop=1920:1080,fps=25,format=yuv420p"),
-            (mp4_9x16, "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,fps=25,format=yuv420p"),
-        ]:
-            subprocess.run(
-                [
-                    ffmpeg_bin,
-                    "-y",
-                    "-stream_loop",
-                    "-1",
-                    "-i",
-                    str(saved_motion),
-                    "-i",
-                    str(wav_path),
-                    "-t",
-                    f"{dur_sec:.2f}",
-                    "-vf",
-                    vf_scale,
-                    "-map",
-                    "0:v:0",
-                    "-map",
-                    "1:a:0",
-                    "-c:v",
-                    "libx264",
-                    "-preset",
-                    "veryfast",
-                    "-pix_fmt",
-                    "yuv420p",
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "192k",
-                    "-shortest",
-                    str(target_mp4),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
+    f_in_dur = round(max(0.18, f_hold - f_in), 3)
+    f_out_dur = round(max(0.18, f_end - f_out), 3)
+    h_in_dur = round(max(0.18, h_hold - h_in), 3)
+    h_out_dur = round(max(0.18, h_end - h_out), 3)
+
+    render_specs = [
+        # (is_vert, img_src, target_mp4, hud_p, form_p, hack_p, W_frame, H_frame, fx_rest, hx_rest, fy, hy)
+        (False, img_16x9, mp4_16x9, hud_16, form_16, hack_16, 1920, 1080, 42, 1920 - 750 - 42, 102, 102),
+        (True, img_9x16, mp4_9x16, hud_9, form_9, hack_9, 1080, 1920, 60, 60, 206, 206),
+    ]
+
+    for is_vert, src_img, target_mp4, hud_p, form_p, hack_p, wf, hf, fx_r, hx_r, fy, hy in render_specs:
+        # Formula slides in from LEFT (-w -> fx_r) and slides out to LEFT (fx_r -> -w)
+        fx_expr = (
+            f"if(lt(t,{f_hold}), -w+(w+{fx_r})*((t-{f_in})/{f_in_dur}), "
+            f"if(gt(t,{f_out}), {fx_r}-(w+{fx_r})*((t-{f_out})/{f_out_dur}), {fx_r}))"
+        )
+        # Quick Tip / Hack slides in from RIGHT (W -> hx_r) and slides out to RIGHT (hx_r -> W)
+        hx_expr = (
+            f"if(lt(t,{h_hold}), {wf}-({wf}-{hx_r})*((t-{h_in})/{h_in_dur}), "
+            f"if(gt(t,{h_out}), {hx_r}+({wf}-{hx_r})*((t-{h_out})/{h_out_dur}), {hx_r}))"
+        )
+
+        if saved_motion.exists():
+            base_chain = f"[0:v]scale={wf}:{hf}:force_original_aspect_ratio=increase,crop={wf}:{hf},fps=25,format=rgba[bg]"
+            in_args = ["-stream_loop", "-1", "-i", str(saved_motion)]
+            scene["motion_source"] = "Google Flow / Veo 3.1 + Fly-In Cards + BGM"
+        else:
+            base_chain = (
+                f"[0:v]zoompan=z='min(zoom+0.0008,1.10)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
+                f":d={frames_total}:s={wf}x{hf}:fps=25,format=rgba[bg]"
             )
-        scene["motion_source"] = "Google Flow / Veo 3.1 Motion Clip"
-    else:
-        # Smooth 3D camera push-in (Ken Burns) at 25fps
-        for src_img, target_mp4, res_str in [
-            (img_16x9, mp4_16x9, "1920x1080"),
-            (img_9x16, mp4_9x16, "1080x1920"),
-        ]:
-            zp_filter = (
-                f"zoompan=z='min(zoom+0.0009,1.12)':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)'"
-                f":d={frames_total}:s={res_str}:fps=25,format=yuv420p"
-            )
-            subprocess.run(
-                [
-                    ffmpeg_bin,
-                    "-y",
-                    "-loop",
-                    "1",
-                    "-i",
-                    str(src_img),
-                    "-i",
-                    str(wav_path),
-                    "-t",
-                    f"{dur_sec:.2f}",
-                    "-vf",
-                    zp_filter,
-                    "-c:v",
-                    "libx264",
-                    "-preset",
-                    "veryfast",
-                    "-pix_fmt",
-                    "yuv420p",
-                    "-c:a",
-                    "aac",
-                    "-b:a",
-                    "192k",
-                    "-shortest",
-                    str(target_mp4),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
-        scene["motion_source"] = "3D Camera Push-In (Nano Banana Plate)"
+            in_args = ["-loop", "1", "-i", str(src_img)]
+            scene["motion_source"] = "Bright 3D Classroom Model + Fly-In Cards + BGM"
+
+        fc_graph = (
+            f"{base_chain};"
+            f"[bg][1:v]overlay=0:0:format=auto[v1];"
+            f"[v1][2:v]overlay=x='{fx_expr}':y={fy}:enable='between(t,{f_in},{f_end})':format=auto[v2];"
+            f"[v2][3:v]overlay=x='{hx_expr}':y={hy}:enable='between(t,{h_in},{h_end})':format=auto,format=yuv420p[vout]"
+        )
+
+        cmd = [
+            ffmpeg_bin,
+            "-y",
+            *in_args,
+            "-i",
+            str(hud_p),
+            "-i",
+            str(form_p),
+            "-i",
+            str(hack_p),
+            "-i",
+            str(wav_master),
+            "-t",
+            f"{dur_sec:.2f}",
+            "-filter_complex",
+            fc_graph,
+            "-map",
+            "[vout]",
+            "-map",
+            "4:a:0",
+            "-c:v",
+            "libx264",
+            "-preset",
+            "veryfast",
+            "-pix_fmt",
+            "yuv420p",
+            "-c:a",
+            "aac",
+            "-b:a",
+            "192k",
+            "-shortest",
+            str(target_mp4),
+        ]
+        subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
     scene["duration_sec"] = dur_sec
     scene["img_16x9"] = to_portable_path(img_16x9)
     scene["img_9x16"] = to_portable_path(img_9x16)
-    scene["audio_wav"] = to_portable_path(wav_path)
+    scene["audio_wav"] = to_portable_path(wav_master)
     scene["mp4_16x9"] = to_portable_path(mp4_16x9)
     scene["mp4_9x16"] = to_portable_path(mp4_9x16)
     return scene
@@ -1346,7 +2226,6 @@ def stitch_master_videos(project_dir: Path, scenes: List[Dict[str, Any]], short_
     renders_dir.mkdir(parents=True, exist_ok=True)
     ffmpeg_bin = get_ffmpeg_exe()
 
-    # Keep vertical Short/Reel under ~59s (Scene 1 Hook + middle proof if it fits + final CTA scene)
     if len(scenes) >= 2:
         short_scenes = [scenes[0]]
         running = float(scenes[0].get("duration_sec", 15.0)) + float(scenes[-1].get("duration_sec", 15.0))
@@ -1388,21 +2267,42 @@ def stitch_master_videos(project_dir: Path, scenes: List[Dict[str, Any]], short_
     }
 
 
-def render_full_topperlab_project(blueprint: Dict[str, Any], short_max_scenes: int = 4) -> Dict[str, Any]:
+def render_full_topperlab_project(
+    blueprint: Dict[str, Any],
+    short_max_scenes: int = 4,
+    bgm_enabled: bool = True,
+    force_live_images: bool = False,
+) -> Dict[str, Any]:
     ch = load_active_channel()
     project_dir = resolve_workspace_path(blueprint["project_dir"])
     voice_mode = blueprint.get("voice_mode", ch["default_voice_mode"])
     theme_key = blueprint.get("visual_theme_key", ch["default_visual_theme"])
-    voice_preset = ch["voice_presets"].get(voice_mode, ch["voice_presets"][ch["default_voice_mode"]])
-    theme_prompt = ch["visual_themes"].get(theme_key, ch["visual_themes"][ch["default_visual_theme"]])["style_prompt"]
+    voice_preset = _resolve_voice_preset(ch, voice_mode)
+    theme_prompt = _resolve_visual_theme(ch, theme_key)["style_prompt"]
+    class_badge_text = blueprint.get("class_badge_text") or infer_class_badge_label(
+        exam_track=blueprint.get("exam_track", ""),
+        topic_title=blueprint.get("topic_title", ""),
+        class_override=blueprint.get("target_class_label", ""),
+        subject_override=blueprint.get("target_subject_label", ""),
+    )
 
     scenes = blueprint["scenes"]
     for sc in scenes:
-        render_faceless_scene_media(sc, project_dir, voice_preset, theme_prompt, force_live_image=False)
+        render_faceless_scene_media(
+            sc,
+            project_dir,
+            voice_preset,
+            theme_prompt,
+            force_live_image=force_live_images,
+            class_badge_text=class_badge_text,
+            bgm_enabled=bgm_enabled,
+        )
 
     renders = stitch_master_videos(project_dir, scenes, short_max_scenes=short_max_scenes)
     draft_state = {
         **blueprint,
+        "class_badge_text": class_badge_text,
+        "bgm_enabled": bgm_enabled,
         "project_dir": to_portable_path(project_dir),
         "scenes": scenes,
         "renders": renders,
@@ -1422,13 +2322,22 @@ def update_single_faceless_scene(
     new_3d_prompt: str,
     regenerate_3d_image: bool = False,
     uploaded_motion_bytes: bytes | None = None,
+    new_formula_badge: str | None = None,
+    new_quick_tip: str | None = None,
+    bgm_enabled: bool = True,
 ) -> Dict[str, Any]:
     ch = load_active_channel()
     project_dir = resolve_workspace_path(draft_state["project_dir"])
     voice_mode = draft_state.get("voice_mode", ch["default_voice_mode"])
     theme_key = draft_state.get("visual_theme_key", ch["default_visual_theme"])
-    voice_preset = ch["voice_presets"].get(voice_mode, ch["voice_presets"][ch["default_voice_mode"]])
-    theme_prompt = ch["visual_themes"].get(theme_key, ch["visual_themes"][ch["default_visual_theme"]])["style_prompt"]
+    voice_preset = _resolve_voice_preset(ch, voice_mode)
+    theme_prompt = _resolve_visual_theme(ch, theme_key)["style_prompt"]
+    class_badge_text = draft_state.get("class_badge_text") or infer_class_badge_label(
+        exam_track=draft_state.get("exam_track", ""),
+        topic_title=draft_state.get("topic_title", ""),
+        class_override=draft_state.get("target_class_label", ""),
+        subject_override=draft_state.get("target_subject_label", ""),
+    )
 
     target = next((s for s in draft_state["scenes"] if int(s["scene_id"]) == int(scene_id)), None)
     if not target:
@@ -1436,6 +2345,10 @@ def update_single_faceless_scene(
 
     target["narration"] = new_narration.strip()
     target["image_3d_prompt"] = new_3d_prompt.strip()
+    if new_formula_badge is not None:
+        target["formula_badge"] = new_formula_badge.strip()
+    if new_quick_tip is not None:
+        target["quick_tip"] = new_quick_tip.strip()
 
     motion_file: Path | None = None
     if uploaded_motion_bytes:
@@ -1450,6 +2363,8 @@ def update_single_faceless_scene(
         visual_theme_prompt=theme_prompt,
         force_live_image=regenerate_3d_image,
         custom_motion_mp4=motion_file,
+        class_badge_text=class_badge_text,
+        bgm_enabled=bgm_enabled,
     )
     draft_state["renders"] = stitch_master_videos(project_dir, draft_state["scenes"])
     (project_dir / "topperlab_draft_state.json").write_text(

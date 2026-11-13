@@ -30,6 +30,8 @@ from studio_engine import (
     CURRICULUM_BOARDS,
     CURRICULUM_CLASSES,
     SCRIPT_MODEL_PRESETS,
+    apply_consistent_topperlab_thumbnail_branding,
+    infer_class_badge_label,
     build_youtube_auth_url,
     check_gemini_api_key_health,
     check_youtube_playlist_scope,
@@ -219,14 +221,17 @@ _preloaded_draft = _load_portable_json(_sample_dir / "topperlab_draft_state.json
 for k, default_val in [
     ("ui_theme_mode", "🌙 Dark Lab Mode"),
     ("script_model_id", get_active_script_model()),
-    ("voice_mode", channel_cfg.get("default_voice_mode", "Clean Indian-English (en-IN)")),
-    ("visual_theme_key", channel_cfg.get("default_visual_theme", "3D_DARK_LAB_CUTAWAY")),
+    ("voice_mode", channel_cfg.get("default_voice_mode", "Energetic Indian Mentor — Expressive AI (en-IN)")),
+    ("visual_theme_key", channel_cfg.get("default_visual_theme", "BRIGHT_CLASSROOM_3D_MODEL")),
+    ("bgm_enabled", True),
+    ("target_class_label", "Class 10"),
+    ("target_subject_label", "Science"),
     ("selected_pillar_id", "3d_concept_visualizer"),
     ("selected_exam_track", pillars_cfg["exam_tracks"][0]),
     ("generated_topics", pillars_cfg["pillars"][0]["starter_topics"]),
     (
         "selected_topic_title",
-        "Why Spinning Gyroscopes Defy Gravity — Rotational Motion & Torque Explained in 3D",
+        pillars_cfg["pillars"][0]["starter_topics"][0]["title"],
     ),
     ("current_blueprint", _preloaded_bp),
     ("current_draft", _preloaded_draft),
@@ -329,6 +334,11 @@ with st.sidebar:
         index=theme_keys.index(st.session_state["visual_theme_key"])
         if st.session_state["visual_theme_key"] in theme_keys
         else 0,
+    )
+    st.session_state["bgm_enabled"] = st.checkbox(
+        "🎵 Background Groove + Fly-In Chime SFX",
+        value=bool(st.session_state.get("bgm_enabled", True)),
+        help="Adds lively student-curiosity marimba music (auto-ducked under voice) + whoosh & bell chimes synced with Fly-In Formulas & Quick Tips!",
     )
 
     st.divider()
@@ -677,29 +687,47 @@ with tab2:
     final_topic_title = st.text_input("🎯 Working Video Title:", value=picked_from_list)
     st.session_state["selected_topic_title"] = final_topic_title
 
-    sc_col1, sc_col2 = st.columns([1, 2])
+    sc_col1, sc_col2, sc_col3, sc_col4 = st.columns([1.15, 0.85, 0.9, 1.5])
     with sc_col1:
         num_scenes = st.selectbox(
             "Target Episode Depth:",
             options=[4, 6, 8],
             format_func=lambda n: (
-                "4 Scenes (~1–2 Min Core 3D Breakdown + 45s Short)"
+                "4 Scenes (~1 Min 3D + 45s Short)"
                 if n == 4
-                else (f"{n} Scenes (~4–6 Min Deep 3D Chapter)" if n == 6 else f"{n} Scenes (~8+ Min Full Syllabus Masterclass)")
+                else (f"{n} Scenes (~4–6 Min Chapter)" if n == 6 else f"{n} Scenes (~8+ Min Masterclass)")
             ),
         )
     with sc_col2:
+        cls_choices = ["Class 10", "Class 9", "Class 8", "Class 11", "Class 12"]
+        st.session_state["target_class_label"] = st.selectbox(
+            "🎯 Thumbnail Class Badge:",
+            options=cls_choices,
+            index=cls_choices.index(st.session_state["target_class_label"])
+            if st.session_state["target_class_label"] in cls_choices
+            else 0,
+        )
+    with sc_col3:
+        subj_choices = ["Science", "Physics", "Chemistry", "Mathematics", "Biology", "Topper Hacks"]
+        st.session_state["target_subject_label"] = st.selectbox(
+            "📘 Subject Tag:",
+            options=subj_choices,
+            index=subj_choices.index(st.session_state["target_subject_label"])
+            if st.session_state["target_subject_label"] in subj_choices
+            else 0,
+        )
+    with sc_col4:
         custom_thumb_override = st.text_input(
-            "Optional Custom 3D Thumbnail Prompt Override:",
-            placeholder="Leave blank for automatic Veritasium/Zack-D-Films 3D thumbnail generation...",
+            "Optional Custom 3D Model Prompt Override:",
+            placeholder="Leave blank for bright Class-10 classroom 3D model + Yellow/Red heading...",
         )
 
     if st.button(
-        "✨ Build Dual Script, Google Flow Prompts & Pure 3D Thumbnails",
+        "✨ Build Expressive Script, Fly-In Formulas & Consistent Yellow+Red Class Thumbnails",
         type="primary",
         use_container_width=True,
     ):
-        with st.spinner("Designing 3D storyboard, Clean Indian-English script & pure 3D thumbnails..."):
+        with st.spinner("Designing bright Class-10 3D models, expressive narration, Fly-In Formulas & Yellow+Red Class Thumbnails..."):
             bp = generate_dual_script_and_thumbnails(
                 topic_title=final_topic_title,
                 pillar_id=st.session_state["selected_pillar_id"],
@@ -708,11 +736,13 @@ with tab2:
                 visual_theme_key=st.session_state["visual_theme_key"],
                 scene_count=num_scenes,
                 custom_thumb_prompt=custom_thumb_override,
-                force_regenerate_thumbs=bool(custom_thumb_override.strip()),
+                force_regenerate_thumbs=True,
+                target_class_label=st.session_state["target_class_label"],
+                target_subject_label=st.session_state["target_subject_label"],
             )
             st.session_state["current_blueprint"] = bp
             st.session_state["seo_bundle"] = None
-        st.success("✅ 3D Storyboard & Pure Thumbnails Ready! Review below and click Render.")
+        st.success("✅ Expressive Storyboard, Fly-In Formulas & Consistent Yellow+Red Class Thumbnails Ready!")
 
     bp = st.session_state.get("current_blueprint")
     if bp:
@@ -741,20 +771,27 @@ with tab2:
                     mime="image/jpeg",
                 )
 
-        st.subheader("📜 Faceless 3D Scene-by-Scene Script Preview")
+        st.subheader("📜 Expressive Script + Animated Fly-In Formulas & Quick Tips Preview")
         for sc in bp["scenes"]:
             st.markdown(
                 f"**Scene {sc['scene_id']:02d} — {sc['headline']}** (`{sc['concept_takeaway']}`)  \n"
+                f"📐 **Fly-In Formula:** `{sc.get('formula_badge', 'Core 3D Rule')}`  •  "
+                f"⚡ **Fly-In Quick Tip:** `{sc.get('quick_tip', 'Board Exam Hack')}`  \n"
                 f"🎙️ *{sc['narration']}*"
             )
 
         if st.button(
-            "🎬 Approve & Render Full `16:9` Long Video + `9:16` Short (`-14 LUFS` Clean Indian-English)",
+            "🎬 Approve & Render Full `16:9` Video + `9:16` Short (Expressive AI Voice + BGM + Fly-In Cards)",
             type="primary",
             use_container_width=True,
         ):
-            with st.spinner("Synthesizing Clean Indian-English narration, rendering 3D scenes & stitching 16:9 + 9:16 MP4s..."):
-                draft = render_full_topperlab_project(bp, short_max_scenes=4)
+            with st.spinner("Synthesizing expressive AI voiceover, mixing curiosity BGM + chimes, animating Fly-In Formula/Hack cards & rendering 3D MP4s..."):
+                draft = render_full_topperlab_project(
+                    bp,
+                    short_max_scenes=4,
+                    bgm_enabled=bool(st.session_state.get("bgm_enabled", True)),
+                    force_live_images=True,
+                )
                 st.session_state["current_draft"] = draft
                 st.session_state["seo_bundle"] = generate_student_seo_bundle(
                     video_title=draft["topic_title"],
@@ -771,17 +808,26 @@ with tab3:
     st.markdown('<span class="step-badge">STEP 3 • PREVIEW MASTER VIDEOS, EDIT SCENES & DROP IN GOOGLE FLOW / VEO 3.1 CLIPS</span>', unsafe_allow_html=True)
 
     st.markdown(
-        '<div class="lab-card"><b>100% Free Built-In 3D Camera Motion + Clean Indian-English Voiceover</b><br/>'
-        'Render or re-render your full <code>16:9</code> Long Video and <code>9:16</code> Vertical Short anytime below with zero paid video API needed—or drop custom Google Flow / Omni clips per scene.</div>',
+        '<div class="lab-card"><b>🎒 Bright Class-10 3D Classroom Models + Expressive AI Mentor + Curiosity BGM + Animated Fly-In Formulas & Hacks</b><br/>'
+        'Every scene automatically animates <b>📐 Fly-In / Fly-Out Formula Cards</b> (from left) and <b>⚡ Quick Tip / Exam Hack Cards</b> (from right) synced with bell chimes & auto-ducked background music!</div>',
         unsafe_allow_html=True,
     )
-    if st.button(
-        "🎬 Generate / Re-Render Master `16:9` Long Video + `9:16` Short Now (Free Built-In 3D Engine)",
-        type="primary",
-        use_container_width=True,
-        key="step3_top_render_btn",
-    ):
-        with st.spinner("Building 3D scenes, Clean Indian-English (-14 LUFS) voiceover & stitching 16:9 + 9:16 MP4s..."):
+    rc_top1, rc_top2 = st.columns([3.0, 1.3])
+    with rc_top2:
+        force_fresh_3d_chk = st.checkbox(
+            "✨ Fresh AI 3D Models",
+            value=False,
+            help="Check to generate brand-new bright 3D classroom images via Nano Banana 2.1 when re-rendering.",
+        )
+    with rc_top1:
+        step3_render_clicked = st.button(
+            "🎬 Generate / Re-Render Master `16:9` Video + `9:16` Short (Expressive Voice + BGM + Fly-In Cards)",
+            type="primary",
+            use_container_width=True,
+            key="step3_top_render_btn",
+        )
+    if step3_render_clicked:
+        with st.spinner("Synthesizing expressive AI voiceover, curiosity BGM + chimes, animated Fly-In Formula/Hack cards & 3D MP4s..."):
             active_bp = st.session_state.get("current_blueprint")
             if not active_bp or active_bp.get("topic_title") != st.session_state["selected_topic_title"]:
                 active_bp = generate_dual_script_and_thumbnails(
@@ -791,11 +837,25 @@ with tab3:
                     voice_mode=st.session_state["voice_mode"],
                     visual_theme_key=st.session_state["visual_theme_key"],
                     scene_count=4,
+                    force_regenerate_thumbs=force_fresh_3d_chk,
+                    target_class_label=st.session_state["target_class_label"],
+                    target_subject_label=st.session_state["target_subject_label"],
                 )
                 st.session_state["current_blueprint"] = active_bp
             active_bp["voice_mode"] = st.session_state["voice_mode"]
             active_bp["visual_theme_key"] = st.session_state["visual_theme_key"]
-            rendered_draft = render_full_topperlab_project(active_bp, short_max_scenes=4)
+            active_bp["class_badge_text"] = infer_class_badge_label(
+                exam_track=active_bp.get("exam_track", ""),
+                topic_title=active_bp.get("topic_title", ""),
+                class_override=st.session_state["target_class_label"],
+                subject_override=st.session_state["target_subject_label"],
+            )
+            rendered_draft = render_full_topperlab_project(
+                active_bp,
+                short_max_scenes=4,
+                bgm_enabled=bool(st.session_state.get("bgm_enabled", True)),
+                force_live_images=force_fresh_3d_chk,
+            )
             st.session_state["current_draft"] = rendered_draft
             st.session_state["seo_bundle"] = generate_student_seo_bundle(
                 video_title=rendered_draft["topic_title"],
@@ -874,16 +934,29 @@ with tab3:
                             st.info(vres.get("message", ""))
 
                 with ec2:
-                    ed_narr = st.text_area(f"Spoken Narration (Scene {sid:02d}):", value=sc["narration"], key=f"narr_{sid}", height=95)
-                    ed_img_p = st.text_area(f"Pure 3D Image Prompt (Scene {sid:02d}):", value=sc["image_3d_prompt"], key=f"imgp_{sid}", height=80)
-                    regen_img_chk = st.checkbox("Regenerate 3D Image via Nano Banana / Imagen", value=False, key=f"rg_{sid}")
+                    fc1, fc2 = st.columns(2)
+                    with fc1:
+                        ed_formula = st.text_input(
+                            f"📐 Fly-In Formula Card (Scene {sid:02d}):",
+                            value=sc.get("formula_badge", ""),
+                            key=f"form_{sid}",
+                        )
+                    with fc2:
+                        ed_tip = st.text_input(
+                            f"⚡ Fly-In Quick Tip / Hack (Scene {sid:02d}):",
+                            value=sc.get("quick_tip", ""),
+                            key=f"tip_{sid}",
+                        )
+                    ed_narr = st.text_area(f"🎙️ Expressive Narration (Scene {sid:02d}):", value=sc["narration"], key=f"narr_{sid}", height=90)
+                    ed_img_p = st.text_area(f"🎒 Friendly 3D Classroom Model Prompt (Scene {sid:02d}):", value=sc["image_3d_prompt"], key=f"imgp_{sid}", height=75)
+                    regen_img_chk = st.checkbox("Regenerate Bright 3D Model Image via Nano Banana", value=False, key=f"rg_{sid}")
                     flow_upload = st.file_uploader(
                         f"🎞️ Optional: Drop Google Flow / Veo `.mp4` Motion Clip for Scene {sid:02d}:",
                         type=["mp4"],
                         key=f"flow_up_{sid}",
                     )
                     if st.button(f"🔄 Update Scene {sid:02d} & Re-Stitch Master Videos", key=f"upd_{sid}", type="primary"):
-                        with st.spinner(f"Updating Scene {sid:02d} & re-stitching 16:9 + 9:16 videos..."):
+                        with st.spinner(f"Updating Scene {sid:02d} (Voice + BGM + Fly-In Cards) & re-stitching 16:9 + 9:16 videos..."):
                             motion_bytes = flow_upload.read() if flow_upload is not None else None
                             updated = update_single_faceless_scene(
                                 draft_state=draft,
@@ -892,6 +965,9 @@ with tab3:
                                 new_3d_prompt=ed_img_p,
                                 regenerate_3d_image=regen_img_chk,
                                 uploaded_motion_bytes=motion_bytes,
+                                new_formula_badge=ed_formula,
+                                new_quick_tip=ed_tip,
+                                bgm_enabled=bool(st.session_state.get("bgm_enabled", True)),
                             )
                             st.session_state["current_draft"] = updated
                         st.success(f"✅ Scene {sid:02d} updated and master MP4s re-stitched!")
@@ -981,7 +1057,7 @@ with tab4:
             help="One video can live in BOTH CBSE and ICSE playlists simultaneously!",
         )
     with plc2:
-        pub_class = st.selectbox("🎓 Target Class:", options=CURRICULUM_CLASSES, index=1)
+        pub_class = st.selectbox("🎓 Target Class:", options=CURRICULUM_CLASSES, index=CURRICULUM_CLASSES.index(st.session_state.get("target_class_label", "Class 10")) if st.session_state.get("target_class_label", "Class 10") in CURRICULUM_CLASSES else 2)
     with plc3:
         pub_subject = st.selectbox("🔬 Target Subject:", options=ALL_CURRICULUM_SUBJECTS, index=0)
 

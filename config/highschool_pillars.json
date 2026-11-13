@@ -2,121 +2,114 @@
   "pillars": [
     {
       "id": "3d_concept_visualizer",
-      "name": "🔬 Pillar 1: 3D Syllabus & Concept Visualizer (Physics • Chem • Bio • Maths)",
-      "short_label": "3D Concept Visualizer",
-      "description": "Turns abstract Class 9–12, JEE & NEET chapters into jaw-dropping 3D visual cutaways so students understand in 6 minutes what 2D textbooks fail to show in 6 hours.",
-      "default_visual_theme": "3D_DARK_LAB_CUTAWAY",
+      "name": "🎒 Pillar 1: Bright 3D Science & Maths Models (Easy Class 8–12 Visualizer)",
+      "short_label": "3D Classroom Models",
+      "description": "Turns tough CBSE & ICSE Class 8–12 chapters into friendly, colorful real-life 3D models (bicycle wheels, magnets, prisms, circuits, hearts) with fly-in formulas & exam hacks.",
+      "default_visual_theme": "BRIGHT_CLASSROOM_3D_MODEL",
       "starter_topics": [
         {
-          "title": "Why Spinning Gyroscopes Defy Gravity — Rotational Motion & Torque Explained in 3D",
-          "exam_track": "Class 11–12 + JEE Physics & General Curiosity",
-          "thumb_hook": "DEFIES GRAVITY?!",
-          "short_hook": "99% MISREAD TORQUE",
-          "why_viral": "Combines counter-intuitive physics mystery with core Class 11 Rotational Motion (hardest JEE chapter)."
+          "title": "Why Spinning Bicycle Wheels Defy Gravity — Rotational Motion & Torque in Easy 3D",
+          "exam_track": "Class 10 & 11 Science / Physics (CBSE & ICSE)",
+          "thumb_hook": "WHY NO FALL?!",
+          "short_hook": "CYCLE WHEEL MAGIC!",
+          "why_viral": "Uses an everyday cycle wheel that every Class 10 student has ridden to explain Torque & Balance effortlessly."
         },
         {
-          "title": "Inside Electromagnetic Induction & Lenz's Law in 3D: See Invisible Magnetic Flux",
-          "exam_track": "Class 10 & Class 12 Boards + JEE / NEET Physics",
-          "thumb_hook": "INVISIBLE FLUX!",
-          "short_hook": "LENZ LAW IN 3D",
-          "why_viral": "Right-hand/left-hand rule confusion drives massive search traffic every board & entrance season."
+          "title": "Inside an Electric Motor & Fleming's Left-Hand Rule in 3D — Never Confuse Directions Again!",
+          "exam_track": "Class 10 CBSE & ICSE Physics (Magnetic Effects of Current)",
+          "thumb_hook": "LEFT HAND HACK!",
+          "short_hook": "MOTOR IN 3D!",
+          "why_viral": "#1 guaranteed 5-mark Class 10 Board question where students mix up Force, Field, and Current."
         },
         {
-          "title": "SN1 vs SN2 Reaction Mechanisms at 10,000,000x Zoom in 3D (Organic Chemistry Unlocked)",
-          "exam_track": "Class 12 Boards + JEE & NEET Organic Chemistry",
-          "thumb_hook": "SEE THE COLLISION",
-          "short_hook": "SN1 VS SN2 IN 3D",
-          "why_viral": "Steric hindrance & backside inversion make instant sense once seen as colliding 3D molecules."
+          "title": "Ohm's Law & Series vs Parallel Circuits as 3D Water Pipes — Electricity Made Super Easy",
+          "exam_track": "Class 10 CBSE & ICSE Science (Electricity Chapter)",
+          "thumb_hook": "VOLTAGE = PRESSURE!",
+          "short_hook": "OHM'S LAW IN 3D!",
+          "why_viral": "Clear 3D water-pump & pipe model makes Voltage, Current, and Resistance click in 30 seconds for Class 10."
         },
         {
-          "title": "How Human DNA Replicates at 50 Letters Per Second — 3D Molecular Machine Breakdown",
-          "exam_track": "Class 12 Boards + NEET UG Biology",
-          "thumb_hook": "DNA MACHINE 3D",
-          "short_hook": "LEADING VS LAGGING",
-          "why_viral": "Helicase, Okazaki fragments & 5'-to-3' directionality are top high-weightage NEET/Board visuals."
+          "title": "How a Glass Prism Splits White Light Into 7 Rainbow Colours & Why Sky Looks Blue (3D Model)",
+          "exam_track": "Class 10 CBSE & ICSE Physics (Human Eye & Colourful World)",
+          "thumb_hook": "WHY SKY IS BLUE?!",
+          "short_hook": "PRISM RAINBOW 3D!",
+          "why_viral": "Bright colorful 3D rainbow light rays + 3-mark board exam trick ('Red bends least, Violet bends most!')."
         },
         {
-          "title": "Bernoulli's Principle & Fluid Mechanics in 3D: Why Fast Air Creates Low Pressure",
-          "exam_track": "Class 11 Physics + JEE / NEET",
-          "thumb_hook": "FAST = LOW PRESSURE?",
-          "short_hook": "BERNOULLI MYTH!",
-          "why_viral": "Busts the #1 textbook misconception on airplane lift and Venturi tubes using 3D particle flow."
+          "title": "Inside the Human Heart's Double Circulation in 3D — 4 Chambers & Valves Made Unforgettable",
+          "exam_track": "Class 10 CBSE & ICSE Biology (Life Processes)",
+          "thumb_hook": "4 CHAMBERS IN 3D!",
+          "short_hook": "HEART PUMP HACK!",
+          "why_viral": "Color-coded red & blue 3D toy cutaway of Arteries, Veins, and Pulmonary loop locks in 5 board marks."
         }
       ]
     },
     {
       "id": "topper_brain_strategy",
-      "name": "🧠 Pillar 2: Topper Memory Science & 99%ile Exam Strategy",
-      "short_label": "Topper Brain & Strategy",
-      "description": "Neuroscience-backed memory systems, active recall loops, and 90-day revision architectures illustrated with 3D brain cutaways and holographic blueprints.",
-      "default_visual_theme": "TOPPER_NEURO_DESK_3D",
+      "name": "🧠 Pillar 2: Topper Study Hacks, Formula Tricks & 95%+ Board Strategy",
+      "short_label": "Topper Hacks & Memory",
+      "description": "Fun 3D memory models, active recall tricks, and exam-hall hacks so Class 8–12 students remember every formula without cramming.",
+      "default_visual_theme": "BRIGHT_CLASSROOM_3D_MODEL",
       "starter_topics": [
         {
-          "title": "Why 95% of Students Blank Out in the Exam Hall — The 3X Active Recall Loop in 3D",
-          "exam_track": "All High-Schoolers (Class 9–12, Boards, JEE & NEET)",
-          "thumb_hook": "3X MEMORY LOOP",
-          "short_hook": "STOP RE-READING!",
-          "why_viral": "Universal student pain point; high shareability and strong conversion for revision tracker sheets."
+          "title": "Why Students Blank Out in the Exam Hall — The 3X Active Recall Trick in 3D",
+          "exam_track": "Class 10 & 12 Board Exams (CBSE & ICSE)",
+          "thumb_hook": "STOP BLANKING OUT!",
+          "short_hook": "3X MEMORY HACK!",
+          "why_viral": "Every Class 10 student fears forgetting answers in the board exam hall — huge shareability with classmates."
         },
         {
-          "title": "The 1-3-7-21 Spaced Repetition Blueprint: How Toppers Lock 500 Formulas Permanently",
-          "exam_track": "All High-Schoolers (Class 9–12, Boards, JEE & NEET)",
+          "title": "The 1-3-7 Revision Rule: How Toppers Lock 100 Science & Maths Formulas Permanently",
+          "exam_track": "Class 8–12 CBSE & ICSE Board Prep",
           "thumb_hook": "NEVER FORGET!",
-          "short_hook": "1-3-7-21 RULE",
-          "why_viral": "Visualizes Ebbinghaus forgetting curve in 3D and hands students an actionable daily system."
+          "short_hook": "1-3-7 FORMULA HACK",
+          "why_viral": "Simple visual calendar + 3D brain pathway model students can apply tonight."
         },
         {
-          "title": "The 90-Day 3-Layer NCERT & PYQ Comeback System (Data-Backed Exam Strategy)",
-          "exam_track": "Class 10 & Class 12 Boards + JEE / NEET",
-          "thumb_hook": "90-DAY COMEBACK",
-          "short_hook": "3-LAYER SYSTEM",
-          "why_viral": "Explodes in views every exam quarter from students seeking a realistic structured recovery plan."
-        },
-        {
-          "title": "Feynman Technique in 3D: How Explaining Out Loud Rewires Weak Neural Pathways",
-          "exam_track": "All High-Schoolers (Class 9–12, Boards, JEE & NEET)",
-          "thumb_hook": "REWIRE YOUR BRAIN",
-          "short_hook": "FEYNMAN HACK 3D",
-          "why_viral": "Bridges global study science with Indian board & competitive exam preparation."
+          "title": "How to Score 95%+ in Class 10 Science & Maths Using the 3-Colour NCERT Mistake Notebook",
+          "exam_track": "CBSE & ICSE Class 10 Board Toppers",
+          "thumb_hook": "SCORE 95%+ EASY!",
+          "short_hook": "3-COLOUR NOTEBOOK",
+          "why_viral": "Practical, colorful study desk 3D breakdown tailored specifically for Class 10 board aspirants."
         }
       ]
     },
     {
       "id": "pyq_exam_traps_shorts",
-      "name": "⚡ Pillar 3: 60-Second Exam Traps, Formula Hacks & Visual Quizzes",
-      "short_label": "60s Exam Traps & Quizzes",
-      "description": "Ultra-punchy problem traps, sign-convention fixes, and 5-second visual quizzes engineered to rack up millions of Shorts views and rapid subscribers.",
-      "default_visual_theme": "HOLOGRAPHIC_CONCEPT_CORE",
+      "name": "⚡ Pillar 3: 60-Second Board Exam Traps, Sign-Convention Hacks & Quizzes",
+      "short_label": "60s Exam Traps & Hacks",
+      "description": "Fast, colourful 3D visual fixes for the silly mistakes that cost Class 9–12 students easy marks in Physics, Chemistry, Bio & Maths.",
+      "default_visual_theme": "COLORFUL_3D_SCIENCE_CUTAWAY",
       "starter_topics": [
         {
-          "title": "The Friction Direction Trap That Costs 4 Marks in Rolling Motion Every Year (3D Proof)",
-          "exam_track": "Class 11 Physics + JEE / NEET",
-          "thumb_hook": "-1 MARK TRAP!",
-          "short_hook": "WHICH WAY FRICTION?",
-          "why_viral": "Triggers massive debate in student comments (boosting YouTube Shorts algorithmic push)."
+          "title": "Concave vs Convex Mirror & Lens Sign Convention Hack — Never Lose Marks on +/- Signs!",
+          "exam_track": "Class 10 CBSE & ICSE Light — Reflection & Refraction",
+          "thumb_hook": "+ OR - SIGN TRAP!",
+          "short_hook": "MIRROR SIGN HACK!",
+          "why_viral": "#1 numerical mistake in Class 10 Light chapter — solved forever with a simple 3D number-line model."
         },
         {
-          "title": "90% Confuse Mitosis vs Meiosis Chromosome & DNA Counts — Master Both in 60 Seconds",
-          "exam_track": "Class 11 Biology + NEET UG",
-          "thumb_hook": "2N OR 4C TRAP!",
-          "short_hook": "MITOSIS VS MEIOSIS",
-          "why_viral": "Classic NEET negative-marking trap solved permanently with one 3D chromosome split visual."
+          "title": "Roasting vs Calcination & Reactivity Series Trick in 3D — 3 Marks Guaranteed in 60 Seconds",
+          "exam_track": "Class 10 CBSE & ICSE Chemistry (Metals & Non-Metals)",
+          "thumb_hook": "EASY 3 MARKS!",
+          "short_hook": "METALS MEMORY HACK",
+          "why_viral": "High-scoring board chemistry confusion solved with colorful 3D ore models and a funny mnemonic."
         },
         {
-          "title": "Why Zero Factorial Equals One (0! = 1) — Visualized in 3D Permutations",
-          "exam_track": "Class 11 Maths + General STEM Curiosity",
-          "thumb_hook": "WHY IS 0! = 1?",
-          "short_hook": "0! = 1 IN 3D",
-          "why_viral": "Broad global + Indian student appeal — captures international English STEM RPM alongside India."
+          "title": "Trigonometry Table in 10 Seconds Using Your Left Hand in 3D — Class 10 Maths Magic Hack",
+          "exam_track": "Class 10 CBSE & ICSE Mathematics",
+          "thumb_hook": "5-FINGER TRIG HACK!",
+          "short_hook": "SIN COS IN 5 SEC!",
+          "why_viral": "Visual 3D hand-angle trick for 0°, 30°, 45°, 60°, 90° goes massively viral among Class 10 students."
         }
       ]
     }
   ],
   "exam_tracks": [
+    "CBSE & ICSE Class 10 (Board Science & Maths — Easy 3D Visuals)",
+    "CBSE & ICSE Class 8, 9 & 10 Foundation (All Subjects)",
     "All Students (Class 8–12 • CBSE & ICSE/ISC • JEE & NEET)",
     "CBSE & ISC Class 11–12 + JEE Mains & Advanced (Physics • Chem • Maths)",
-    "CBSE & ISC Class 11–12 + NEET UG (Biology • Physics • Chemistry)",
-    "CBSE Class 8, 9 & 10 (NCERT Science & Maths Foundation)",
-    "ICSE Class 8, 9 & 10 (Physics • Chemistry • Biology • Maths)"
+    "CBSE & ISC Class 11–12 + NEET UG (Biology • Physics • Chemistry)"
   ]
 }
