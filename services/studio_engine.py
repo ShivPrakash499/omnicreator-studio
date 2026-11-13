@@ -228,6 +228,7 @@ def build_genai_client(location: str = "global", timeout_ms: int = 60000, api_ke
     from google import genai
     from google.genai import types
 
+    http_opts = types.HttpOptions(timeout=timeout_ms) if hasattr(types, "HttpOptions") else {"timeout": timeout_ms}
     project_id = os.environ.get("VERTEX_PROJECT_ID", "gen-lang-client-0777980903").strip()
     if not api_key_override:
         adc_info = _load_vertex_adc_dict()
@@ -247,14 +248,14 @@ def build_genai_client(location: str = "global", timeout_ms: int = 60000, api_ke
                     project=project_id,
                     location=location,
                     credentials=creds,
-                    http_options=types.HttpOptions(timeout=timeout_ms),
+                    http_options=http_opts,
                 )
             except Exception:
                 pass
 
     key = (api_key_override or get_gemini_api_key()).strip()
     if key:
-        return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=timeout_ms))
+        return genai.Client(api_key=key, http_options=http_opts)
     return None
 
 

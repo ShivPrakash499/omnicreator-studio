@@ -24,10 +24,6 @@ ROOT_DIR = Path(__file__).resolve().parent
 if str(ROOT_DIR / "services") not in sys.path:
     sys.path.insert(0, str(ROOT_DIR / "services"))
 
-import studio_engine
-
-importlib.reload(studio_engine)
-
 from studio_engine import (
     ALL_CURRICULUM_SUBJECTS,
     CORE_STEM_SUBJECTS,
