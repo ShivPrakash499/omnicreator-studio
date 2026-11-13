@@ -29,6 +29,7 @@ import studio_engine
 importlib.reload(studio_engine)
 
 from studio_engine import (
+    SCRIPT_MODEL_PRESETS,
     build_youtube_auth_url,
     check_gemini_api_key_health,
     exchange_youtube_auth_code,
@@ -38,6 +39,7 @@ from studio_engine import (
     generate_topperlab_branding,
     generate_veo_clip_via_api,
     generate_viral_highschool_topics,
+    get_active_script_model,
     get_gemini_api_key,
     get_youtube_oauth_status,
     has_vertex_adc,
@@ -51,6 +53,7 @@ from studio_engine import (
     save_active_channel,
     save_meta_credentials,
     save_youtube_client_secret,
+    set_active_script_model,
     set_runtime_gemini_api_key,
     update_single_faceless_scene,
 )
@@ -211,6 +214,7 @@ _preloaded_draft = _load_portable_json(_sample_dir / "topperlab_draft_state.json
 
 for k, default_val in [
     ("ui_theme_mode", "🌙 Dark Lab Mode"),
+    ("script_model_id", get_active_script_model()),
     ("voice_mode", channel_cfg.get("default_voice_mode", "Clean Indian-English (en-IN)")),
     ("visual_theme_key", channel_cfg.get("default_visual_theme", "3D_DARK_LAB_CUTAWAY")),
     ("selected_pillar_id", "3d_concept_visualizer"),
@@ -257,11 +261,30 @@ with st.sidebar:
     else:
         st.info("⚪ YouTube API: Not Authorized Yet (Connect in Step 1)")
 
+    model_keys = list(SCRIPT_MODEL_PRESETS.keys())
+    selected_model = st.selectbox(
+        "🧠 Gemini 4 Brain:",
+        options=model_keys,
+        format_func=lambda mk: SCRIPT_MODEL_PRESETS[mk],
+        index=model_keys.index(st.session_state["script_model_id"])
+        if st.session_state["script_model_id"] in model_keys
+        else 0,
+    )
+    st.session_state["script_model_id"] = selected_model
+    set_active_script_model(selected_model)
+
     active_gem_key = get_gemini_api_key()
     vertex_ready = has_vertex_adc()
-    key_fp = f"v:{vertex_ready}|k:{len(active_gem_key)}:{active_gem_key[:6]}:{active_gem_key[-4:]}" if active_gem_key else f"v:{vertex_ready}|empty"
+    key_fp = (
+        f"m:{selected_model}|v:{vertex_ready}|k:{len(active_gem_key)}:{active_gem_key[:6]}:{active_gem_key[-4:]}"
+        if active_gem_key
+        else f"m:{selected_model}|v:{vertex_ready}|empty"
+    )
     if st.session_state.get("gemini_health_fp") != key_fp:
-        st.session_state["gemini_health_cache"] = check_gemini_api_key_health(None if vertex_ready else active_gem_key)
+        st.session_state["gemini_health_cache"] = check_gemini_api_key_health(
+            None if vertex_ready else active_gem_key,
+            preferred_model=selected_model,
+        )
         st.session_state["gemini_health_fp"] = key_fp
     gem_health = st.session_state["gemini_health_cache"]
 
@@ -270,7 +293,7 @@ with st.sidebar:
     else:
         st.warning(f"🟠 {gem_health['summary']}")
 
-    exp_label = "☁️ Gemini 3.8 & Vertex AI Credits" if gem_health.get("ok") else "🔑 Gemini / Vertex AI Setup"
+    exp_label = "☁️ Gemini 4 & Vertex AI Credits" if gem_health.get("ok") else "🔑 Gemini / Vertex AI Setup"
     with st.expander(exp_label, expanded=not gem_health.get("ok")):
         st.caption(gem_health.get("detail", ""))
         new_gem_key = st.text_input(

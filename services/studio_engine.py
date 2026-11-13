@@ -258,10 +258,57 @@ def build_genai_client(location: str = "global", timeout_ms: int = 60000, api_ke
     return None
 
 
-def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
+SCRIPT_MODEL_PRESETS: Dict[str, str] = {
+    "gemini-4-argon": "Gemini 4 Argon ⭐ (Best STEM & JEE/NEET Reasoning)",
+    "gemini-4-hydrogen": "Gemini 4 Hydrogen ⚡ (Fastest Gemini 4 Workhorse)",
+    "gemini-4-carbon": "Gemini 4 Carbon 🧠 (Deepest Frontier — Auto-Fallback to Argon)",
+    "gemini-3.8-flash": "Gemini 3.8 Flash (Ultra-Light Fallback)",
+}
+
+SCRIPT_MODEL_SHORT_NAMES: Dict[str, str] = {
+    "gemini-4-argon": "Gemini 4 Argon",
+    "gemini-4-hydrogen": "Gemini 4 Hydrogen",
+    "gemini-4-carbon": "Gemini 4 Carbon",
+    "gemini-3.8-flash": "Gemini 3.8 Flash",
+}
+
+
+def get_active_script_model() -> str:
+    rt = os.environ.get("RUNTIME_SCRIPT_MODEL", "").strip()
+    if rt in SCRIPT_MODEL_PRESETS:
+        return rt
+    try:
+        import streamlit as st
+
+        if "SCRIPT_MODEL" in st.secrets:
+            sval = str(st.secrets["SCRIPT_MODEL"]).strip()
+            if sval in SCRIPT_MODEL_PRESETS:
+                return sval
+    except Exception:
+        pass
+    return "gemini-4-argon"
+
+
+def set_active_script_model(model_id: str) -> None:
+    clean = (model_id or "").strip()
+    if clean:
+        os.environ["RUNTIME_SCRIPT_MODEL"] = clean
+        os.environ["SCRIPT_MODEL"] = clean
+
+
+def _ordered_script_models(preferred: str | None = None) -> List[str]:
+    first = (preferred or get_active_script_model()).strip()
+    ordered: List[str] = []
+    for m in (first, "gemini-4-argon", "gemini-4-hydrogen", "gemini-3.8-flash"):
+        if m and m not in ordered:
+            ordered.append(m)
+    return ordered
+
+
+def check_gemini_api_key_health(api_key: str | None = None, preferred_model: str | None = None) -> Dict[str, Any]:
     runtime_override = os.environ.get("RUNTIME_GEMINI_API_KEY", "").strip()
     effective_override = runtime_override if runtime_override else (None if has_vertex_adc() else (api_key if api_key else None))
-    client = build_genai_client(location="global", timeout_ms=15000, api_key_override=effective_override)
+    client = build_genai_client(location="global", timeout_ms=60000, api_key_override=effective_override)
     if client is None:
         return {
             "ok": False,
@@ -274,26 +321,40 @@ def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
         }
     try:
         is_vertex = _is_vertex_client(client)
+        candidates = _ordered_script_models(preferred_model)
+        requested = candidates[0]
         last_err = ""
-        for probe_model in ("gemini-3.8-flash",):
+        for probe_model in candidates:
             try:
                 if not is_vertex and hasattr(client, "interactions"):
-                    inter = client.interactions.create(model=probe_model, input="Reply with OK")
+                    inter = client.interactions.create(model=probe_model, input="Reply OK")
                     if getattr(inter, "output_text", None):
+                        short_lbl = SCRIPT_MODEL_SHORT_NAMES.get(probe_model, probe_model)
                         return {
                             "ok": True,
                             "code": "ACTIVE",
-                            "summary": "Gemini AI Key Active & Healthy",
+                            "active_model": probe_model,
+                            "summary": f"{short_lbl} Active (Gemini AI Key)",
                             "detail": f"Verified live on {probe_model}.",
                         }
                 resp = client.models.generate_content(model=probe_model, contents="Reply OK")
                 if getattr(resp, "text", None):
+                    short_lbl = SCRIPT_MODEL_SHORT_NAMES.get(probe_model, probe_model)
                     mode_lbl = "Vertex AI Cloud Credits" if is_vertex else "Gemini AI Studio Key"
+                    fallback_note = (
+                        f" ({SCRIPT_MODEL_SHORT_NAMES.get(requested, requested)} auto-routed to {short_lbl} on Vertex AI)"
+                        if probe_model != requested
+                        else ""
+                    )
                     return {
                         "ok": True,
                         "code": "ACTIVE",
-                        "summary": f"Gemini 3.8 + Nano Banana 3D Active ({mode_lbl})",
-                        "detail": f"Verified live on {probe_model} ({project_label() if is_vertex else 'AI Studio'}) — scripts, 3D renders & Veo 3.1 ready!",
+                        "active_model": probe_model,
+                        "summary": f"{short_lbl} + Nano Banana 3D Active ({mode_lbl})",
+                        "detail": (
+                            f"Verified live on {probe_model}{fallback_note} "
+                            f"({project_label() if is_vertex else 'AI Studio'}) — scripts, 3D renders & Veo 3.1 ready!"
+                        ),
                     }
             except Exception as exc:
                 last_err = sanitize_api_error(exc)
@@ -308,7 +369,7 @@ def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
                             "Vertex AI (₹28,568 + ₹3,810 Cloud credits at ₹0 deposit)!"
                         ),
                     }
-                if "outstanding balance" in low or "billing account" in low:
+                if "outstanding balance" in low:
                     return {
                         "ok": False,
                         "code": "BILLING_HOLD",
@@ -322,6 +383,7 @@ def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
                         "summary": "Invalid Gemini API Key",
                         "detail": "Please paste a valid key or VERTEX_ADC_JSON in Streamlit Secrets.",
                     }
+                continue
         return {
             "ok": False,
             "code": "ERROR",
@@ -342,14 +404,14 @@ def project_label() -> str:
 
 
 def call_gemini_json(prompt: str, fallback: Any) -> Any:
-    client = build_genai_client(location="global", timeout_ms=45000)
+    client = build_genai_client(location="global", timeout_ms=120000)
     if client is None:
         return fallback
     try:
         from google.genai import types
 
         is_vertex = _is_vertex_client(client)
-        for model_id in (os.environ.get("SCRIPT_MODEL", "gemini-3.8-flash"), "gemini-4-argon"):
+        for model_id in _ordered_script_models():
             try:
                 if not is_vertex and hasattr(client, "interactions"):
                     inter = client.interactions.create(
@@ -364,7 +426,6 @@ def call_gemini_json(prompt: str, fallback: Any) -> Any:
                     contents=prompt,
                     config=types.GenerateContentConfig(
                         response_mime_type="application/json",
-                        temperature=0.65,
                     ),
                 )
                 if resp and resp.text:
