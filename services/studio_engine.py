@@ -194,7 +194,7 @@ def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
 
         client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=12000))
         last_err = ""
-        for probe_model in ("gemini-3.8-flash", "gemini-2.5-flash"):
+        for probe_model in ("gemini-3.8-flash",):
             try:
                 if hasattr(client, "interactions"):
                     inter = client.interactions.create(model=probe_model, input="Reply with OK")
@@ -216,15 +216,25 @@ def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
             except Exception as exc:
                 last_err = sanitize_api_error(exc)
                 low = last_err.lower()
+                if "prepayment credits are depleted" in low or "402" in low:
+                    return {
+                        "ok": False,
+                        "code": "PREPAY_EMPTY",
+                        "summary": "AI Studio Project Needs Free-Tier Key or Upgraded Billing",
+                        "detail": (
+                            "Default Gemini Project is waiting on AI Studio Prepay / Free-Trial upgrade. "
+                            "Either click 'Create API key in new project' (Free Tier — ₹0) at https://aistudio.google.com/apikey, "
+                            "or upgrade 'Free trial account' in Cloud Billing so your ₹3.81K credits unlock!"
+                        ),
+                    }
                 if "outstanding balance" in low or "billing account" in low:
                     return {
                         "ok": False,
                         "code": "BILLING_HOLD",
                         "summary": "Old GCP Key Paused (Billing Hold on Previous Project)",
                         "detail": (
-                            "The active key belongs to your older jwalashiva@gmail.com Cloud project whose billing account has a balance hold. "
-                            "Fix in 30s for ₹0: open https://aistudio.google.com/apikey while signed into jwala4work@gmail.com, "
-                            "click 'Create API key' (Free Tier), and paste the new AIza... key below!"
+                            "The active key belongs to a project with a paused billing hold. "
+                            "Open https://aistudio.google.com/apikey, click 'Create API key in new project' (Free Tier), and paste it below!"
                         ),
                     }
                 if "api_key_invalid" in low or "api key not valid" in low:
@@ -232,7 +242,7 @@ def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
                         "ok": False,
                         "code": "INVALID_KEY",
                         "summary": "Invalid Gemini API Key",
-                        "detail": "Please generate a fresh AIza... key at https://aistudio.google.com/apikey (signed into jwala4work@gmail.com) and paste it below.",
+                        "detail": "Please generate a fresh AIza... key at https://aistudio.google.com/apikey and paste it below.",
                     }
         if "429" in last_err or "resource_exhausted" in last_err.lower():
             return {
