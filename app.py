@@ -63,7 +63,7 @@ ALLOWED_GOOGLE_EMAILS = {
     e.strip().lower()
     for e in os.environ.get(
         "ALLOWED_GOOGLE_EMAILS",
-        "jwalashiva@gmail.com,jwalasinghekcrore@gmail.com",
+        "jwala4work@gmail.com,jwalashiva@gmail.com,jwalasinghekcrore@gmail.com",
     ).split(",")
     if e.strip()
 }
@@ -99,7 +99,7 @@ if "code" in st.query_params and st.query_params.get("state") == "youtube_channe
     try:
         redir = st.session_state.get("yt_redirect_uri_input", "")
         tok_info = exchange_youtube_auth_code(st.query_params["code"], redirect_uri=redir)
-        st.session_state["authenticated_google_user"] = st.session_state["authenticated_google_user"] or "jwalashiva@gmail.com"
+        st.session_state["authenticated_google_user"] = st.session_state["authenticated_google_user"] or "jwala4work@gmail.com"
         st.session_state["yt_oauth_flash"] = (
             f"✅ Connected YouTube Channel: {tok_info.get('connected_channel_title', 'TopperLab 3D')} "
             f"({tok_info.get('connected_channel_id', '')})"
@@ -149,7 +149,7 @@ if not st.session_state["authenticated_google_user"]:
         """
         <div style="max-width:540px;margin:55px auto;padding:30px;background:#0F172A;border:1px solid #334155;border-top:5px solid #00E5FF;border-radius:14px;color:#F8FAFC;font-family:'Segoe UI',sans-serif;">
             <h2 style="margin-top:0;color:#F8FAFC;">🔬 TopperLab 3D — Studio Sign-In</h2>
-            <p style="color:#CBD5E1;font-size:0.95rem;">Dedicated Faceless 3D STEM & Exam Strategy Studio for <b>@TopperLab3D</b>.<br/>Restricted to owner Google accounts (<b>jwalashiva@gmail.com</b>).</p>
+            <p style="color:#CBD5E1;font-size:0.95rem;">Dedicated Faceless 3D STEM & Exam Strategy Studio for <b>@TopperLab3D</b>.<br/>Restricted to owner Google accounts (<b>jwala4work@gmail.com</b> / <b>jwalashiva@gmail.com</b>).</p>
         </div>
         """,
         unsafe_allow_html=True,
@@ -157,7 +157,7 @@ if not st.session_state["authenticated_google_user"]:
     _, login_col, _ = st.columns([1, 1.8, 1])
     with login_col:
         with st.form("topperlab_owner_login"):
-            login_email = st.text_input("Authorized Google Email:", value="jwalashiva@gmail.com")
+            login_email = st.text_input("Authorized Google Email:", value="jwala4work@gmail.com")
             login_code = st.text_input(
                 "Studio Passcode:",
                 type="password",
