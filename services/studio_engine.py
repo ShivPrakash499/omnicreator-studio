@@ -116,8 +116,16 @@ def call_gemini_json(prompt: str, fallback: Any) -> Any:
         from google.genai import types
 
         client = genai.Client(api_key=api_key)
-        for model_id in ("gemini-2.5-flash", "gemini-2.0-flash"):
+        for model_id in (os.environ.get("SCRIPT_MODEL", "gemini-3.8-flash"), "gemini-4-argon"):
             try:
+                if hasattr(client, "interactions"):
+                    inter = client.interactions.create(
+                        model=model_id,
+                        input=f"{prompt}\n\nRespond ONLY with valid raw JSON (no markdown fences).",
+                    )
+                    txt = (inter.output_text or "").strip().removeprefix("```json").removeprefix("```").removesuffix("```").strip()
+                    if txt:
+                        return json.loads(txt)
                 resp = client.models.generate_content(
                     model=model_id,
                     contents=prompt,
@@ -175,8 +183,15 @@ def generate_pure_3d_image(
             from google.genai import types
 
             client = genai.Client(api_key=api_key)
-            for img_model in ("gemini-2.5-flash-image", "gemini-2.0-flash-preview-image-generation"):
+            for img_model in (os.environ.get("IMAGE_MODEL", "gemini-nano-banana-2.1"), "gemini-3-pro-image"):
                 try:
+                    if hasattr(client, "interactions"):
+                        inter = client.interactions.create(model=img_model, input=clean_prompt)
+                        out_img = getattr(inter, "output_image", None)
+                        if out_img and getattr(out_img, "data", None):
+                            import base64
+                            raw = base64.b64decode(out_img.data) if isinstance(out_img.data, str) else out_img.data
+                            return _fit_and_save_image(Image.open(BytesIO(raw)), output_path, target_size)
                     resp = client.models.generate_content(
                         model=img_model,
                         contents=clean_prompt,
