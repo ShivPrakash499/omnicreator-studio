@@ -176,27 +176,108 @@ def get_gemini_api_key() -> str:
     return ""
 
 
+def _vertex_adc_file() -> Path:
+    CREDS_DIR.mkdir(parents=True, exist_ok=True)
+    return CREDS_DIR / "vertex_adc.json"
+
+
+def _load_vertex_adc_dict() -> Dict[str, Any] | None:
+    env_raw = os.environ.get("VERTEX_ADC_JSON", "").strip()
+    if not env_raw:
+        try:
+            import streamlit as st
+
+            if "VERTEX_ADC_JSON" in st.secrets:
+                env_raw = str(st.secrets["VERTEX_ADC_JSON"]).strip()
+        except Exception:
+            pass
+    if env_raw:
+        try:
+            return json.loads(env_raw)
+        except Exception:
+            pass
+    for cand in [
+        _vertex_adc_file(),
+        Path(os.environ.get("APPDATA", "")) / "gcloud" / "application_default_credentials.json",
+        Path.home() / ".config" / "gcloud" / "application_default_credentials.json",
+    ]:
+        try:
+            if cand.is_file():
+                return json.loads(cand.read_text(encoding="utf-8"))
+        except Exception:
+            continue
+    return None
+
+
+def has_vertex_adc() -> bool:
+    return _load_vertex_adc_dict() is not None
+
+
+def _is_vertex_client(client: Any) -> bool:
+    return bool(getattr(client, "vertexai", False) or getattr(getattr(client, "_api_client", None), "vertexai", False))
+
+
+def build_genai_client(location: str = "global", timeout_ms: int = 60000, api_key_override: str | None = None):
+    """
+    Builds an authenticated google-genai Client:
+      1. If an explicit runtime api_key_override is passed, uses AI Studio API key mode.
+      2. If Vertex AI Cloud Credits credentials (VERTEX_ADC_JSON / gcloud ADC) are available,
+         uses Vertex AI on gen-lang-client-0777980903 (draws directly from ₹28.5K + ₹3.8K GCP credits at ₹0 cash cost).
+      3. Otherwise falls back to GEMINI_API_KEY.
+    """
+    from google import genai
+    from google.genai import types
+
+    project_id = os.environ.get("VERTEX_PROJECT_ID", "gen-lang-client-0777980903").strip()
+    if not api_key_override:
+        adc_info = _load_vertex_adc_dict()
+        if adc_info:
+            try:
+                scopes = ["https://www.googleapis.com/auth/cloud-platform"]
+                if adc_info.get("type") == "service_account":
+                    from google.oauth2 import service_account
+
+                    creds = service_account.Credentials.from_service_account_info(adc_info, scopes=scopes).with_quota_project(project_id)
+                else:
+                    from google.oauth2.credentials import Credentials
+
+                    creds = Credentials.from_authorized_user_info(adc_info, scopes=scopes).with_quota_project(project_id)
+                return genai.Client(
+                    vertexai=True,
+                    project=project_id,
+                    location=location,
+                    credentials=creds,
+                    http_options=types.HttpOptions(timeout=timeout_ms),
+                )
+            except Exception:
+                pass
+
+    key = (api_key_override or get_gemini_api_key()).strip()
+    if key:
+        return genai.Client(api_key=key, http_options=types.HttpOptions(timeout=timeout_ms))
+    return None
+
+
 def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
-    key = (api_key if api_key is not None else get_gemini_api_key()).strip()
-    if not key:
+    runtime_override = os.environ.get("RUNTIME_GEMINI_API_KEY", "").strip()
+    effective_override = runtime_override if runtime_override else (None if has_vertex_adc() else (api_key if api_key else None))
+    client = build_genai_client(location="global", timeout_ms=15000, api_key_override=effective_override)
+    if client is None:
         return {
             "ok": False,
             "code": "MISSING",
-            "summary": "No Gemini API Key Set (Free Built-In 3D Video Renderer Still Works!)",
+            "summary": "No Gemini / Vertex AI Credentials Set (Free Built-In 3D Renderer Works!)",
             "detail": (
-                "To enable live Gemini AI scripts & 3D image generation, open https://aistudio.google.com/apikey "
-                "signed in as jwala4work@gmail.com, click 'Create API key' (₹0 Free Tier), and paste it below."
+                "Add VERTEX_ADC_JSON in Streamlit Secrets to use your ₹28.5K+ Google Cloud credits, "
+                "or paste a Free-Tier AIza... key below."
             ),
         }
     try:
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(api_key=key, http_options=types.HttpOptions(timeout=12000))
+        is_vertex = _is_vertex_client(client)
         last_err = ""
         for probe_model in ("gemini-3.8-flash",):
             try:
-                if hasattr(client, "interactions"):
+                if not is_vertex and hasattr(client, "interactions"):
                     inter = client.interactions.create(model=probe_model, input="Reply with OK")
                     if getattr(inter, "output_text", None):
                         return {
@@ -207,11 +288,12 @@ def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
                         }
                 resp = client.models.generate_content(model=probe_model, contents="Reply OK")
                 if getattr(resp, "text", None):
+                    mode_lbl = "Vertex AI Cloud Credits" if is_vertex else "Gemini AI Studio Key"
                     return {
                         "ok": True,
                         "code": "ACTIVE",
-                        "summary": "Gemini AI Key Active & Healthy",
-                        "detail": f"Verified live on {probe_model}.",
+                        "summary": f"Gemini 3.8 + Nano Banana 3D Active ({mode_lbl})",
+                        "detail": f"Verified live on {probe_model} ({project_label() if is_vertex else 'AI Studio'}) — scripts, 3D renders & Veo 3.1 ready!",
                     }
             except Exception as exc:
                 last_err = sanitize_api_error(exc)
@@ -220,64 +302,56 @@ def check_gemini_api_key_health(api_key: str | None = None) -> Dict[str, Any]:
                     return {
                         "ok": False,
                         "code": "PREPAY_EMPTY",
-                        "summary": "AI Studio Project Needs Free-Tier Key or Upgraded Billing",
+                        "summary": "Paste VERTEX_ADC_JSON in Streamlit Secrets to Unlock ₹28.5K Credits",
                         "detail": (
-                            "Default Gemini Project is waiting on AI Studio Prepay / Free-Trial upgrade. "
-                            "Either click 'Create API key in new project' (Free Tier — ₹0) at https://aistudio.google.com/apikey, "
-                            "or upgrade 'Free trial account' in Cloud Billing so your ₹3.81K credits unlock!"
+                            "Add VERTEX_ADC_JSON to Streamlit Cloud → Settings → Secrets so the cloud app routes through "
+                            "Vertex AI (₹28,568 + ₹3,810 Cloud credits at ₹0 deposit)!"
                         ),
                     }
                 if "outstanding balance" in low or "billing account" in low:
                     return {
                         "ok": False,
                         "code": "BILLING_HOLD",
-                        "summary": "Old GCP Key Paused (Billing Hold on Previous Project)",
-                        "detail": (
-                            "The active key belongs to a project with a paused billing hold. "
-                            "Open https://aistudio.google.com/apikey, click 'Create API key in new project' (Free Tier), and paste it below!"
-                        ),
+                        "summary": "Billing Hold on Key",
+                        "detail": last_err[:220],
                     }
                 if "api_key_invalid" in low or "api key not valid" in low:
                     return {
                         "ok": False,
                         "code": "INVALID_KEY",
                         "summary": "Invalid Gemini API Key",
-                        "detail": "Please generate a fresh AIza... key at https://aistudio.google.com/apikey and paste it below.",
+                        "detail": "Please paste a valid key or VERTEX_ADC_JSON in Streamlit Secrets.",
                     }
-        if "429" in last_err or "resource_exhausted" in last_err.lower():
-            return {
-                "ok": False,
-                "code": "QUOTA",
-                "summary": "Gemini Rate Limit Reached (Built-In 3D Renderer Active)",
-                "detail": last_err[:240],
-            }
         return {
             "ok": False,
             "code": "ERROR",
-            "summary": "Gemini Key Needs Refresh",
-            "detail": last_err[:260] or "Create a fresh Free-Tier key at https://aistudio.google.com/apikey under jwala4work@gmail.com.",
+            "summary": "Gemini Connection Notice",
+            "detail": last_err[:260],
         }
     except Exception as exc:
         return {
             "ok": False,
             "code": "ERROR",
-            "summary": "Gemini Key Check Notice",
+            "summary": "Gemini Check Notice",
             "detail": sanitize_api_error(exc)[:240],
         }
 
 
+def project_label() -> str:
+    return os.environ.get("VERTEX_PROJECT_ID", "gen-lang-client-0777980903").strip()
+
+
 def call_gemini_json(prompt: str, fallback: Any) -> Any:
-    api_key = get_gemini_api_key()
-    if not api_key:
+    client = build_genai_client(location="global", timeout_ms=45000)
+    if client is None:
         return fallback
     try:
-        from google import genai
         from google.genai import types
 
-        client = genai.Client(api_key=api_key)
+        is_vertex = _is_vertex_client(client)
         for model_id in (os.environ.get("SCRIPT_MODEL", "gemini-3.8-flash"), "gemini-4-argon"):
             try:
-                if hasattr(client, "interactions"):
+                if not is_vertex and hasattr(client, "interactions"):
                     inter = client.interactions.create(
                         model=model_id,
                         input=f"{prompt}\n\nRespond ONLY with valid raw JSON (no markdown fences).",
@@ -321,30 +395,28 @@ def generate_pure_3d_image(
 ) -> Path:
     """
     Generates a 100% pure 3D faceless render (zero PIL ImageDraw boxes).
-    Uses Gemini / Imagen image generation when API key is active, otherwise uses
+    Uses Vertex AI / Gemini Nano Banana 2.1 when active, otherwise uses
     clean pre-rendered TopperLab 3D plates in assets/topperlab_3d/.
     """
     if output_path.exists() and not force_live:
         return output_path
 
-    api_key = get_gemini_api_key()
-    aspect = "9:16" if target_size[1] > target_size[0] else ("1:1" if target_size[0] == target_size[1] else "16:9")
     clean_prompt = (
         f"{prompt.strip()} "
         "100% faceless 3D scientific studio visualization, zero human faces, zero people, "
         "high-contrast Octane 3D render, crisp volumetric lighting."
     )
 
-    if api_key:
+    client = build_genai_client(location="global", timeout_ms=90000)
+    if client is not None:
         try:
             from io import BytesIO
-            from google import genai
             from google.genai import types
 
-            client = genai.Client(api_key=api_key)
+            is_vertex = _is_vertex_client(client)
             for img_model in (os.environ.get("IMAGE_MODEL", "gemini-nano-banana-2.1"), "gemini-3-pro-image"):
                 try:
-                    if hasattr(client, "interactions"):
+                    if not is_vertex and hasattr(client, "interactions"):
                         inter = client.interactions.create(model=img_model, input=clean_prompt)
                         out_img = getattr(inter, "output_image", None)
                         if out_img and getattr(out_img, "data", None):
@@ -385,56 +457,67 @@ def generate_veo_clip_via_api(
     aspect_ratio: str = "16:9",
 ) -> Dict[str, Any]:
     """
-    Attempts direct AI motion clip generation via google-genai SDK (gemini-omni-1.2-flash) if enabled on the user's API key.
+    Generates direct 3D physics motion clip via Vertex AI Veo 3.1 (using GCP credits) or Gemini Omni 1.2 Flash.
     """
-    api_key = get_gemini_api_key()
-    if not api_key:
-        return {
-            "ok": False,
-            "message": (
-                "No GEMINI_API_KEY set yet — paste a free key in the left Sidebar (from aistudio.google.com/apikey), "
-                "or use the '🎬 Generate / Re-Render Master Videos' button at the top of Step 3 (100% free built-in 3D motion!)."
-            ),
-        }
     clean_prompt = f"{veo_prompt.strip()} Faceless 3D scientific animation, zero human faces."
     try:
-        from google import genai
+        import time
         from google.genai import types
 
-        client = genai.Client(api_key=api_key, http_options=types.HttpOptions(timeout=300000))
+        v_client = build_genai_client(location="us-central1", timeout_ms=300000)
+        if v_client is None:
+            return {
+                "ok": False,
+                "message": "Add VERTEX_ADC_JSON in Streamlit Secrets (or use the Free Built-In 3D Renderer at the top of Step 3!).",
+            }
+
+        is_vertex = _is_vertex_client(v_client)
         last_err = ""
-        if hasattr(client, "interactions"):
+        if is_vertex:
+            for veo_model in ("veo-3.1-fast-generate-001", "veo-3.1-generate-001"):
+                try:
+                    op = v_client.models.generate_videos(
+                        model=veo_model,
+                        prompt=clean_prompt,
+                        config=types.GenerateVideosConfig(aspect_ratio=aspect_ratio),
+                    )
+                    for _ in range(42):
+                        if getattr(op, "done", False):
+                            break
+                        time.sleep(5)
+                        op = v_client.operations.get(op)
+                    if getattr(op, "done", False) and getattr(op, "response", None):
+                        vids = getattr(op.response, "generated_videos", [])
+                        if vids:
+                            vid_obj = vids[0].video
+                            raw_bytes = getattr(vid_obj, "video_bytes", None)
+                            output_mp4.parent.mkdir(parents=True, exist_ok=True)
+                            if raw_bytes:
+                                output_mp4.write_bytes(raw_bytes)
+                            else:
+                                vid_obj.save(str(output_mp4))
+                            return {"ok": True, "path": to_portable_path(output_mp4), "model": veo_model}
+                except Exception as exc:
+                    last_err = sanitize_api_error(exc)
+        elif hasattr(v_client, "interactions"):
             try:
-                interaction = client.interactions.create(
+                interaction = v_client.interactions.create(
                     model="gemini-omni-1.2-flash",
                     input=[{"type": "text", "text": clean_prompt}],
                     response_format={"type": "video", "delivery": "uri", "aspect_ratio": aspect_ratio},
                 )
                 out_vid = getattr(interaction, "output_video", None)
                 if out_vid and getattr(out_vid, "uri", None):
-                    video_bytes = client.files.download(file=out_vid.uri)
+                    video_bytes = v_client.files.download(file=out_vid.uri)
                     output_mp4.parent.mkdir(parents=True, exist_ok=True)
                     output_mp4.write_bytes(video_bytes)
                     return {"ok": True, "path": to_portable_path(output_mp4), "model": "gemini-omni-1.2-flash"}
             except Exception as exc:
                 last_err = sanitize_api_error(exc)
 
-        low = last_err.lower()
-        if "outstanding balance" in low or "billing account" in low:
-            return {
-                "ok": False,
-                "message": (
-                    "API Key Billing Hold: Your current key belongs to the older jwalashiva@gmail.com project with a paused billing balance. "
-                    "Create a fresh ₹0 Free-Tier key under jwala4work@gmail.com at https://aistudio.google.com/apikey and paste it in the Sidebar — "
-                    "or use the Free Built-In 3D Master Video Renderer at the top of Step 3 (or drop a Google Flow MP4 clip below)!"
-                ),
-            }
         return {
             "ok": False,
-            "message": (
-                "Direct paid video API quota isn't enabled on this key — your Master 16:9 + 9:16 Videos already render 100% FREE via "
-                "our built-in 3D camera engine above, or you can paste this scene prompt into Google Flow (labs.google/fx/tools/flow) and drop the MP4 clip!"
-            ),
+            "message": f"Motion API notice: {last_err[:200] or 'Use the Free Built-In 3D Master Renderer above or drop a Google Flow MP4 clip!'}",
         }
     except Exception as exc:
         return {"ok": False, "message": f"Video API notice: {sanitize_api_error(exc)[:220]}"}

@@ -40,6 +40,7 @@ from studio_engine import (
     generate_viral_highschool_topics,
     get_gemini_api_key,
     get_youtube_oauth_status,
+    has_vertex_adc,
     list_publish_queue,
     load_active_channel,
     load_meta_credentials,
@@ -257,9 +258,10 @@ with st.sidebar:
         st.info("⚪ YouTube API: Not Authorized Yet (Connect in Step 1)")
 
     active_gem_key = get_gemini_api_key()
-    key_fp = f"{len(active_gem_key)}:{active_gem_key[:6]}:{active_gem_key[-4:]}" if active_gem_key else "empty"
+    vertex_ready = has_vertex_adc()
+    key_fp = f"v:{vertex_ready}|k:{len(active_gem_key)}:{active_gem_key[:6]}:{active_gem_key[-4:]}" if active_gem_key else f"v:{vertex_ready}|empty"
     if st.session_state.get("gemini_health_fp") != key_fp:
-        st.session_state["gemini_health_cache"] = check_gemini_api_key_health(active_gem_key)
+        st.session_state["gemini_health_cache"] = check_gemini_api_key_health(None if vertex_ready else active_gem_key)
         st.session_state["gemini_health_fp"] = key_fp
     gem_health = st.session_state["gemini_health_cache"]
 
@@ -268,19 +270,15 @@ with st.sidebar:
     else:
         st.warning(f"🟠 {gem_health['summary']}")
 
-    with st.expander("🔑 Gemini AI Key (Fix / Update)", expanded=not gem_health.get("ok")):
+    exp_label = "☁️ Gemini 3.8 & Vertex AI Credits" if gem_health.get("ok") else "🔑 Gemini / Vertex AI Setup"
+    with st.expander(exp_label, expanded=not gem_health.get("ok")):
         st.caption(gem_health.get("detail", ""))
-        st.link_button(
-            "✨ Get Free Key (jwala4work@gmail.com)",
-            "https://aistudio.google.com/apikey",
-            use_container_width=True,
-        )
         new_gem_key = st.text_input(
-            "Paste Fresh Gemini API Key (`AIza...`):",
+            "Optional Override API Key (`AIza...`):",
             type="password",
-            placeholder="AIzaSy...",
+            placeholder="Uses Vertex AI Cloud Credits automatically when VERTEX_ADC_JSON is set",
         )
-        if st.button("💾 Apply & Verify Gemini Key", use_container_width=True) and new_gem_key.strip():
+        if st.button("💾 Apply & Verify Key Override", use_container_width=True) and new_gem_key.strip():
             set_runtime_gemini_api_key(new_gem_key.strip())
             st.session_state["gemini_health_fp"] = ""
             st.rerun()
