@@ -310,23 +310,53 @@ def _yt_secret_path() -> Path:
 
 def _yt_token_path() -> Path:
     CREDS_DIR.mkdir(parents=True, exist_ok=True)
-    return CREDS_DIR / "youtube_oauth_token.json"
+    p = CREDS_DIR / "youtube_oauth_token.json"
+    if not p.exists():
+        env_tok = os.environ.get("YOUTUBE_OAUTH_TOKEN_JSON", "").strip()
+        if not env_tok:
+            try:
+                import streamlit as st
+
+                if "YOUTUBE_OAUTH_TOKEN_JSON" in st.secrets:
+                    env_tok = str(st.secrets["YOUTUBE_OAUTH_TOKEN_JSON"]).strip()
+            except Exception:
+                pass
+        if env_tok:
+            p.write_text(env_tok, encoding="utf-8")
+    return p
 
 
-def _parse_google_client_secret() -> Dict[str, str]:
+def _yt_redirect_memo_path() -> Path:
+    CREDS_DIR.mkdir(parents=True, exist_ok=True)
+    return CREDS_DIR / "youtube_last_redirect.txt"
+
+
+def _parse_google_client_secret() -> Dict[str, Any]:
     p = _yt_secret_path()
+    if not p.exists():
+        try:
+            import streamlit as st
+
+            if "YOUTUBE_CLIENT_SECRET_JSON" in st.secrets:
+                p.write_text(str(st.secrets["YOUTUBE_CLIENT_SECRET_JSON"]).strip(), encoding="utf-8")
+        except Exception:
+            pass
     if p.exists():
         raw = json.loads(p.read_text(encoding="utf-8"))
         block = raw.get("web") or raw.get("installed") or raw
         return {
             "client_id": block.get("client_id", ""),
             "client_secret": block.get("client_secret", ""),
-            "redirect_uris": block.get("redirect_uris", ["http://localhost:8501"]),
+            "redirect_uris": block.get("redirect_uris", ["https://onebillionviews.streamlit.app", "http://localhost:8501"]),
         }
     cid = os.environ.get("YOUTUBE_OAUTH_CLIENT_ID") or os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
     csec = os.environ.get("YOUTUBE_OAUTH_CLIENT_SECRET") or os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "")
     if cid and csec:
-        return {"client_id": cid.strip(), "client_secret": csec.strip(), "redirect_uris": ["http://localhost:8501"]}
+        return {
+            "client_id": cid.strip(),
+            "client_secret": csec.strip(),
+            "redirect_uris": ["https://onebillionviews.streamlit.app", "http://localhost:8501"],
+        }
     return {}
 
 
@@ -338,13 +368,15 @@ def save_youtube_client_secret(raw_bytes: bytes) -> Dict[str, Any]:
     return _parse_google_client_secret()
 
 
-def build_youtube_auth_url(redirect_uri: str = "http://localhost:8501") -> str:
+def build_youtube_auth_url(redirect_uri: str = "https://onebillionviews.streamlit.app") -> str:
     cfg = _parse_google_client_secret()
     if not cfg.get("client_id"):
         return ""
+    clean_redir = redirect_uri.strip().rstrip("/")
+    _yt_redirect_memo_path().write_text(clean_redir, encoding="utf-8")
     params = {
         "client_id": cfg["client_id"],
-        "redirect_uri": redirect_uri.strip(),
+        "redirect_uri": clean_redir,
         "response_type": "code",
         "scope": "https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/youtube.readonly",
         "access_type": "offline",
@@ -354,10 +386,17 @@ def build_youtube_auth_url(redirect_uri: str = "http://localhost:8501") -> str:
     return "https://accounts.google.com/o/oauth2/v2/auth?" + urllib.parse.urlencode(params)
 
 
-def exchange_youtube_auth_code(code_or_url: str, redirect_uri: str = "http://localhost:8501") -> Dict[str, Any]:
+def exchange_youtube_auth_code(code_or_url: str, redirect_uri: str = "") -> Dict[str, Any]:
     cfg = _parse_google_client_secret()
     if not cfg.get("client_id") or not cfg.get("client_secret"):
         raise ValueError("Upload client_secret.json first before exchanging an authorization code.")
+
+    memo_redir = (
+        _yt_redirect_memo_path().read_text(encoding="utf-8").strip()
+        if _yt_redirect_memo_path().exists()
+        else ""
+    )
+    final_redir = (redirect_uri.strip() or memo_redir or "https://onebillionviews.streamlit.app").rstrip("/")
 
     clean_code = code_or_url.strip()
     if "code=" in clean_code:
@@ -371,7 +410,7 @@ def exchange_youtube_auth_code(code_or_url: str, redirect_uri: str = "http://loc
             "code": clean_code,
             "client_id": cfg["client_id"],
             "client_secret": cfg["client_secret"],
-            "redirect_uri": redirect_uri.strip(),
+            "redirect_uri": final_redir,
             "grant_type": "authorization_code",
         },
         timeout=20,

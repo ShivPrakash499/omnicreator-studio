@@ -74,7 +74,22 @@ VALID_PASSCODES = {
 }
 GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "").strip()
 GOOGLE_OAUTH_CLIENT_SECRET = os.environ.get("GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
-DEFAULT_REDIRECT_URI = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI", "http://localhost:8501").strip()
+def _detect_default_redirect_uri() -> str:
+    env_uri = os.environ.get("GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+    if env_uri:
+        return env_uri.rstrip("/")
+    try:
+        host = (st.context.headers.get("Host") or "").strip()
+        if host and "localhost" not in host and "127.0.0.1" not in host:
+            return f"https://{host}".rstrip("/")
+        if host:
+            return f"http://{host}".rstrip("/")
+    except Exception:
+        pass
+    return "https://onebillionviews.streamlit.app" if os.name != "nt" else "http://localhost:8501"
+
+
+DEFAULT_REDIRECT_URI = _detect_default_redirect_uri()
 
 if "authenticated_google_user" not in st.session_state:
     st.session_state["authenticated_google_user"] = None
@@ -82,7 +97,7 @@ if "authenticated_google_user" not in st.session_state:
 # Handle YouTube Data API OAuth callback (`?code=...&state=youtube_channel_connect`)
 if "code" in st.query_params and st.query_params.get("state") == "youtube_channel_connect":
     try:
-        redir = st.session_state.get("yt_redirect_uri_input", DEFAULT_REDIRECT_URI)
+        redir = st.session_state.get("yt_redirect_uri_input", "")
         tok_info = exchange_youtube_auth_code(st.query_params["code"], redirect_uri=redir)
         st.session_state["authenticated_google_user"] = st.session_state["authenticated_google_user"] or "jwalashiva@gmail.com"
         st.session_state["yt_oauth_flash"] = (
@@ -434,7 +449,7 @@ with tab1:
             )
             manual_code = st.text_input(
                 "Or paste redirected URL / `?code=...` here if authorizing from another browser tab:",
-                placeholder="http://localhost:8501/?code=4/0A...",
+                placeholder="https://onebillionviews.streamlit.app/?code=4/0A...",
             )
             if st.button("🔗 Verify Code & Save Permanent Refresh Token", use_container_width=True) and manual_code.strip():
                 try:
@@ -445,6 +460,12 @@ with tab1:
                     st.error(str(exc))
         else:
             st.info("Upload your `client_secret.json` on the left to unlock the 1-Click Google Authorization button.")
+
+        tok_disk = ROOT_DIR / "config" / "credentials" / "youtube_oauth_token.json"
+        if yt_status.get("connected") and tok_disk.exists():
+            with st.expander("☁️ Optional: Keep Token Permanent Across Streamlit Cloud Restarts"):
+                st.caption("Paste this line into **Streamlit Cloud → Manage app → Settings → Secrets** so `@TopperLab3D` stays connected forever:")
+                st.code(f"YOUTUBE_OAUTH_TOKEN_JSON = '''{tok_disk.read_text(encoding='utf-8').strip()}'''", language="toml")
 
     with st.expander("📸 Optional: Connect Instagram Reels & Facebook Page (`Meta Graph API v21.0`)"):
         mc1, mc2, mc3 = st.columns(3)
