@@ -129,6 +129,83 @@ def load_pillars_config() -> Dict[str, Any]:
     return json.loads(path.read_text(encoding="utf-8"))
 
 
+def load_curriculum_catalog() -> Dict[str, Any]:
+    path = CONFIG_DIR / "curriculum_chapters.json"
+    if path.exists():
+        return json.loads(path.read_text(encoding="utf-8"))
+    return {"boards": ["CBSE", "ICSE"], "classes": ["Class 10", "Class 9", "Class 8", "Class 11", "Class 12"], "duration_badges": ["6 Mins", "5 Mins", "8 Mins", "10 Mins", "15 Mins"], "curriculum": {}, "booster_modes": {}}
+
+
+def get_curriculum_subjects(board: str = "CBSE", class_name: str = "Class 10") -> List[str]:
+    cat = load_curriculum_catalog().get("curriculum", {})
+    b_map = cat.get(board, {}) or next(iter(cat.values()), {})
+    c_map = b_map.get(class_name, {}) or next(iter(b_map.values()), {})
+    return list(c_map.keys()) or ["Mathematics", "Physics", "Chemistry", "Biology"]
+
+
+def get_curriculum_chapters(board: str = "CBSE", class_name: str = "Class 10", subject: str = "Mathematics") -> List[str]:
+    cat = load_curriculum_catalog().get("curriculum", {})
+    b_map = cat.get(board, {}) or next(iter(cat.values()), {})
+    c_map = b_map.get(class_name, {}) or next(iter(b_map.values()), {})
+    return list(c_map.get(subject, []))
+
+
+def strip_3d_text(text: str) -> str:
+    """Remove all '3D' / '3d' labels from public titles, descriptions, captions, hooks, and hashtags."""
+    s = str(text or "")
+    if not s:
+        return ""
+    s = re.sub(r"\(\s*@?TopperLab\s*3[dD]\s*\)", "", s, flags=re.IGNORECASE)
+    s = re.sub(r"@TopperLab3[dD]\b", "@TopperLab", s, flags=re.IGNORECASE)
+    s = re.sub(r"\bTopperLab\s*3[dD]\b", "TopperLab", s, flags=re.IGNORECASE)
+    s = re.sub(r"\(\s*(?:easy\s+|friendly\s+|pure\s+)?3[dD][^)]*\)", "", s, flags=re.IGNORECASE)
+    s = re.sub(
+        r"\b(?:visualized\s+in\s+(?:crystal[- ]clear\s+)?|explained\s+in\s+|in\s+easy\s+|in\s+friendly\s+|in\s+crystal[- ]clear\s+|as\s+|in\s+)3[dD]\b",
+        "",
+        s,
+        flags=re.IGNORECASE,
+    )
+    s = re.sub(r"#3[dD][A-Za-z0-9_]*\b", "", s)
+    s = re.sub(r"#([A-Za-z0-9_]+?)3[dD]\b", r"#\1", s)
+    s = re.sub(r"\b3[dD]\b", "", s)
+    cleaned_lines: List[str] = []
+    for raw_ln in s.splitlines():
+        if "http://" in raw_ln or "https://" in raw_ln:
+            # Clean label part before URL while preserving exact URL characters
+            m_url = re.search(r"https?://\S+", raw_ln)
+            if m_url:
+                prefix = re.sub(r"[ \t]{2,}", " ", raw_ln[: m_url.start()]).strip()
+                cleaned_lines.append(f"{prefix} {m_url.group(0)}".strip())
+                continue
+        ln = re.sub(r"[ \t]{2,}", " ", raw_ln)
+        ln = re.sub(r"\s+([,.:;!?])", r"\1", ln)
+        ln = re.sub(r"—\s*—", "—", ln)
+        cleaned_lines.append(ln.strip(" —-|"))
+    return "\n".join(cleaned_lines).strip()
+
+
+def format_syllabus_chapter_title(chapter_name: str, duration_badge: str = "6 Mins") -> str:
+    clean_ch = re.sub(r"^\s*\d+[\.\)\-:]\s*", "", strip_3d_text(chapter_name)).strip()
+    clean_ch = re.sub(r"\s+in\s+\d+\s*mins?\s+complete\s*$", "", clean_ch, flags=re.IGNORECASE).strip(" —-|")
+    dur = (duration_badge or "6 Mins").strip()
+    if not clean_ch:
+        clean_ch = "Heights and Distances"
+    return f"{clean_ch} in {dur} Complete"
+
+
+def format_booster_video_title(
+    chapter_name: str,
+    booster_mode_key: str = "toppers_hack",
+    generic_topic: str = "",
+) -> str:
+    if generic_topic and generic_topic.strip():
+        return strip_3d_text(generic_topic.strip())
+    clean_ch = re.sub(r"^\s*\d+[\.\)\-:]\s*", "", strip_3d_text(chapter_name)).strip() or "Board Exams"
+    modes = load_curriculum_catalog().get("booster_modes", {})
+    pattern = modes.get(booster_mode_key, {}).get("title_pattern", "{chapter} — Toppers Secret Hack & Exam Tricks")
+    return strip_3d_text(pattern.format(chapter=clean_ch))
+
+
 # ============================================================================
 # 2. GEMINI 2.5 + NANO BANANA / IMAGEN 3 + VEO 3.1 HELPERS
 # ============================================================================
@@ -500,7 +577,7 @@ def infer_class_badge_label(
     class_override: str = "",
     subject_override: str = "",
 ) -> str:
-    cls = (class_override or "").strip().upper()
+    cls = strip_3d_text(class_override or "").strip().upper()
     if not cls:
         low = f"{exam_track} {topic_title}".lower()
         if "class 10" in low:
@@ -516,29 +593,29 @@ def infer_class_badge_label(
         else:
             cls = "CLASS 10"
 
-    subj = (subject_override or "").strip().upper()
+    subj = strip_3d_text(subject_override or "").strip().upper()
+    if subj == "COMPUTER SCIENCE & AI":
+        subj = "COMPUTER & AI"
     if not subj:
         t_low = f"{topic_title} {exam_track}".lower()
-        if any(k in t_low for k in ("trig", "math", "factorial", "algebra", "geometry", "quadratic")):
-            subj = "MATHS 3D"
-        elif any(k in t_low for k in ("heart", "dna", "mitosis", "biology", "life process", "cell")):
-            subj = "BIOLOGY 3D"
-        elif any(k in t_low for k in ("sn1", "chemistry", "metal", "calcination", "acid", "carbon")):
-            subj = "CHEMISTRY 3D"
-        elif any(k in t_low for k in ("memory", "recall", "revision", "blank out", "score 95")):
+        if any(k in t_low for k in ("trig", "math", "height", "distance", "factorial", "algebra", "geometry", "quadratic", "circle", "triangle", "polynomial", "probability", "statistics", "calculus")):
+            subj = "MATHEMATICS"
+        elif any(k in t_low for k in ("heart", "dna", "mitosis", "biology", "life process", "cell", "heredity", "reproduc")):
+            subj = "BIOLOGY"
+        elif any(k in t_low for k in ("sn1", "chemistry", "metal", "calcination", "acid", "carbon", "periodic", "mole")):
+            subj = "CHEMISTRY"
+        elif any(k in t_low for k in ("memory", "recall", "revision", "blank out", "score 95", "score 98", "topper")):
             subj = "TOPPER HACKS"
         else:
-            subj = "SCIENCE 3D"
-    elif "3D" not in subj:
-        subj = f"{subj} 3D"
+            subj = "PHYSICS"
     return f"{cls} • {subj}"
 
 
 def _split_hook_two_lines(hook_text: str) -> tuple[str, str]:
-    clean = _sanitize_drawable_text(hook_text).upper() or "SEE IT IN 3D!"
+    clean = _sanitize_drawable_text(strip_3d_text(hook_text)).upper() or "6 MINS COMPLETE!"
     words = clean.split()
     if len(words) == 1:
-        return words[0], "IN 3D!"
+        return words[0], "COMPLETE!"
     if len(words) == 2:
         return words[0], words[1]
     best_idx = 1
@@ -574,16 +651,16 @@ def _fit_font_for_width(
 def apply_consistent_topperlab_thumbnail_branding(
     image_path: Path,
     hook_text: str,
-    class_badge_text: str = "CLASS 10 • SCIENCE 3D",
-    sub_tagline: str = "EASY 3D MODEL + EXAM HACK",
+    class_badge_text: str = "CLASS 10 • MATHEMATICS",
+    sub_tagline: str = "ALL FORMULAS + EXAM HACKS",
     is_vertical: bool = False,
 ) -> Path:
     """
-    Applies 100% consistent, high-CTR TopperLab 3D branding across EVERY video thumbnail:
-      - Crimson Red Class Name Pill (e.g., ★ CLASS 10 • SCIENCE 3D)
+    Applies 100% consistent, high-CTR TopperLab branding across EVERY video thumbnail:
+      - Crimson Red Class Name Pill (e.g., CLASS 10 • MATHEMATICS)
       - Giant Line 1 Heading in Electric Yellow (#FFD600) with thick black stroke
-      - Explosive Line 2 Vibrant Red Banner (#DC2626) with bold White/Yellow pop
-      - Electric Yellow outer frame accent while keeping the bright 3D model vivid and clear!
+      - Explosive Line 2 Vibrant Red Banner (#DC2626) with bold White pop
+      - Electric Yellow outer frame accent while keeping the bright visual model vivid and clear!
     """
     if not image_path.exists():
         return image_path
@@ -611,9 +688,9 @@ def apply_consistent_topperlab_thumbnail_branding(
 
     draw.rectangle([4, 4, W - 5, H - 5], outline=(255, 214, 0, 255), width=10)
 
-    badge_str = _sanitize_drawable_text(class_badge_text).upper()
+    badge_str = _sanitize_drawable_text(strip_3d_text(class_badge_text)).upper()
     line1, line2 = _split_hook_two_lines(hook_text)
-    sub_str = _sanitize_drawable_text(sub_tagline).upper()
+    sub_str = _sanitize_drawable_text(strip_3d_text(sub_tagline)).upper()
 
     if not is_vertical:
         f_badge = _load_studio_font(38, weight="bold")
@@ -667,7 +744,7 @@ def apply_consistent_topperlab_thumbnail_branding(
             )
             draw.text((56 + 20, y3 + 9 - bs[1]), sub_str, font=f_sub, fill=(253, 224, 71, 255))
 
-        stamp_txt = "TOPPERLAB 3D • CBSE & ICSE"
+        stamp_txt = "TOPPERLAB • CBSE & ICSE"
         f_st = _load_studio_font(28, weight="bold")
         bst = draw.textbbox((0, 0), stamp_txt, font=f_st)
         stw, sth = (bst[2] - bst[0]) + 36, (bst[3] - bst[1]) + 20
@@ -1171,23 +1248,34 @@ def generate_viral_highschool_topics(
     pillar = next((p for p in pillars_cfg["pillars"] if p["id"] == pillar_id), pillars_cfg["pillars"][0])
     fallback_topics = pillar["starter_topics"]
 
-    if not custom_chapter_query.strip() and not get_gemini_api_key():
+    if not custom_chapter_query.strip() and not get_gemini_api_key() and not has_vertex_adc():
         return fallback_topics
 
     chapter_clause = (
         f"specifically focused on the chapter/topic '{custom_chapter_query.strip()}'"
         if custom_chapter_query.strip()
-        else "covering high-search NCERT, CBSE Board, JEE & NEET pain points"
+        else "covering high-search NCERT, CBSE/ICSE Board, JEE & NEET pain points"
     )
     prompt = (
-        f"You are the head producer of TopperLab 3D (@TopperLab3D), an elite faceless 3D science & exam strategy YouTube channel "
+        f"You are the head producer of TopperLab, an elite faceless science, maths & exam strategy YouTube channel "
         f"for Indian High-School students ({exam_track}).\n"
         f"Content Pillar: {pillar['name']} — {pillar['description']}\n"
         f"Generate 5 viral, high-CTR faceless video ideas {chapter_clause}.\n"
+        f"STRICT RULE: Do NOT include the word '3D' or '3d' anywhere in title, thumb_hook, short_hook, or why_viral. "
+        f"For complete syllabus chapters, format titles like '<Chapter Name> in 6 Mins Complete'. "
+        f"For toppers hacks / exam tricks / super memory, make crisp student-friendly titles.\n"
         f"Return a JSON array of 5 objects with keys: title, exam_track, thumb_hook (max 3 bold words), short_hook (max 3 bold words), why_viral."
     )
     res = call_gemini_json(prompt, fallback_topics)
-    return res if isinstance(res, list) and len(res) > 0 else fallback_topics
+    if isinstance(res, list) and len(res) > 0:
+        for item in res:
+            if isinstance(item, dict):
+                item["title"] = strip_3d_text(item.get("title", ""))
+                item["thumb_hook"] = strip_3d_text(item.get("thumb_hook", ""))
+                item["short_hook"] = strip_3d_text(item.get("short_hook", ""))
+                item["why_viral"] = strip_3d_text(item.get("why_viral", ""))
+        return res
+    return fallback_topics
 
 
 def _resolve_voice_preset(ch: Dict[str, Any], voice_mode: str) -> Dict[str, Any]:
@@ -1215,6 +1303,76 @@ def _resolve_visual_theme(ch: Dict[str, Any], visual_theme_key: str) -> Dict[str
 
 def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> List[Dict[str, Any]]:
     t_low = topic_title.lower()
+    if "height" in t_low or "distance" in t_low or "elevation" in t_low:
+        return [
+            {
+                "scene_id": 1,
+                "headline": "ELEVATION VS DEPRESSION",
+                "concept_takeaway": "Looking UP from eye-level = Elevation; Looking DOWN = Depression (Equal by Z-Rule!)",
+                "formula_badge": "tan θ = Perpendicular (Height) / Base (Ground Distance)",
+                "quick_tip": "Z-Angle Hack: Angle of Depression from top ALWAYS equals Angle of Elevation from ground!",
+                "narration": (
+                    "Wait a second—have you ever looked up at the top of a tall lighthouse or a flying kite and wondered how engineers measure its exact height without climbing it?! "
+                    "Draw a straight horizontal eye-level line: looking UP gives Angle of Elevation, looking DOWN gives Angle of Depression—and by the Z-rule, both angles are always equal!"
+                    if not is_hinglish
+                    else "Ruko zara! Kya aapne kabhi kisi oonche lighthouse ya udti patang ko dekh kar socha hai ki bina chadhe uski exact height kaise naapte hain?! Eye-level se upar dekho toh Angle of Elevation, neeche dekho toh Angle of Depression—aur Z-rule se dono hamesha barabar hote hain!"
+                ),
+                "image_3d_prompt": "Bright sunny Pixar-style 3D classroom geometry tabletop model: a cheerful red-and-white striped coastal lighthouse on a green cliff overlooking a small yellow boat on calm blue water, crisp yellow horizontal eye-level beam and a vivid red diagonal line-of-sight forming a clear right-angled triangle, warm sunlit sky backdrop, zero text, zero faces.",
+                "google_flow_veo_prompt": "Bright colorful Pixar-style 3D classroom model of a red-and-white lighthouse and boat showing yellow horizontal eye-level ray and red diagonal sight ray forming a crisp right triangle.",
+                "fallback_plate": "scene_01_16x9.jpg",
+            },
+            {
+                "scene_id": 2,
+                "headline": "30-45-60 MAGIC RATIOS",
+                "concept_takeaway": "95% of Class 10 Board questions use ONLY tan 30°, tan 45°, and tan 60°!",
+                "formula_badge": "tan 30° = 1/√3   |   tan 45° = 1   |   tan 60° = √3",
+                "quick_tip": "1-Second 45° Hack: Whenever angle is 45°, Tower Height = Ground Shadow Length instantly!",
+                "narration": (
+                    "Here is the coolest Class 10 Maths secret: ninety-five percent of Heights and Distances questions need just THREE values! "
+                    "Tan thirty is one over root three, tan forty-five is one, and tan sixty is root three! "
+                    "Spot forty-five degrees in an MCQ? Boom—height and ground shadow are immediately equal in one second flat!"
+                    if not is_hinglish
+                    else "Ab suniye Class 10 Maths ka sabse bada secret: ninety-five percent board sawalon mein sirf TEEN values lagti hain! Tan thirty hota hai one by root three, tan forty-five hota hai one, aur tan sixty hota hai root three! Jahan 45 degree dikhe—height aur shadow turant barabar!"
+                ),
+                "image_3d_prompt": "Vibrant sunny 3D school maths tabletop model: a bright red clock tower standing vertically on a neat green courtyard board with three color-coded yellow, blue, and emerald right-triangle beams touching three ground pegs at short, medium, and long shadow distances, bright Pixar educational lighting, zero text, zero faces.",
+                "google_flow_veo_prompt": "Sunny colorful 3D school geometry model of a red clock tower casting three distinct color-coded triangle rays onto ground pegs.",
+                "fallback_plate": "scene_02_16x9.jpg",
+            },
+            {
+                "scene_id": 3,
+                "headline": "TWO-POINT TOWER HACK",
+                "concept_takeaway": "Walking closer from 30° to 60°? Distance walked is ALWAYS twice the remaining base!",
+                "formula_badge": "d = h (cot 30° − cot 60°)  ⇒  h = (d × √3) / 2",
+                "quick_tip": "30° → 60° Topper Trick: Walked 40m closer? Remaining base is half (20m), Height = 20√3 m!",
+                "narration": (
+                    "Now watch the famous five-mark board question where someone walks closer to a tower and the angle jumps from thirty degrees to sixty degrees! "
+                    "Don't waste five minutes solving long equations—when thirty becomes sixty, the remaining distance to the base is ALWAYS exact half of what you walked, and height is half-walked times root three!"
+                    if not is_hinglish
+                    else "Ab dekhiye woh famous five-mark board question jahan tower ke paas chalne par angle thirty degree se sixty degree ho jata hai! Lambe equations mein time mat gawaiye—jab 30 se 60 bane, bacha hua base hamesha chali gayi doori ka aadha hota hai!"
+                ),
+                "image_3d_prompt": "Crisp colorful 3D classroom demonstration on a sunlit desk: a tall royal-blue communication tower on the right with two bright yellow milestone pins on a straight road moving closer to the tower base, connected by clean red and emerald diagonal beams forming nested right triangles, zero text, zero faces.",
+                "google_flow_veo_prompt": "Smooth camera glide along a bright 3D tabletop model showing two road milestone markers approaching a royal-blue tower with nested red and green triangle rays.",
+                "fallback_plate": "scene_03_16x9.jpg",
+            },
+            {
+                "scene_id": 4,
+                "headline": "#1 BOARD EXAM TRAP!",
+                "concept_takeaway": "When observer height is given, ALWAYS add eye-height to triangle height at the end!",
+                "formula_badge": "Total Building Height (H) = Triangle Height (h) + Observer Height",
+                "quick_tip": "Full-Marks Checklist: √3 = 1.732  •  Add boy's height  •  Write 'metres' unit at the end!",
+                "narration": (
+                    "Hold on—don't lose your final mark to the number-one board exam trap! "
+                    "Whenever a question gives a student's height, like one point five metres, your triangle sits at eye level—so ALWAYS add that one point five metres at the end! "
+                    "Download the free one-page Formula and Shortcut Sheet below, and subscribe for the next chapter!"
+                    if not is_hinglish
+                    else "Ruko—board exam ke number-one trap mein mat phasna! Jab bhi sawal mein ladke ki height di ho, jaise 1.5 metre, toh triangle eye-level se banta hai—isliye aakhir mein 1.5 metre jodna mat bhoolna! Neeche description se free 1-page Formula Sheet download karein aur subscribe karein!"
+                ),
+                "image_3d_prompt": "Cheerful sunlit 3D classroom model: a colorful miniature viewing stand on the left facing a tall yellow-and-red apartment tower on the right, showing a clear elevated horizontal green platform line and a bright golden star trophy on the desk, Pixar educational style, zero text, zero faces.",
+                "google_flow_veo_prompt": "Cheerful sunlit 3D classroom model showing an elevated viewing stand, apartment tower right-triangle beam, and golden star trophy.",
+                "fallback_plate": "scene_04_16x9.jpg",
+            },
+        ]
+
     if "gyroscope" in t_low or "rotational" in t_low or "bicycle" in t_low or "wheel" in t_low:
         return [
             {
@@ -1226,9 +1384,9 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
                 "narration": (
                     "Hold on—imagine hanging a real bicycle wheel from just one rope on one side of its axle! "
                     "If the wheel isn't spinning, boom—gravity slams it straight down! "
-                    "But give that exact same cycle wheel a super-fast spin... and wait—why is it floating sideways in mid-air without falling?! Let's see the simple 3D secret!"
+                    "But give that exact same cycle wheel a super-fast spin... and wait—why is it floating sideways in mid-air without falling?! Let's unlock the secret!"
                     if not is_hinglish
-                    else "Ruko zara! Socho agar aap ek normal cycle ke wheel ko sirf ek side ki rassi se latka dein! Bina spin kiye chhodoge, toh dhadam se neeche girega! Lekin usi wheel ko zor se spin kijiye... arey wah—yeh hawa mein seedha kaise tair raha hai?! Chaliye 3D model mein iska secret dekhte hain!"
+                    else "Ruko zara! Socho agar aap ek normal cycle ke wheel ko sirf ek side ki rassi se latka dein! Bina spin kiye chhodoge, toh dhadam se neeche girega! Lekin usi wheel ko zor se spin kijiye... arey wah—yeh hawa mein seedha kaise tair raha hai?! Chaliye iska secret dekhte hain!"
                 ),
                 "image_3d_prompt": "Bright sunny Pixar-style 3D classroom tabletop demonstration: a colorful red-and-yellow school bicycle wheel spinning fast while hanging horizontally from one bright white rope attached to one side of its axle, bold yellow 3D spin arrows around the tire and a bright blue balance arrow along the axle, warm sky-blue classroom background, super clear for Class 10 students, zero text, zero faces.",
                 "google_flow_veo_prompt": "Bright colorful Pixar-style 3D science classroom model: a red and yellow bicycle wheel hanging from a single rope spins rapidly and glides smoothly in a horizontal circle without falling, bright yellow and blue 3D arrows.",
@@ -1277,9 +1435,9 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
                 "narration": (
                     "Boom—here is your guaranteed exam takeaway! The faster a wheel spins, and the heavier its outer tire rim, the steadier it stays! "
                     "That's the exact same science keeping your bicycle upright and spacecraft pointed straight! "
-                    "Grab the free one-page 3D Formula and Hack Sheet in the description below, and hit subscribe for your next chapter!"
+                    "Grab the free one-page Formula and Hack Sheet in the description below, and hit subscribe for your next chapter!"
                     if not is_hinglish
-                    else "Boom—ab lock kar lijiye pakke exam marks! Wheel jitna tez ghoomega aur uska bahari rim jitna bhaari hoga, balance utna hi rock-solid rahega! Yahi science aapki cycle aur satellites dono ko seedha rakhti hai! Description se free 1-page Formula Sheet download karein aur TopperLab 3D ko subscribe karein!"
+                    else "Boom—ab lock kar lijiye pakke exam marks! Wheel jitna tez ghoomega aur uska bahari rim jitna bhaari hoga, balance utna hi rock-solid rahega! Yahi science aapki cycle aur satellites dono ko seedha rakhti hai! Description se free 1-page Formula Sheet download karein aur TopperLab ko subscribe karein!"
                 ),
                 "image_3d_prompt": "Bright cheerful 3D student study desk in sunlit classroom: a miniature colorful 3D bicycle model, a spinning toy top, a golden star trophy, and an open colorful 3D science model kit with neat color-coded arrows, warm inviting Pixar educational style, zero text, zero faces.",
                 "google_flow_veo_prompt": "Cheerful sunlit 3D student desk with a miniature spinning bicycle wheel model, colorful magnets, and a golden trophy rotating gently.",
@@ -1287,25 +1445,26 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
             },
         ]
 
+    clean_core = strip_3d_text(topic_title.split("—")[0].replace("Complete", "").strip())
     return [
         {
             "scene_id": 1,
-            "headline": "REAL-LIFE MYSTERY!",
-            "concept_takeaway": f"See how {topic_title.split('—')[0].strip()} works in everyday life in 3D!",
-            "formula_badge": f"Core Concept: {topic_title.split('—')[0].strip()[:44]}",
-            "quick_tip": "Visual Memory Trick: Picture the real-life 3D object first — never cram blind words!",
-            "narration": f"Wait a second! Have you ever wondered why {topic_title.split('—')[0].strip()} confuses almost everyone in flat black-and-white textbook diagrams? Because real science happens in three dimensions! Let's build a super-simple, colourful 3D classroom model right now so you understand it in ten seconds flat!",
+            "headline": "REAL-LIFE HOOK!",
+            "concept_takeaway": f"Understand {clean_core} using an everyday real-life classroom model!",
+            "formula_badge": f"Core Rule: {clean_core[:44]}",
+            "quick_tip": "Visual Memory Trick: Picture the real-life object first — never cram blind definitions!",
+            "narration": f"Wait a second! Have you ever wondered why {clean_core} confuses so many students in boring black-and-white textbook pages? Once you see how it works in real life, every single formula clicks in ten seconds flat! Let's break down the whole chapter step by step!",
             "image_3d_prompt": f"Bright colorful Pixar-style 3D classroom tabletop cutaway model illustrating '{topic_title}' using everyday real-life student objects and bold red, yellow, and blue 3D arrows, sunny sky-blue backdrop, zero text, zero faces.",
-            "google_flow_veo_prompt": f"Bright colorful 3D classroom model camera zoom onto an everyday real-life 3D demonstration of '{topic_title}'.",
+            "google_flow_veo_prompt": f"Bright colorful 3D classroom model camera zoom onto an everyday real-life demonstration of '{topic_title}'.",
             "fallback_plate": "scene_01_16x9.jpg",
         },
         {
             "scene_id": 2,
-            "headline": "HOW IT WORKS IN 3D",
-            "concept_takeaway": f"Step-by-step colorful 3D model of {topic_title.split('—')[0].strip()}",
-            "formula_badge": "Direct Rule: Cause Arrow (Red) → 3D Action (Yellow)",
-            "quick_tip": "Board Exam Tip: Always draw neat labelled arrows in your answer sheet for full marks!",
-            "narration": f"Look closely at our colorful 3D model! When we open it up from the side, every moving part connects like simple Lego blocks. Follow the bright yellow arrow from start to finish—no scary jargon, just pure common sense!",
+            "headline": "CORE LAWS & FORMULAS",
+            "concept_takeaway": f"Step-by-step visual breakdown of {clean_core}",
+            "formula_badge": "Master Formula: Direct Cause (Red) → Output (Yellow)",
+            "quick_tip": "Board Exam Tip: Always draw neat labelled diagrams in your answer sheet for full marks!",
+            "narration": f"Look closely at our classroom model! When we open it up from the side, every part connects like simple building blocks. Follow the bright yellow arrow from start to finish—zero scary jargon, just pure common sense!",
             "image_3d_prompt": f"Vibrant well-lit 3D school science lab cutaway model of '{topic_title}' on a clean bright desk, primary-colored red, yellow, and royal-blue parts sliced open clearly, zero text, zero faces.",
             "google_flow_veo_prompt": f"Smooth orbital 3D camera around a colorful classroom model demonstrating '{topic_title}'.",
             "fallback_plate": "scene_02_16x9.jpg",
@@ -1314,20 +1473,20 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
             "scene_id": 3,
             "headline": "#1 BOARD EXAM TRAP!",
             "concept_takeaway": "Spot and fix the #1 silly mistake students make in the exam hall!",
-            "formula_badge": "Check Units & +/- Signs Before Final Step!",
+            "formula_badge": "Check Units & +/- Signs Before Final Answer!",
             "quick_tip": "Topper Hack: Circle the asked unit in the question before writing your formula!",
-            "narration": f"Hold on—here is where ninety percent of students lose easy marks in the exam hall! They rush the sign or mix up the two directions. Look at the green check model versus the red mistake model—once you see this in 3D, you will never fall for that trap again!",
+            "narration": f"Hold on—here is where ninety percent of students lose easy marks in the exam hall! They rush the sign or mix up the two cases. Compare the green right setup with the red mistake—now you will never fall for that trap again!",
             "image_3d_prompt": f"Bright colorful 3D side-by-side classroom model comparing the wrong vs right setup for '{topic_title}' using vivid emerald green and crimson red 3D indicators on a sunny tabletop, zero text, zero faces.",
             "google_flow_veo_prompt": f"Colorful 3D classroom demonstration locking bright green parts together for '{topic_title}'.",
             "fallback_plate": "scene_03_16x9.jpg",
         },
         {
             "scene_id": 4,
-            "headline": "FULL MARKS LOCKED!",
-            "concept_takeaway": "1-Minute 3D Recap + Free 1-Page Formula & Hack Sheet in Description!",
+            "headline": "COMPLETE RECAP!",
+            "concept_takeaway": "Rapid Formula Recap + Free 1-Page Summary Sheet in Description!",
             "formula_badge": "1-3-7 Recall Rule: Revise Today • Day 3 • Day 7",
-            "quick_tip": "Quick Test: Pause for 3 seconds and picture the 3D model with your eyes closed!",
-            "narration": f"Awesome job! Close your eyes for two seconds—can you still see the colorful 3D model clearly? Boom, that means your brain just locked in full marks! Download the free one-page Formula and Quick-Tip Sheet linked below, and subscribe to TopperLab 3D!",
+            "quick_tip": "Quick Test: Pause for 3 seconds and recall all key formulas with your eyes closed!",
+            "narration": f"Awesome job! Close your eyes for two seconds—can you recall every core formula clearly? Boom, that means your brain just locked in full marks! Download the free one-page Formula and Quick-Tip Sheet linked below, and subscribe to TopperLab!",
             "image_3d_prompt": f"Cheerful sunlit 3D student desk with a colorful miniature 3D science model of '{topic_title}', a bright golden star trophy, and colourful study markers, Pixar educational style, zero text, zero faces.",
             "google_flow_veo_prompt": "Bright cheerful 3D student desk with miniature science models and a golden star trophy.",
             "fallback_plate": "scene_04_16x9.jpg",
@@ -1345,9 +1504,14 @@ def generate_dual_script_and_thumbnails(
     custom_thumb_prompt: str = "",
     force_regenerate_thumbs: bool = False,
     target_class_label: str = "Class 10",
-    target_subject_label: str = "",
+    target_subject_label: str = "Mathematics",
+    selected_board: str = "CBSE",
+    selected_chapter: str = "",
+    video_category: str = "syllabus_chapter",
+    duration_badge: str = "6 Mins",
 ) -> Dict[str, Any]:
     ch = load_active_channel()
+    topic_title = strip_3d_text(topic_title)
     project_slug = slugify(topic_title)
     project_dir = WORKSPACES_DIR / project_slug
     project_dir.mkdir(parents=True, exist_ok=True)
@@ -1362,65 +1526,90 @@ def generate_dual_script_and_thumbnails(
         subject_override=target_subject_label,
     )
 
+    clean_chapter = strip_3d_text(selected_chapter).strip()
+    if not clean_chapter:
+        clean_chapter = re.sub(r"\s+in\s+\d+\s*mins?\s+complete.*$", "", topic_title, flags=re.IGNORECASE).split("—")[0].strip()
+
     default_scenes = _default_gyroscope_scenes(topic_title, is_hinglish=is_hinglish)
-    is_wheel = any(w in topic_title.lower() for w in ("gyroscope", "rotational", "bicycle", "wheel"))
+    is_syllabus = video_category == "syllabus_chapter"
+    dur_upper = (duration_badge or "6 Mins").strip().upper()
+    default_hook = f"{dur_upper} COMPLETE!" if is_syllabus else "TOPPER HACK!"
     fallback_blueprint = {
         "title_variations": [
             topic_title,
-            f"{topic_title.split('—')[0].strip()} — Easy 3D Classroom Model + Exam Hacks!",
-            f"{class_badge_text.split('•')[0].strip()} {topic_title.split('—')[0].strip()} in 3D | Formula Tricks & Quick Tips",
+            f"{clean_chapter} in {duration_badge} Complete | {selected_board} {target_class_label} {target_subject_label}",
+            f"{clean_chapter} One Shot — All Formulas, Shortcuts & Board Questions",
+        ]
+        if is_syllabus
+        else [
+            topic_title,
+            f"{clean_chapter} — Toppers Secret Hack & 5-Second Exam Shortcuts",
+            f"How Toppers Master {clean_chapter} Without Cramming | {selected_board} {target_class_label}",
         ],
-        "thumb_hook_3words": "WHY NO FALL?!" if is_wheel else "SEE IT IN 3D!",
-        "short_hook_3words": "CYCLE WHEEL MAGIC!" if is_wheel else "3-MARK HACK!",
-        "thumb_sub_tagline": "EASY 3D MODEL + FORMULA HACKS",
+        "thumb_hook_3words": default_hook,
+        "short_hook_3words": f"{clean_chapter[:16].upper()}!" if len(clean_chapter) <= 16 else "EXAM SHORTCUT!",
+        "thumb_sub_tagline": "ALL FORMULAS + EXAM HACKS" if is_syllabus else "TOPPERS SECRET SHORTCUT",
         "thumbnail_16x9_prompt": custom_thumb_prompt.strip()
         or (
-            f"Bright, exciting, colorful Pixar-style 16:9 3D classroom science model for '{topic_title}' positioned prominently on the RIGHT half of the frame, "
+            f"Bright, exciting, colorful Pixar-style 16:9 3D classroom educational model for '{clean_chapter}' ({target_subject_label}) positioned prominently on the RIGHT half of the frame, "
             f"leaving clean sunlit sky-blue studio space on the left side for title overlay. "
-            f"{theme_cfg['style_prompt']} Everyday relatable objects a Class 10 student loves, vivid red, yellow, and royal-blue 3D parts, zero text inside the raw 3D render."
+            f"{theme_cfg['style_prompt']} Everyday relatable objects a {target_class_label} student loves, vivid red, yellow, and royal-blue parts, zero text inside the raw 3D render."
         ),
         "short_cover_9x16_prompt": (
-            f"Bright, exciting vertical 9:16 3D classroom science model for '{topic_title}' positioned in the lower-center two-thirds of the frame, "
+            f"Bright, exciting vertical 9:16 3D classroom educational model for '{clean_chapter}' ({target_subject_label}) positioned in the lower-center two-thirds of the frame, "
             f"leaving clean studio space at the top for headline overlay. {theme_cfg['style_prompt']} Zero text inside the raw 3D render."
         ),
         "scenes": default_scenes,
     }
 
+    mode_brief = (
+        f"FOUNDATION COMPLETE SYLLABUS CHAPTER VIDEO ('{topic_title}'): Cover the ENTIRE {selected_board} {target_class_label} {target_subject_label} chapter '{clean_chapter}' systematically from start to finish across {scene_count} crisp scenes: "
+        f"(1) Everyday real-life hook & core chapter intuition, (2) Core concepts, theorems/laws & visual model, (3) Must-know formulas & #1 high-scoring numerical/board shortcut, and (4) #1 exam-hall mistake trap + complete chapter rapid recap."
+        if is_syllabus
+        else f"POST-FOUNDATION BOOSTER VIDEO ({video_category.upper()} — '{topic_title}'): Deliver ultra-actionable topper study hacks, 5-second exam shortcuts, sign-convention tricks, and super-memory mnemonics for {selected_board} {target_class_label} {target_subject_label} ('{clean_chapter}')."
+    )
+
     ai_prompt = (
-        f"Create an exciting, super-clear faceless 3D educational video blueprint for TopperLab 3D (@TopperLab3D).\n"
-        f"Topic: {topic_title}\n"
-        f"Target Student Level: {class_badge_text} ({exam_track}) — MUST be effortlessly understandable by a 15-year-old Class 10 student!\n"
+        f"Create an exciting, super-clear faceless educational video blueprint for TopperLab.\n"
+        f"Topic Title: {topic_title}\n"
+        f"Board / Class / Subject / Chapter: {selected_board} • {target_class_label} • {target_subject_label} • {clean_chapter}\n"
+        f"Mission: {mode_brief}\n"
         f"Expressive Narration Style: {voice_cfg['script_instruction']}\n"
-        f"Friendly 3D Model Style (NO dark sci-fi!): {theme_cfg['style_prompt']}\n"
-        f"Number of Scenes: {scene_count} (Scene 1 = Surprising everyday real-life 3D hook, middle scenes = bright relatable 3D cutaway model + formula + board exam mistake hack, final scene = quick recall test + CTA for free 1-Page Formula Sheet).\n"
-        f"IMPORTANT RULES:\n"
-        f"1. Every `image_3d_prompt` MUST describe bright, colorful, everyday classroom/real-life 3D models (bicycles, cricket balls, magnets, batteries, prisms, water pipes, heart pumps, toy gears) on a bright studio desk — NEVER dark obsidian sci-fi labs, and ZERO text/words inside the 3D render.\n"
-        f"2. Every `narration` (35–50 words) MUST be super expressive, lively, conversational, with questions ('Wait—why does...?!'), exclamations, and everyday analogies — NEVER flat textbook monotone!\n"
-        f"3. Every scene MUST include a concise `formula_badge` (related formula or core equation/rule, max 52 chars) AND a punchy `quick_tip` (shortcut, mnemonic, or exam hack, max 68 chars) that will fly in and fly out on screen!\n"
+        f"Visual Model Style (for image_3d_prompt ONLY — NO dark sci-fi!): {theme_cfg['style_prompt']}\n"
+        f"Number of Scenes: {scene_count}\n"
+        f"CRITICAL RULES:\n"
+        f"1. STRICTLY FORBIDDEN: NEVER write the word '3D' or '3d' anywhere in `title_variations`, `thumb_hook_3words`, `short_hook_3words`, `thumb_sub_tagline`, `headline`, `concept_takeaway`, `formula_badge`, `quick_tip`, or `narration`! (Only use 3D visual rendering terms inside `image_3d_prompt` and `google_flow_veo_prompt`).\n"
+        f"2. Every `image_3d_prompt` MUST describe bright, colorful, everyday classroom/real-life visual models (lighthouses, towers, bicycles, cricket balls, magnets, batteries, prisms, water pipes, heart models, globes, geometry blocks) on a bright studio desk — NEVER dark sci-fi labs, ZERO human faces, and ZERO text/letters inside the raw image.\n"
+        f"3. Every `narration` (38–52 words) MUST be super expressive, lively, conversational, with questions ('Wait—why does...?!'), exclamations, and everyday analogies — NEVER flat textbook monotone!\n"
+        f"4. Every scene MUST include an accurate syllabus `formula_badge` (exact equation/law/rule for '{clean_chapter}', max 52 chars) AND a punchy `quick_tip` (shortcut, mnemonic, or board exam hack, max 68 chars) that will fly in and fly out on screen!\n"
         f"Return JSON with keys:\n"
-        f"- title_variations (array of 3 exciting student titles)\n"
-        f"- thumb_hook_3words (2 to 3 punchy words for the Yellow+Red thumbnail heading, e.g. 'WHY NO FALL?!' or 'LEFT HAND HACK!')\n"
-        f"- short_hook_3words (2 to 3 punchy words for 9:16 cover)\n"
-        f"- thumb_sub_tagline (3 to 5 words, e.g. 'EASY 3D + EXAM HACKS')\n"
-        f"- thumbnail_16x9_prompt (bright 3D model positioned on RIGHT half of 16:9 frame, clean left side, zero raw text, zero faces)\n"
-        f"- short_cover_9x16_prompt (bright 3D model positioned in lower-center of 9:16 frame, clean top area, zero raw text, zero faces)\n"
-        f"- scenes: array of {scene_count} objects with keys: scene_id, headline (max 3 words), concept_takeaway (max 72 chars), formula_badge (max 52 chars), quick_tip (max 68 chars), narration (35-50 expressive spoken words), image_3d_prompt, google_flow_veo_prompt."
+        f"- title_variations (array of 3 clean student titles — first one matching '{topic_title}', ZERO '3D' text)\n"
+        f"- thumb_hook_3words (2 to 3 punchy words for the Yellow+Red thumbnail heading, e.g. '{default_hook}' or '5-SEC TRIG HACK!')\n"
+        f"- short_hook_3words (2 to 3 punchy words for 9:16 cover, ZERO '3D' text)\n"
+        f"- thumb_sub_tagline (3 to 5 words, e.g. 'ALL FORMULAS + EXAM HACKS', ZERO '3D' text)\n"
+        f"- thumbnail_16x9_prompt (bright classroom 3D model positioned on RIGHT half of 16:9 frame, clean left side, zero raw text, zero faces)\n"
+        f"- short_cover_9x16_prompt (bright classroom 3D model positioned in lower-center of 9:16 frame, clean top area, zero raw text, zero faces)\n"
+        f"- scenes: array of {scene_count} objects with keys: scene_id, headline (max 3 words, no '3D'), concept_takeaway (max 72 chars, no '3D'), formula_badge (max 52 chars, no '3D'), quick_tip (max 68 chars, no '3D'), narration (38-52 expressive spoken words, no '3D'), image_3d_prompt, google_flow_veo_prompt."
     )
     blueprint = call_gemini_json(ai_prompt, fallback_blueprint)
     if not isinstance(blueprint, dict) or not blueprint.get("scenes"):
         blueprint = fallback_blueprint
+
+    clean_vars = [strip_3d_text(t) for t in blueprint.get("title_variations", fallback_blueprint["title_variations"]) if strip_3d_text(t)]
+    if not clean_vars or clean_vars[0].lower() != topic_title.lower():
+        clean_vars = [topic_title] + [v for v in clean_vars if v.lower() != topic_title.lower()]
+    blueprint["title_variations"] = clean_vars[:3]
 
     plate_cycle = ["scene_01_16x9.jpg", "scene_02_16x9.jpg", "scene_03_16x9.jpg", "scene_04_16x9.jpg"]
     for idx, sc in enumerate(blueprint["scenes"]):
         sc["scene_id"] = idx + 1
         sc.setdefault("fallback_plate", plate_cycle[idx % len(plate_cycle)])
         def_sc = default_scenes[idx % len(default_scenes)]
-        if not str(sc.get("formula_badge", "")).strip():
-            sc["formula_badge"] = def_sc["formula_badge"]
-        if not str(sc.get("quick_tip", "")).strip():
-            sc["quick_tip"] = def_sc["quick_tip"]
-        if not str(sc.get("concept_takeaway", "")).strip():
-            sc["concept_takeaway"] = def_sc["concept_takeaway"]
+        sc["headline"] = strip_3d_text(sc.get("headline", "")) or def_sc["headline"]
+        sc["concept_takeaway"] = strip_3d_text(sc.get("concept_takeaway", "")) or def_sc["concept_takeaway"]
+        sc["formula_badge"] = strip_3d_text(sc.get("formula_badge", "")) or def_sc["formula_badge"]
+        sc["quick_tip"] = strip_3d_text(sc.get("quick_tip", "")) or def_sc["quick_tip"]
+        sc["narration"] = strip_3d_text(sc.get("narration", "")) or def_sc["narration"]
 
     raw_thumb_16x9 = project_dir / "thumbnail_16x9_raw.jpg"
     raw_short_9x16 = project_dir / "short_cover_9x16_raw.jpg"
@@ -1446,9 +1635,11 @@ def generate_dual_script_and_thumbnails(
     shutil.copyfile(raw_thumb_16x9, thumb_path)
     shutil.copyfile(raw_short_9x16, short_cover_path)
 
-    hook_16x9 = blueprint.get("thumb_hook_3words") or fallback_blueprint["thumb_hook_3words"]
-    hook_9x16 = blueprint.get("short_hook_3words") or hook_16x9
-    sub_tag = blueprint.get("thumb_sub_tagline") or "EASY 3D MODEL + EXAM HACK"
+    hook_16x9 = strip_3d_text(blueprint.get("thumb_hook_3words") or "") or fallback_blueprint["thumb_hook_3words"]
+    if is_syllabus and dur_upper.split()[0] not in hook_16x9.upper():
+        hook_16x9 = default_hook
+    hook_9x16 = strip_3d_text(blueprint.get("short_hook_3words") or "") or hook_16x9
+    sub_tag = strip_3d_text(blueprint.get("thumb_sub_tagline") or "") or fallback_blueprint["thumb_sub_tagline"]
 
     apply_consistent_topperlab_thumbnail_branding(
         image_path=thumb_path,
@@ -1468,14 +1659,18 @@ def generate_dual_script_and_thumbnails(
     pkg = {
         "topic_title": topic_title,
         "pillar_id": pillar_id,
-        "exam_track": exam_track,
+        "exam_track": strip_3d_text(exam_track),
+        "selected_board": selected_board,
         "target_class_label": target_class_label,
         "target_subject_label": target_subject_label,
+        "selected_chapter": clean_chapter,
+        "video_category": video_category,
+        "duration_badge": duration_badge,
         "class_badge_text": class_badge_text,
         "voice_mode": voice_mode,
         "visual_theme_key": visual_theme_key,
         "project_dir": to_portable_path(project_dir),
-        "title_variations": blueprint.get("title_variations", fallback_blueprint["title_variations"]),
+        "title_variations": blueprint["title_variations"],
         "thumb_hook_3words": hook_16x9,
         "short_hook_3words": hook_9x16,
         "thumb_sub_tagline": sub_tag,
@@ -2066,9 +2261,9 @@ def render_faceless_scene_media(
         bgm_enabled=bgm_enabled,
     )
 
-    formula_txt = scene.get("formula_badge") or f"Core Concept: {scene.get('headline', '3D Rule')}"
-    hack_txt = scene.get("quick_tip") or scene.get("concept_takeaway", "Remember the 3D direction in your exam!")
-    takeaway_txt = scene.get("concept_takeaway") or scene.get("headline", "")
+    formula_txt = strip_3d_text(scene.get("formula_badge") or "") or f"Core Rule: {strip_3d_text(scene.get('headline', 'Key Law'))}"
+    hack_txt = strip_3d_text(scene.get("quick_tip") or "") or strip_3d_text(scene.get("concept_takeaway", "Write units & steps clearly for full marks!"))
+    takeaway_txt = strip_3d_text(scene.get("concept_takeaway") or "") or strip_3d_text(scene.get("headline", ""))
 
     # Build crisp RGBA PNG overlays for 16:9 and 9:16
     hud_16 = scenes_dir / f"scene_{sid:02d}_hud_16x9.png"
@@ -2212,10 +2407,16 @@ def render_faceless_scene_media(
         ]
         subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, check=True)
 
+    # Remove bulky intermediate uncompressed WAVs & temp overlay PNGs once muxed into AAC MP4s
+    for tmp_f in (wav_voice, wav_master, hud_16, form_16, hack_16, hud_9, form_9, hack_9):
+        try:
+            tmp_f.unlink(missing_ok=True)
+        except Exception:
+            pass
+
     scene["duration_sec"] = dur_sec
     scene["img_16x9"] = to_portable_path(img_16x9)
     scene["img_9x16"] = to_portable_path(img_9x16)
-    scene["audio_wav"] = to_portable_path(wav_master)
     scene["mp4_16x9"] = to_portable_path(mp4_16x9)
     scene["mp4_9x16"] = to_portable_path(mp4_9x16)
     return scene
@@ -2377,81 +2578,229 @@ def update_single_faceless_scene(
 # ============================================================================
 # 6. STEP 4: STUDENT SEO BUNDLE & LIVE YOUTUBE / META CLOUD SCHEDULER
 # ============================================================================
+def _to_camel_hashtag(phrase: str) -> str:
+    clean = strip_3d_text(phrase)
+    words = re.findall(r"[A-Za-z0-9]+", clean)
+    if not words:
+        return ""
+    camel = "".join(w if w.isupper() and len(w) <= 5 else (w[0].upper() + w[1:]) for w in words)
+    return f"#{camel}" if camel else ""
+
+
+def _build_dynamic_hashtags_and_tags(
+    video_title: str,
+    exam_track: str = "",
+    board: str = "CBSE",
+    class_name: str = "Class 10",
+    subject: str = "Mathematics",
+    chapter_name: str = "",
+    video_category: str = "syllabus_chapter",
+) -> tuple[List[str], List[str]]:
+    clean_title = strip_3d_text(video_title)
+    b = (board or "CBSE").strip().upper()
+    if b not in ("CBSE", "ICSE"):
+        b = "ICSE" if "icse" in f"{exam_track} {clean_title}".lower() else "CBSE"
+
+    cls = strip_3d_text(class_name or "").strip()
+    if not cls:
+        m_cls = re.search(r"Class\s*(8|9|10|11|12)", f"{exam_track} {clean_title}", flags=re.IGNORECASE)
+        cls = f"Class {m_cls.group(1)}" if m_cls else "Class 10"
+    cls_compact = cls.replace(" ", "")  # e.g., Class10
+
+    subj = strip_3d_text(subject or "").strip()
+    if not subj or subj.lower() == "science":
+        low_all = f"{clean_title} {chapter_name} {exam_track}".lower()
+        if any(k in low_all for k in ("height", "distance", "trig", "quadratic", "triangle", "circle", "polynomial", "probability", "statistics", "arithmetic", "number", "algebra", "calculus", "matrix", "vector", "math")):
+            subj = "Mathematics"
+        elif any(k in low_all for k in ("chemical", "acid", "metal", "carbon", "periodic", "mole", "electrochem", "organic", "chemistry")):
+            subj = "Chemistry"
+        elif any(k in low_all for k in ("life process", "heredity", "reproduc", "cell", "tissue", "heart", "dna", "ecosystem", "biology")):
+            subj = "Biology"
+        else:
+            subj = subj or "Physics"
+
+    subj_short_map = {
+        "Mathematics": "Maths",
+        "Physics": "Physics",
+        "Chemistry": "Chemistry",
+        "Biology": "Biology",
+        "Science": "Science",
+        "Computer Science & AI": "ComputerScience",
+        "History & Civics": "SST",
+        "Geography": "Geography",
+        "Economics": "Economics",
+        "English": "English",
+        "Topper Hacks": "StudyHacks",
+    }
+    subj_short = subj_short_map.get(subj, re.sub(r"[^A-Za-z0-9]", "", subj) or "Science")
+
+    chap = strip_3d_text(chapter_name or "").strip()
+    if not chap:
+        chap = re.sub(r"\s+in\s+\d+\s*mins?\s+complete.*$", "", clean_title, flags=re.IGNORECASE).split("—")[0].split("|")[0].strip()
+
+    chap_low = chap.lower()
+    related_tag = ""
+    if any(k in chap_low for k in ("height", "distance", "trigonometr")):
+        related_tag = "#Trigonometry"
+    elif any(k in chap_low for k in ("quadratic", "polynomial", "linear", "arithmetic")):
+        related_tag = "#Algebra"
+    elif any(k in chap_low for k in ("triangle", "circle", "coordinate", "surface", "area", "mensuration")):
+        related_tag = "#Geometry"
+    elif any(k in chap_low for k in ("light", "eye", "optics", "prism")):
+        related_tag = "#Optics"
+    elif any(k in chap_low for k in ("electric", "magnetic", "current", "ohm")):
+        related_tag = "#Electricity"
+    elif any(k in chap_low for k in ("motion", "force", "gravitation", "work", "rotational", "torque")):
+        related_tag = "#Mechanics"
+
+    raw_hashtags: List[str] = [
+        _to_camel_hashtag(chap),
+        f"#{cls_compact}{subj_short}",
+        f"#{b}{cls_compact}",
+        f"#{cls_compact}",
+        _to_camel_hashtag(subj),
+        related_tag,
+    ]
+    if b == "CBSE":
+        raw_hashtags.extend([f"#NCERT{subj_short}", "#NCERT", "#CBSEBoards"])
+    else:
+        raw_hashtags.extend([f"#ICSE{subj_short}", "#ICSEBoard", "#CISCE"])
+
+    if cls in ("Class 11", "Class 12"):
+        if subj in ("Mathematics", "Physics", "Chemistry"):
+            raw_hashtags.append("#JEEMains")
+        if subj in ("Biology", "Physics", "Chemistry"):
+            raw_hashtags.append("#NEETUG")
+
+    if video_category == "syllabus_chapter":
+        raw_hashtags.extend(["#CompleteChapter", "#OneShotRevision", "#BoardExam2026", f"#{subj_short}Tricks"])
+    elif video_category == "toppers_hack":
+        raw_hashtags.extend(["#ToppersHack", "#StudyStrategy", "#Score95Plus", "#BoardExamTips"])
+    elif video_category == "exam_tricks":
+        raw_hashtags.extend(["#ExamTricks", f"#{subj_short}Tricks", "#ShortcutTricks", "#BoardExam2026"])
+    elif video_category == "super_memory":
+        raw_hashtags.extend(["#SuperMemory", "#ActiveRecall", "#FormulaTricks", "#StudyHacks"])
+    else:
+        raw_hashtags.extend(["#CompleteChapter", "#BoardExam2026", f"#{subj_short}Tricks"])
+
+    raw_hashtags.append("#TopperLab")
+
+    hashtags: List[str] = []
+    seen_h = set()
+    for h in raw_hashtags:
+        hc = strip_3d_text(h).strip()
+        if hc.startswith("#") and len(hc) > 2 and hc.lower() not in seen_h and "3d" not in hc.lower():
+            seen_h.add(hc.lower())
+            hashtags.append(hc)
+        if len(hashtags) >= 14:
+            break
+
+    chap_clean_low = chap.lower()
+    cls_low = cls.lower()
+    subj_low = subj.lower()
+    b_low = b.lower()
+    raw_seo_tags = [
+        clean_title.lower(),
+        f"{chap_clean_low} {cls_low}",
+        f"{chap_clean_low} in 6 mins",
+        f"{chap_clean_low} one shot",
+        f"{b_low} {cls_low} {subj_low}",
+        f"{cls_low} {subj_short.lower()} {chap_clean_low}",
+        f"{chap_clean_low} all formulas",
+        f"{chap_clean_low} tricks and shortcuts",
+        f"{chap_clean_low} important board questions",
+        f"ncert {cls_low} {subj_short.lower()}" if b == "CBSE" else f"icse {cls_low} {subj_short.lower()}",
+        f"{cls_low} board exam preparation",
+        "toppers hack",
+        "exam tricks",
+        "topperlab",
+    ]
+    seo_tags: List[str] = []
+    seen_t = set()
+    total_chars = 0
+    for tg in raw_seo_tags:
+        tc = strip_3d_text(tg).strip().lower()
+        if tc and "3d" not in tc and tc not in seen_t and (total_chars + len(tc) + 2) <= 460:
+            seen_t.add(tc)
+            seo_tags.append(tc)
+            total_chars += len(tc) + 2
+
+    return hashtags, seo_tags
+
+
 def generate_student_seo_bundle(
     video_title: str,
     exam_track: str,
     scenes: List[Dict[str, Any]],
     resource_links: List[Dict[str, str]],
+    board: str = "CBSE",
+    class_name: str = "Class 10",
+    subject: str = "Mathematics",
+    chapter_name: str = "",
+    video_category: str = "syllabus_chapter",
 ) -> Dict[str, Any]:
     ch = load_active_channel()
-    ch_name = ch["channel_name"]
-    ch_handle = ch["channel_handle"]
+    ch_name = strip_3d_text(ch.get("channel_name", "TopperLab")) or "TopperLab"
+    clean_title = strip_3d_text(video_title)
+    clean_track = strip_3d_text(exam_track) or f"{board} {class_name} {subject}"
 
     link_lines = []
     for item in resource_links:
-        lbl = item.get("label", "").strip()
+        lbl = strip_3d_text(item.get("label", "")).strip()
         url = item.get("url", "").strip()
-        cat = item.get("category", "")
+        cat = strip_3d_text(item.get("category", ""))
         if lbl and url:
             icon = "📄" if "PDF" in cat or "Formula" in cat else ("📊" if "Sheet" in cat or "Tracker" in cat else "📚")
             link_lines.append(f"{icon} {lbl}: {url}")
-    links_block = "\n".join(link_lines) or "📄 Free 1-Page 3D Formula & Vector Summary Sheet: Coming in Pinned Comment"
+    links_block = "\n".join(link_lines) or "📄 Free 1-Page Formula & Quick-Tip Summary Sheet: Linked in Pinned Comment"
 
     chapters = []
     elapsed = 0.0
     for sc in scenes:
         mm = int(elapsed // 60)
         ss = int(elapsed % 60)
-        chapters.append(f"{mm}:{ss:02d} {sc.get('headline', '3D Concept')} — {sc.get('concept_takeaway', '')[:58]}")
+        hl = strip_3d_text(sc.get("headline", "Core Concept"))
+        raw_tk = strip_3d_text(sc.get("concept_takeaway", ""))
+        tk = raw_tk if len(raw_tk) <= 78 else (raw_tk[:75].rsplit(" ", 1)[0] + "...")
+        chapters.append(f"{mm}:{ss:02d} {hl} — {tk}".rstrip(" —"))
         elapsed += float(sc.get("duration_sec", 12.0))
-    chapters_block = "\n".join(chapters) if chapters else "0:00 3D Hook & Core Mystery\n0:20 3D Vector Breakdown\n0:45 Exam Trap & 1-Page Sheet"
+    chapters_block = "\n".join(chapters) if chapters else "0:00 Real-Life Hook & Core Intuition\n0:20 Key Formulas & Visual Breakdown\n0:45 Board Exam Shortcut & Rapid Recap"
 
-    hashtags = [
-        "#TopperLab3D",
-        "#3DScience",
-        "#Class12",
-        "#Class11",
-        "#JEEMains",
-        "#NEETUG",
-        "#CBSEBoards",
-        "#PhysicsIn3D",
-        "#StudyStrategy",
-        "#ActiveRecall",
-    ]
-    seo_tags = [
-        video_title.lower(),
-        "topperlab 3d",
-        "3d science animation india",
-        "class 11 physics 3d",
-        "class 12 ncert 3d",
-        "jee mains visual concepts",
-        "neet biology 3d",
-        "topper study strategy",
-        "active recall revision",
-    ]
+    hashtags, seo_tags = _build_dynamic_hashtags_and_tags(
+        video_title=clean_title,
+        exam_track=clean_track,
+        board=board,
+        class_name=class_name,
+        subject=subject,
+        chapter_name=chapter_name,
+        video_category=video_category,
+    )
 
-    yt_description = (
-        f"{video_title} — Visualized in crystal-clear 3D by {ch_name} ({ch_handle}) for {exam_track}.\n\n"
+    clean_chap = strip_3d_text(chapter_name).strip() or re.sub(r"\s+in\s+\d+\s*mins?\s+complete.*$", "", clean_title, flags=re.IGNORECASE).strip()
+
+    yt_description = strip_3d_text(
+        f"{clean_title} — Master {clean_chap} ({board} {class_name} {subject}) with crystal-clear visual models, "
+        f"all must-know formulas, and high-scoring exam shortcuts by {ch_name} ({clean_track}).\n\n"
         f"📥 FREE 1-PAGE FORMULA SHEETS, REVISION TRACKERS & STUDY RESOURCES:\n"
         f"{links_block}\n\n"
-        f"⏱️ 3D CHAPTER TIMESTAMPS:\n"
+        f"⏱️ CHAPTER TIMESTAMPS:\n"
         f"{chapters_block}\n\n"
-        f"🔬 Subscribe to {ch_name} ({ch_handle}) — See What 2D Textbooks Can't Show!\n\n"
+        f"🔔 Subscribe to {ch_name} — Complete {board} & ICSE Class 8–12 Chapters, Toppers Hacks & Exam Tricks!\n\n"
         f"{' '.join(hashtags)}"
     )
 
-    short_caption = (
-        f"{video_title} ⚡🔬\n\n"
-        f"Stop memorizing flat 2D diagrams — once you see the 3D vectors, you can never unsee it!\n\n"
-        f"📥 Grab the Free 1-Page 3D Formula Sheet & Tracker:\n{links_block}\n\n"
-        f"{' '.join(hashtags[:7])}"
+    short_caption = strip_3d_text(
+        f"{clean_title} ⚡📘\n\n"
+        f"Lock in every formula and board exam shortcut for {clean_chap} ({class_name} {subject}) in minutes!\n\n"
+        f"📥 Grab the Free 1-Page Formula & Exam Hack Sheet:\n{links_block}\n\n"
+        f"{' '.join(hashtags[:8])}"
     )
 
-    pinned_comment = (
-        f"📌 PINNED BY {ch_name.upper()} ({ch_handle}):\n"
-        f"Download today's Free 1-Page 3D Formula Sheet & Spaced-Repetition Tracker here 👇\n"
+    pinned_comment = strip_3d_text(
+        f"📌 PINNED BY {ch_name.upper()}:\n"
+        f"Download today's Free 1-Page Formula Sheet & Active-Recall Revision Tracker here 👇\n"
         f"{links_block}\n\n"
-        f"Which NCERT / JEE / NEET chapter should we build in 3D next? Drop it in the replies! 👇"
+        f"Which {board} / ICSE chapter or Exam Trick should we cover next? Comment below! 👇"
     )
 
     return {
@@ -2655,6 +3004,9 @@ def publish_or_schedule_deliverable(
     target_class: str = "",
     target_subject: str = "",
 ) -> Dict[str, Any]:
+    title = strip_3d_text(title)
+    description_or_caption = strip_3d_text(description_or_caption)
+    tags = [strip_3d_text(t) for t in tags if strip_3d_text(t) and "3d" not in strip_3d_text(t).lower()]
     vpath = resolve_workspace_path(video_path)
     tpath = resolve_workspace_path(thumbnail_path) if thumbnail_path else None
     sched_str = scheduled_ist_dt.strftime("%Y-%m-%d %H:%M IST")
@@ -2881,6 +3233,18 @@ def format_curriculum_playlist_title(board: str, class_name: str, subject: str) 
     c = class_name.strip()
     s = subject.strip()
     if b == "CBSE":
+        tag = "Complete NCERT & JEE/NEET" if c in ("Class 11", "Class 12") else "Complete Chapters & Board Prep"
+        return f"CBSE {c} {s} | {tag}"
+    if c in ("Class 11", "Class 12"):
+        return f"ISC / ICSE {c} {s} | Complete Chapters & Board Prep"
+    return f"ICSE {c} {s} | Complete Chapters & Board Prep"
+
+
+def _legacy_curriculum_playlist_title(board: str, class_name: str, subject: str) -> str:
+    b = board.strip().upper()
+    c = class_name.strip()
+    s = subject.strip()
+    if b == "CBSE":
         tag = "3D NCERT & JEE/NEET" if c in ("Class 11", "Class 12") else "3D NCERT Concepts & Board Prep"
         return f"CBSE {c} {s} | {tag}"
     if c in ("Class 11", "Class 12"):
@@ -2891,10 +3255,10 @@ def format_curriculum_playlist_title(board: str, class_name: str, subject: str) 
 def format_curriculum_playlist_description(board: str, class_name: str, subject: str) -> str:
     b_lbl = "CBSE (NCERT)" if board.strip().upper() == "CBSE" else ("ISC / ICSE Council" if class_name in ("Class 11", "Class 12") else "ICSE")
     return (
-        f"Complete {b_lbl} {class_name} {subject} 3D visual chapter series by TopperLab 3D (@TopperLab3D).\n\n"
-        f"See invisible vectors, mechanisms, derivations, and exam traps in crystal-clear 3D — engineered for "
-        f"{b_lbl} {class_name} board exams, olympiads, JEE, and NEET preparation.\n"
-        f"📄 Free 1-Page 3D Formula & Revision Sheets linked inside every video description!"
+        f"Complete {b_lbl} {class_name} {subject} Foundation Chapter Series by TopperLab.\n\n"
+        f"Master every syllabus chapter in minutes with crystal-clear visual models, animated formulas, "
+        f"toppers hacks, and exam shortcuts — engineered for {b_lbl} {class_name} board exams, olympiads, JEE, and NEET.\n"
+        f"📄 Free 1-Page Formula & Revision Sheets linked inside every video description!"
     )
 
 
@@ -2979,7 +3343,8 @@ def auto_assign_video_to_curriculum_playlists(
     added_titles: List[str] = []
     for b in boards:
         pl_title = format_curriculum_playlist_title(b, class_name, subject)
-        pl_id = existing_by_title.get(pl_title, "")
+        leg_title = _legacy_curriculum_playlist_title(b, class_name, subject)
+        pl_id = existing_by_title.get(pl_title) or existing_by_title.get(leg_title, "")
         if not pl_id:
             r = requests.post(
                 "https://www.googleapis.com/youtube/v3/playlists?part=snippet,status",
@@ -3044,8 +3409,9 @@ def sync_cbse_icse_playlists_and_sections(
         for c in sel_classes:
             for s in sel_subjects:
                 title = format_curriculum_playlist_title(b, c, s)
-                if title in by_title:
-                    matrix_ids[(b, c, s)] = by_title[title]
+                leg_title = _legacy_curriculum_playlist_title(b, c, s)
+                if title in by_title or leg_title in by_title:
+                    matrix_ids[(b, c, s)] = by_title.get(title) or by_title[leg_title]
                     reused_count += 1
                     continue
                 resp = requests.post(
@@ -3115,14 +3481,14 @@ def sync_cbse_icse_playlists_and_sections(
                 existing_multi_by_title[stitle] = sec
 
         shelf_specs = [
-            ("📘 CBSE Class 12 — All Subjects (3D Visual Series)", "CBSE", ["Class 12"]),
-            ("📘 CBSE Class 11 — All Subjects (3D Visual Series)", "CBSE", ["Class 11"]),
-            ("📘 CBSE Class 9 & 10 — All Subjects (3D Board Prep)", "CBSE", ["Class 10", "Class 9"]),
-            ("📘 CBSE Class 8 — All Subjects (3D Foundation)", "CBSE", ["Class 8"]),
-            ("📗 ISC / ICSE Class 12 — All Subjects (3D Visual Series)", "ICSE", ["Class 12"]),
-            ("📗 ISC / ICSE Class 11 — All Subjects (3D Visual Series)", "ICSE", ["Class 11"]),
-            ("📗 ICSE Class 9 & 10 — All Subjects (3D Board Prep)", "ICSE", ["Class 10", "Class 9"]),
-            ("📗 ICSE Class 8 — All Subjects (3D Foundation)", "ICSE", ["Class 8"]),
+            ("📘 CBSE Class 12 — All Subjects (Complete Chapters)", "CBSE", ["Class 12"]),
+            ("📘 CBSE Class 11 — All Subjects (Complete Chapters)", "CBSE", ["Class 11"]),
+            ("📘 CBSE Class 9 & 10 — All Subjects (Complete Board Prep)", "CBSE", ["Class 10", "Class 9"]),
+            ("📘 CBSE Class 8 — All Subjects (Foundation)", "CBSE", ["Class 8"]),
+            ("📗 ISC / ICSE Class 12 — All Subjects (Complete Chapters)", "ICSE", ["Class 12"]),
+            ("📗 ISC / ICSE Class 11 — All Subjects (Complete Chapters)", "ICSE", ["Class 11"]),
+            ("📗 ICSE Class 9 & 10 — All Subjects (Complete Board Prep)", "ICSE", ["Class 10", "Class 9"]),
+            ("📗 ICSE Class 8 — All Subjects (Foundation)", "ICSE", ["Class 8"]),
         ]
 
         for shelf_title, board_key, cls_list in shelf_specs:

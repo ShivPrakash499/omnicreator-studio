@@ -2,57 +2,57 @@
   "pillars": [
     {
       "id": "3d_concept_visualizer",
-      "name": "🎒 Pillar 1: Bright 3D Science & Maths Models (Easy Class 8–12 Visualizer)",
-      "short_label": "3D Classroom Models",
-      "description": "Turns tough CBSE & ICSE Class 8–12 chapters into friendly, colorful real-life 3D models (bicycle wheels, magnets, prisms, circuits, hearts) with fly-in formulas & exam hacks.",
+      "name": "📘 Pillar 1: Foundation Syllabus Chapters (Complete Chapter in Minutes)",
+      "short_label": "Complete Chapters",
+      "description": "Covers complete CBSE & ICSE Class 8–12 syllabus chapters using bright real-life classroom models, animated fly-in formulas & board exam hacks.",
       "default_visual_theme": "BRIGHT_CLASSROOM_3D_MODEL",
       "starter_topics": [
         {
-          "title": "Why Spinning Bicycle Wheels Defy Gravity — Rotational Motion & Torque in Easy 3D",
-          "exam_track": "Class 10 & 11 Science / Physics (CBSE & ICSE)",
-          "thumb_hook": "WHY NO FALL?!",
-          "short_hook": "CYCLE WHEEL MAGIC!",
-          "why_viral": "Uses an everyday cycle wheel that every Class 10 student has ridden to explain Torque & Balance effortlessly."
+          "title": "Heights and Distances in 6 Mins Complete",
+          "exam_track": "CBSE & ICSE Class 10 Mathematics",
+          "thumb_hook": "6 MINS COMPLETE!",
+          "short_hook": "HEIGHTS & DISTANCES!",
+          "why_viral": "Complete Class 10 Trigonometry applications chapter with 30°-45°-60° ratio shortcuts & zero formula confusion."
         },
         {
-          "title": "Inside an Electric Motor & Fleming's Left-Hand Rule in 3D — Never Confuse Directions Again!",
-          "exam_track": "Class 10 CBSE & ICSE Physics (Magnetic Effects of Current)",
+          "title": "Magnetic Effects of Electric Current in 6 Mins Complete",
+          "exam_track": "CBSE & ICSE Class 10 Physics",
           "thumb_hook": "LEFT HAND HACK!",
-          "short_hook": "MOTOR IN 3D!",
-          "why_viral": "#1 guaranteed 5-mark Class 10 Board question where students mix up Force, Field, and Current."
+          "short_hook": "FULL CHAPTER FAST!",
+          "why_viral": "#1 guaranteed 5-mark Class 10 Board chapter where students mix up Force, Field, and Current."
         },
         {
-          "title": "Ohm's Law & Series vs Parallel Circuits as 3D Water Pipes — Electricity Made Super Easy",
-          "exam_track": "Class 10 CBSE & ICSE Science (Electricity Chapter)",
-          "thumb_hook": "VOLTAGE = PRESSURE!",
-          "short_hook": "OHM'S LAW IN 3D!",
-          "why_viral": "Clear 3D water-pump & pipe model makes Voltage, Current, and Resistance click in 30 seconds for Class 10."
+          "title": "Electricity in 6 Mins Complete",
+          "exam_track": "CBSE & ICSE Class 10 Physics",
+          "thumb_hook": "6 MINS COMPLETE!",
+          "short_hook": "OHM'S LAW EASY!",
+          "why_viral": "Clear water-pump & pipe model makes Voltage, Current, Resistance, and Power numericals click instantly."
         },
         {
-          "title": "How a Glass Prism Splits White Light Into 7 Rainbow Colours & Why Sky Looks Blue (3D Model)",
-          "exam_track": "Class 10 CBSE & ICSE Physics (Human Eye & Colourful World)",
+          "title": "The Human Eye and the Colourful World in 6 Mins Complete",
+          "exam_track": "CBSE & ICSE Class 10 Physics",
           "thumb_hook": "WHY SKY IS BLUE?!",
-          "short_hook": "PRISM RAINBOW 3D!",
-          "why_viral": "Bright colorful 3D rainbow light rays + 3-mark board exam trick ('Red bends least, Violet bends most!')."
+          "short_hook": "PRISM RAINBOW HACK!",
+          "why_viral": "Bright rainbow dispersion model + Myopia/Hypermetropia lens fix + 3-mark board exam trick."
         },
         {
-          "title": "Inside the Human Heart's Double Circulation in 3D — 4 Chambers & Valves Made Unforgettable",
-          "exam_track": "Class 10 CBSE & ICSE Biology (Life Processes)",
-          "thumb_hook": "4 CHAMBERS IN 3D!",
+          "title": "Life Processes in 8 Mins Complete",
+          "exam_track": "CBSE & ICSE Class 10 Biology",
+          "thumb_hook": "8 MINS COMPLETE!",
           "short_hook": "HEART PUMP HACK!",
-          "why_viral": "Color-coded red & blue 3D toy cutaway of Arteries, Veins, and Pulmonary loop locks in 5 board marks."
+          "why_viral": "Color-coded red & blue cutaway of Nutrition, Respiration, Double Circulation & Nephron."
         }
       ]
     },
     {
       "id": "topper_brain_strategy",
-      "name": "🧠 Pillar 2: Topper Study Hacks, Formula Tricks & 95%+ Board Strategy",
-      "short_label": "Topper Hacks & Memory",
-      "description": "Fun 3D memory models, active recall tricks, and exam-hall hacks so Class 8–12 students remember every formula without cramming.",
+      "name": "🧠 Pillar 2: Toppers Hack, Super Memory & 95%+ Board Strategy",
+      "short_label": "Toppers Hack & Memory",
+      "description": "Active recall tricks, super-memory techniques, and topper study hacks so Class 8–12 students lock every formula without cramming.",
       "default_visual_theme": "BRIGHT_CLASSROOM_3D_MODEL",
       "starter_topics": [
         {
-          "title": "Why Students Blank Out in the Exam Hall — The 3X Active Recall Trick in 3D",
+          "title": "Why Students Blank Out in the Exam Hall — The 3X Active Recall Method",
           "exam_track": "Class 10 & 12 Board Exams (CBSE & ICSE)",
           "thumb_hook": "STOP BLANKING OUT!",
           "short_hook": "3X MEMORY HACK!",
@@ -63,50 +63,50 @@
           "exam_track": "Class 8–12 CBSE & ICSE Board Prep",
           "thumb_hook": "NEVER FORGET!",
           "short_hook": "1-3-7 FORMULA HACK",
-          "why_viral": "Simple visual calendar + 3D brain pathway model students can apply tonight."
+          "why_viral": "Simple visual spaced-repetition calendar students can apply tonight."
         },
         {
-          "title": "How to Score 95%+ in Class 10 Science & Maths Using the 3-Colour NCERT Mistake Notebook",
+          "title": "How to Score 95%+ in Class 10 Science & Maths Using the 3-Colour Mistake Notebook",
           "exam_track": "CBSE & ICSE Class 10 Board Toppers",
           "thumb_hook": "SCORE 95%+ EASY!",
           "short_hook": "3-COLOUR NOTEBOOK",
-          "why_viral": "Practical, colorful study desk 3D breakdown tailored specifically for Class 10 board aspirants."
+          "why_viral": "Practical, colorful study desk breakdown tailored specifically for Class 10 board aspirants."
         }
       ]
     },
     {
       "id": "pyq_exam_traps_shorts",
-      "name": "⚡ Pillar 3: 60-Second Board Exam Traps, Sign-Convention Hacks & Quizzes",
-      "short_label": "60s Exam Traps & Hacks",
-      "description": "Fast, colourful 3D visual fixes for the silly mistakes that cost Class 9–12 students easy marks in Physics, Chemistry, Bio & Maths.",
+      "name": "⚡ Pillar 3: Exam Tricks, 5-Second Shortcuts & Sign-Convention Hacks",
+      "short_label": "Exam Tricks & Shortcuts",
+      "description": "Fast, colourful visual shortcuts for the silly mistakes that cost Class 8–12 students easy marks in Maths, Physics, Chemistry & Biology.",
       "default_visual_theme": "COLORFUL_3D_SCIENCE_CUTAWAY",
       "starter_topics": [
         {
-          "title": "Concave vs Convex Mirror & Lens Sign Convention Hack — Never Lose Marks on +/- Signs!",
+          "title": "Concave vs Convex Mirror & Lens Sign Convention Trick — Never Lose Marks on +/- Signs!",
           "exam_track": "Class 10 CBSE & ICSE Light — Reflection & Refraction",
           "thumb_hook": "+ OR - SIGN TRAP!",
           "short_hook": "MIRROR SIGN HACK!",
-          "why_viral": "#1 numerical mistake in Class 10 Light chapter — solved forever with a simple 3D number-line model."
+          "why_viral": "#1 numerical mistake in Class 10 Light chapter — solved forever with a simple number-line trick."
         },
         {
-          "title": "Roasting vs Calcination & Reactivity Series Trick in 3D — 3 Marks Guaranteed in 60 Seconds",
+          "title": "Roasting vs Calcination & Reactivity Series Trick — 3 Marks Guaranteed in 60 Seconds",
           "exam_track": "Class 10 CBSE & ICSE Chemistry (Metals & Non-Metals)",
           "thumb_hook": "EASY 3 MARKS!",
           "short_hook": "METALS MEMORY HACK",
-          "why_viral": "High-scoring board chemistry confusion solved with colorful 3D ore models and a funny mnemonic."
+          "why_viral": "High-scoring board chemistry confusion solved with colorful ore models and a funny mnemonic."
         },
         {
-          "title": "Trigonometry Table in 10 Seconds Using Your Left Hand in 3D — Class 10 Maths Magic Hack",
+          "title": "Trigonometry Table in 10 Seconds Using Your Left Hand — Class 10 Maths Magic Trick",
           "exam_track": "Class 10 CBSE & ICSE Mathematics",
           "thumb_hook": "5-FINGER TRIG HACK!",
           "short_hook": "SIN COS IN 5 SEC!",
-          "why_viral": "Visual 3D hand-angle trick for 0°, 30°, 45°, 60°, 90° goes massively viral among Class 10 students."
+          "why_viral": "Visual hand-angle shortcut for 0°, 30°, 45°, 60°, 90° goes massively viral among Class 10 students."
         }
       ]
     }
   ],
   "exam_tracks": [
-    "CBSE & ICSE Class 10 (Board Science & Maths — Easy 3D Visuals)",
+    "CBSE & ICSE Class 10 (Complete Board Syllabus & Tricks)",
     "CBSE & ICSE Class 8, 9 & 10 Foundation (All Subjects)",
     "All Students (Class 8–12 • CBSE & ICSE/ISC • JEE & NEET)",
     "CBSE & ISC Class 11–12 + JEE Mains & Advanced (Physics • Chem • Maths)",

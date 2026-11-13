@@ -1,0 +1,928 @@
+{
+  "boards": [
+    "CBSE",
+    "ICSE"
+  ],
+  "classes": [
+    "Class 10",
+    "Class 9",
+    "Class 8",
+    "Class 11",
+    "Class 12"
+  ],
+  "duration_badges": [
+    "6 Mins",
+    "5 Mins",
+    "8 Mins",
+    "10 Mins",
+    "15 Mins"
+  ],
+  "curriculum": {
+    "CBSE": {
+      "Class 10": {
+        "Mathematics": [
+          "Real Numbers",
+          "Polynomials",
+          "Pair of Linear Equations in Two Variables",
+          "Quadratic Equations",
+          "Arithmetic Progressions",
+          "Triangles",
+          "Coordinate Geometry",
+          "Introduction to Trigonometry",
+          "Heights and Distances",
+          "Circles",
+          "Areas Related to Circles",
+          "Surface Areas and Volumes",
+          "Statistics",
+          "Probability"
+        ],
+        "Physics": [
+          "Light — Reflection and Refraction",
+          "The Human Eye and the Colourful World",
+          "Electricity",
+          "Magnetic Effects of Electric Current"
+        ],
+        "Chemistry": [
+          "Chemical Reactions and Equations",
+          "Acids, Bases and Salts",
+          "Metals and Non-Metals",
+          "Carbon and Its Compounds"
+        ],
+        "Biology": [
+          "Life Processes",
+          "Control and Coordination",
+          "How Do Organisms Reproduce",
+          "Heredity",
+          "Our Environment"
+        ],
+        "Computer Science & AI": [
+          "Communication and Self-Management Skills",
+          "Python Programming Fundamentals",
+          "Artificial Intelligence Project Cycle",
+          "Data Science and Computer Vision Basics",
+          "Cyber Safety and Networking"
+        ],
+        "History & Civics": [
+          "The Rise of Nationalism in Europe",
+          "Nationalism in India",
+          "The Making of a Global World",
+          "Print Culture and the Modern World",
+          "Power Sharing and Federalism",
+          "Political Parties and Outcomes of Democracy"
+        ],
+        "Geography": [
+          "Resources and Development",
+          "Forest and Wildlife Resources",
+          "Water Resources",
+          "Agriculture",
+          "Minerals and Energy Resources",
+          "Manufacturing Industries",
+          "Lifelines of National Economy"
+        ],
+        "Economics": [
+          "Development",
+          "Sectors of the Indian Economy",
+          "Money and Credit",
+          "Globalisation and the Indian Economy"
+        ],
+        "English": [
+          "Tenses and Subject-Verb Concord",
+          "Modals and Determiners",
+          "Reported Speech (Direct and Indirect)",
+          "Analytical Paragraph and Formal Letter Writing",
+          "Unseen Comprehension Hacks"
+        ]
+      },
+      "Class 9": {
+        "Mathematics": [
+          "Number Systems",
+          "Polynomials",
+          "Coordinate Geometry",
+          "Linear Equations in Two Variables",
+          "Introduction to Euclid's Geometry",
+          "Lines and Angles",
+          "Triangles",
+          "Quadrilaterals",
+          "Circles",
+          "Heron's Formula",
+          "Surface Areas and Volumes",
+          "Statistics"
+        ],
+        "Physics": [
+          "Motion",
+          "Force and Laws of Motion",
+          "Gravitation",
+          "Work and Energy",
+          "Sound"
+        ],
+        "Chemistry": [
+          "Matter in Our Surroundings",
+          "Is Matter Around Us Pure",
+          "Atoms and Molecules",
+          "Structure of the Atom"
+        ],
+        "Biology": [
+          "The Fundamental Unit of Life (Cell)",
+          "Tissues",
+          "Improvement in Food Resources"
+        ],
+        "Computer Science & AI": [
+          "Computer System Organisation",
+          "Introduction to Python and Variables",
+          "Conditional and Looping Statements",
+          "Introduction to Artificial Intelligence",
+          "Cyber Security Essentials"
+        ],
+        "History & Civics": [
+          "The French Revolution",
+          "Socialism in Europe and the Russian Revolution",
+          "Nazism and the Rise of Hitler",
+          "What is Democracy and Constitutional Design",
+          "Electoral Politics and Working of Institutions"
+        ],
+        "Geography": [
+          "India — Size and Location",
+          "Physical Features of India",
+          "Drainage",
+          "Climate",
+          "Natural Vegetation and Wildlife",
+          "Population"
+        ],
+        "Economics": [
+          "The Story of Village Palampur",
+          "People as Resource",
+          "Poverty as a Challenge",
+          "Food Security in India"
+        ],
+        "English": [
+          "Tenses and Modals Complete Rules",
+          "Subject-Verb Concord and Determiners",
+          "Reported Speech Made Easy",
+          "Descriptive Paragraph and Story Writing"
+        ]
+      },
+      "Class 8": {
+        "Mathematics": [
+          "Rational Numbers",
+          "Linear Equations in One Variable",
+          "Understanding Quadrilaterals",
+          "Data Handling",
+          "Squares and Square Roots",
+          "Cubes and Cube Roots",
+          "Comparing Quantities",
+          "Algebraic Expressions and Identities",
+          "Mensuration",
+          "Exponents and Powers",
+          "Direct and Inverse Proportions",
+          "Factorisation",
+          "Introduction to Graphs"
+        ],
+        "Physics": [
+          "Force and Pressure",
+          "Friction",
+          "Sound",
+          "Chemical Effects of Electric Current",
+          "Some Natural Phenomena",
+          "Light"
+        ],
+        "Chemistry": [
+          "Coal and Petroleum",
+          "Combustion and Flame"
+        ],
+        "Biology": [
+          "Crop Production and Management",
+          "Microorganisms — Friend and Foe",
+          "Conservation of Plants and Animals",
+          "Reproduction in Animals",
+          "Reaching the Age of Adolescence"
+        ],
+        "Computer Science & AI": [
+          "Networking and Cloud Computing",
+          "HTML and CSS Web Design Basics",
+          "Introduction to Coding in Python",
+          "Domains of Artificial Intelligence"
+        ],
+        "History & Civics": [
+          "From Trade to Territory",
+          "Ruling the Countryside",
+          "When People Rebel — 1857 and After",
+          "The Making of the National Movement",
+          "The Indian Constitution and Secularism",
+          "Parliament and the Judiciary"
+        ],
+        "Geography": [
+          "Resources",
+          "Land, Soil, Water and Natural Vegetation",
+          "Agriculture",
+          "Industries",
+          "Human Resources"
+        ],
+        "Economics": [
+          "Public Facilities and Economic Presence of Government",
+          "Markets Around Us and Rural Livelihoods"
+        ],
+        "English": [
+          "Parts of Speech and Tenses",
+          "Active and Passive Voice",
+          "Direct and Indirect Speech",
+          "Notice, Message and Formal Letter Writing"
+        ]
+      },
+      "Class 11": {
+        "Mathematics": [
+          "Sets",
+          "Relations and Functions",
+          "Trigonometric Functions",
+          "Complex Numbers and Quadratic Equations",
+          "Linear Inequalities",
+          "Permutations and Combinations",
+          "Binomial Theorem",
+          "Sequences and Series",
+          "Straight Lines",
+          "Conic Sections",
+          "Introduction to Three Dimensional Geometry",
+          "Limits and Derivatives",
+          "Statistics",
+          "Probability"
+        ],
+        "Physics": [
+          "Units and Measurements",
+          "Motion in a Straight Line",
+          "Motion in a Plane",
+          "Laws of Motion",
+          "Work, Energy and Power",
+          "System of Particles and Rotational Motion",
+          "Gravitation",
+          "Mechanical Properties of Solids",
+          "Mechanical Properties of Fluids",
+          "Thermal Properties of Matter",
+          "Thermodynamics",
+          "Kinetic Theory",
+          "Oscillations",
+          "Waves"
+        ],
+        "Chemistry": [
+          "Some Basic Concepts of Chemistry",
+          "Structure of Atom",
+          "Classification of Elements and Periodicity",
+          "Chemical Bonding and Molecular Structure",
+          "Chemical Thermodynamics",
+          "Equilibrium",
+          "Redox Reactions",
+          "Organic Chemistry — Basic Principles and Techniques",
+          "Hydrocarbons"
+        ],
+        "Biology": [
+          "The Living World",
+          "Biological Classification",
+          "Plant Kingdom",
+          "Animal Kingdom",
+          "Morphology of Flowering Plants",
+          "Anatomy of Flowering Plants",
+          "Structural Organisation in Animals",
+          "Cell — The Unit of Life",
+          "Biomolecules",
+          "Cell Cycle and Cell Division",
+          "Photosynthesis in Higher Plants",
+          "Respiration in Plants",
+          "Plant Growth and Development",
+          "Breathing and Exchange of Gases",
+          "Body Fluids and Circulation",
+          "Excretory Products and Their Elimination",
+          "Locomotion and Movement",
+          "Neural Control and Coordination",
+          "Chemical Coordination and Integration"
+        ],
+        "Computer Science & AI": [
+          "Computer Systems and Boolean Logic",
+          "Number Systems and Encoding Schemes",
+          "Python Basics and Flow of Control",
+          "Strings, Lists, Tuples and Dictionaries",
+          "Society, Law and Ethics in Digital Era"
+        ],
+        "History & Civics": [
+          "Writing and City Life",
+          "An Empire Across Three Continents",
+          "Nomadic Empires and Changing Cultural Traditions",
+          "Indian Constitution — Rights, Election and Executive",
+          "Legislature, Judiciary and Federalism"
+        ],
+        "Geography": [
+          "Geography as a Discipline and Origin of Earth",
+          "Interior of the Earth and Landforms",
+          "Composition and Structure of Atmosphere",
+          "Oceans and Movements of Ocean Water",
+          "India — Physical Environment and Climate"
+        ],
+        "Economics": [
+          "Introduction to Microeconomics and Consumer Equilibrium",
+          "Demand and Elasticity of Demand",
+          "Production Function, Cost and Revenue",
+          "Forms of Market and Price Determination",
+          "Statistics — Measures of Central Tendency and Correlation"
+        ],
+        "English": [
+          "Note Making and Summarising",
+          "Classified Advertisements and Poster Writing",
+          "Speech and Debate Writing",
+          "Grammar — Integrated Clauses and Tenses"
+        ]
+      },
+      "Class 12": {
+        "Mathematics": [
+          "Relations and Functions",
+          "Inverse Trigonometric Functions",
+          "Matrices",
+          "Determinants",
+          "Continuity and Differentiability",
+          "Application of Derivatives",
+          "Integrals",
+          "Application of Integrals",
+          "Differential Equations",
+          "Vector Algebra",
+          "Three Dimensional Geometry",
+          "Linear Programming",
+          "Probability"
+        ],
+        "Physics": [
+          "Electric Charges and Fields",
+          "Electrostatic Potential and Capacitance",
+          "Current Electricity",
+          "Moving Charges and Magnetism",
+          "Magnetism and Matter",
+          "Electromagnetic Induction",
+          "Alternating Current",
+          "Electromagnetic Waves",
+          "Ray Optics and Optical Instruments",
+          "Wave Optics",
+          "Dual Nature of Radiation and Matter",
+          "Atoms",
+          "Nuclei",
+          "Semiconductor Electronics"
+        ],
+        "Chemistry": [
+          "Solutions",
+          "Electrochemistry",
+          "Chemical Kinetics",
+          "The d- and f-Block Elements",
+          "Coordination Compounds",
+          "Haloalkanes and Haloarenes",
+          "Alcohols, Phenols and Ethers",
+          "Aldehydes, Ketones and Carboxylic Acids",
+          "Amines",
+          "Biomolecules"
+        ],
+        "Biology": [
+          "Sexual Reproduction in Flowering Plants",
+          "Human Reproduction",
+          "Reproductive Health",
+          "Principles of Inheritance and Variation",
+          "Molecular Basis of Inheritance",
+          "Evolution",
+          "Human Health and Disease",
+          "Microbes in Human Welfare",
+          "Biotechnology — Principles and Processes",
+          "Biotechnology and Its Applications",
+          "Organisms and Populations",
+          "Ecosystem",
+          "Biodiversity and Conservation"
+        ],
+        "Computer Science & AI": [
+          "Functions and Exception Handling in Python",
+          "File Handling (Text, Binary and CSV Files)",
+          "Data Structures — Stack in Python",
+          "Computer Networks and Protocols",
+          "Relational Databases and SQL Complete"
+        ],
+        "History & Civics": [
+          "Bricks, Beads and Bones (Harappan Civilisation)",
+          "Kings, Farmers and Towns",
+          "Bhakti-Sufi Traditions and Vijayanagara",
+          "Mahatma Gandhi and the Nationalist Movement",
+          "Challenges of Nation Building and Indian Politics"
+        ],
+        "Geography": [
+          "Human Geography and World Population",
+          "Primary, Secondary and Tertiary Activities",
+          "Transport, Communication and International Trade",
+          "India — People, Resources and Planning"
+        ],
+        "Economics": [
+          "National Income and Related Aggregates",
+          "Money and Banking",
+          "Determination of Income and Employment",
+          "Government Budget and Balance of Payments",
+          "Indian Economy on the Eve of Independence to 1991 Reforms",
+          "Current Challenges Facing Indian Economy"
+        ],
+        "English": [
+          "Notice and Formal/Informal Invitations",
+          "Letter to the Editor and Job Application",
+          "Article and Report Writing Format",
+          "Reading Comprehension High-Score Strategy"
+        ]
+      }
+    },
+    "ICSE": {
+      "Class 10": {
+        "Mathematics": [
+          "Goods and Services Tax (GST)",
+          "Banking (Recurring Deposit Accounts)",
+          "Shares and Dividends",
+          "Linear Inequations",
+          "Quadratic Equations in One Variable",
+          "Ratio and Proportion",
+          "Remainder and Factor Theorems",
+          "Matrices",
+          "Arithmetic and Geometric Progression",
+          "Reflection",
+          "Section and Mid-Point Formula",
+          "Equation of a Straight Line",
+          "Similarity of Triangles",
+          "Loci",
+          "Circles — Tangents and Intersecting Chords",
+          "Mensuration (Cylinder, Cone and Sphere)",
+          "Trigonometrical Identities",
+          "Heights and Distances",
+          "Statistics (Mean, Median, Mode and Ogive)",
+          "Probability"
+        ],
+        "Physics": [
+          "Force, Torque and Centre of Gravity",
+          "Work, Energy and Power",
+          "Machines (Levers and Pulleys)",
+          "Refraction of Light at Plane Surfaces",
+          "Refraction Through a Lens",
+          "Spectrum and Dispersion of Light",
+          "Sound and Echoes",
+          "Current Electricity",
+          "Household Circuits",
+          "Electromagnetism",
+          "Calorimetry",
+          "Radioactivity"
+        ],
+        "Chemistry": [
+          "Periodic Table and Periodic Properties",
+          "Chemical Bonding",
+          "Acids, Bases and Salts",
+          "Analytical Chemistry",
+          "Mole Concept and Stoichiometry",
+          "Electrolysis",
+          "Metallurgy",
+          "Study of Compounds — Hydrogen Chloride",
+          "Study of Compounds — Ammonia",
+          "Study of Compounds — Nitric Acid",
+          "Study of Compounds — Sulphuric Acid",
+          "Organic Chemistry"
+        ],
+        "Biology": [
+          "Cell Cycle and Cell Division",
+          "Structure of Chromosomes and Genetics",
+          "Absorption by Roots",
+          "Transpiration",
+          "Photosynthesis",
+          "Chemical Coordination in Plants",
+          "The Circulatory System",
+          "The Excretory System",
+          "The Nervous System and Sense Organs",
+          "The Endocrine System",
+          "The Reproductive System",
+          "Population and Human Evolution",
+          "Pollution and Environment"
+        ],
+        "Computer Science & AI": [
+          "Communication and Self-Management Skills",
+          "Python Programming Fundamentals",
+          "Artificial Intelligence Project Cycle",
+          "Data Science and Computer Vision Basics",
+          "Cyber Safety and Networking"
+        ],
+        "History & Civics": [
+          "The Rise of Nationalism in Europe",
+          "Nationalism in India",
+          "The Making of a Global World",
+          "Print Culture and the Modern World",
+          "Power Sharing and Federalism",
+          "Political Parties and Outcomes of Democracy"
+        ],
+        "Geography": [
+          "Resources and Development",
+          "Forest and Wildlife Resources",
+          "Water Resources",
+          "Agriculture",
+          "Minerals and Energy Resources",
+          "Manufacturing Industries",
+          "Lifelines of National Economy"
+        ],
+        "Economics": [
+          "Development",
+          "Sectors of the Indian Economy",
+          "Money and Credit",
+          "Globalisation and the Indian Economy"
+        ],
+        "English": [
+          "Tenses and Subject-Verb Concord",
+          "Modals and Determiners",
+          "Reported Speech (Direct and Indirect)",
+          "Analytical Paragraph and Formal Letter Writing",
+          "Unseen Comprehension Hacks"
+        ]
+      },
+      "Class 9": {
+        "Mathematics": [
+          "Rational and Irrational Numbers",
+          "Compound Interest",
+          "Expansions",
+          "Factorisation",
+          "Simultaneous Linear Equations",
+          "Indices (Exponents)",
+          "Logarithms",
+          "Triangles and Congruency",
+          "Mid-Point and Intercept Theorem",
+          "Pythagoras Theorem",
+          "Rectilinear Figures (Quadrilaterals)",
+          "Circle",
+          "Statistics",
+          "Mensuration",
+          "Trigonometrical Ratios and Standard Angles",
+          "Coordinate Geometry and Distance Formula"
+        ],
+        "Physics": [
+          "Measurements and Experimentation",
+          "Motion in One Dimension",
+          "Laws of Motion",
+          "Pressure in Fluids and Atmospheric Pressure",
+          "Upthrust in Fluids and Archimedes' Principle",
+          "Heat and Energy",
+          "Reflection of Light",
+          "Propagation of Sound Waves",
+          "Current Electricity",
+          "Magnetism"
+        ],
+        "Chemistry": [
+          "The Language of Chemistry",
+          "Chemical Changes and Reactions",
+          "Water",
+          "Atomic Structure and Chemical Bonding",
+          "The Periodic Table",
+          "Study of the First Element — Hydrogen",
+          "Study of Gas Laws",
+          "Atmospheric Pollution"
+        ],
+        "Biology": [
+          "Cell — The Unit of Life",
+          "Tissues — Plant and Animal",
+          "The Flower, Pollination and Fertilisation",
+          "Seeds — Structure and Germination",
+          "Respiration in Plants",
+          "Five Kingdom Classification",
+          "Economic Importance of Bacteria and Fungi",
+          "Nutrition and Digestive System",
+          "Skeleton — Movement and Locomotion",
+          "The Respiratory System",
+          "Hygiene and Diseases"
+        ],
+        "Computer Science & AI": [
+          "Computer System Organisation",
+          "Introduction to Python and Variables",
+          "Conditional and Looping Statements",
+          "Introduction to Artificial Intelligence",
+          "Cyber Security Essentials"
+        ],
+        "History & Civics": [
+          "The French Revolution",
+          "Socialism in Europe and the Russian Revolution",
+          "Nazism and the Rise of Hitler",
+          "What is Democracy and Constitutional Design",
+          "Electoral Politics and Working of Institutions"
+        ],
+        "Geography": [
+          "India — Size and Location",
+          "Physical Features of India",
+          "Drainage",
+          "Climate",
+          "Natural Vegetation and Wildlife",
+          "Population"
+        ],
+        "Economics": [
+          "The Story of Village Palampur",
+          "People as Resource",
+          "Poverty as a Challenge",
+          "Food Security in India"
+        ],
+        "English": [
+          "Tenses and Modals Complete Rules",
+          "Subject-Verb Concord and Determiners",
+          "Reported Speech Made Easy",
+          "Descriptive Paragraph and Story Writing"
+        ]
+      },
+      "Class 8": {
+        "Mathematics": [
+          "Rational Numbers",
+          "Exponents and Powers",
+          "Squares, Cubes and Roots",
+          "Sets",
+          "Percent, Profit, Loss and Discount",
+          "Simple and Compound Interest",
+          "Direct and Inverse Variations",
+          "Algebraic Expressions and Factorisation",
+          "Linear Equations and Inequations",
+          "Quadrilaterals and Circles",
+          "Symmetry, Reflection and Rotation",
+          "Perimeter and Area of Plane Figures",
+          "Volume and Surface Area of Solids",
+          "Data Handling and Probability"
+        ],
+        "Physics": [
+          "Matter — Kinetic Theory",
+          "Physical Quantities and Density Measurement",
+          "Force and Pressure",
+          "Energy, Work and Power",
+          "Light Energy — Refraction and Curved Mirrors",
+          "Heat Transfer",
+          "Sound",
+          "Electricity and Household Safety"
+        ],
+        "Chemistry": [
+          "Matter",
+          "Physical and Chemical Changes",
+          "Elements, Compounds and Mixtures",
+          "Atomic Structure",
+          "Language of Chemistry",
+          "Chemical Reactions",
+          "Hydrogen",
+          "Water",
+          "Carbon and Its Allotropes"
+        ],
+        "Biology": [
+          "Transport of Food and Minerals in Plants",
+          "Reproduction in Plants and Animals",
+          "Ecosystems",
+          "Endocrine System and Adolescence",
+          "The Circulatory System",
+          "The Nervous System",
+          "Diseases and First Aid",
+          "Food Production"
+        ],
+        "Computer Science & AI": [
+          "Networking and Cloud Computing",
+          "HTML and CSS Web Design Basics",
+          "Introduction to Coding in Python",
+          "Domains of Artificial Intelligence"
+        ],
+        "History & Civics": [
+          "From Trade to Territory",
+          "Ruling the Countryside",
+          "When People Rebel — 1857 and After",
+          "The Making of the National Movement",
+          "The Indian Constitution and Secularism",
+          "Parliament and the Judiciary"
+        ],
+        "Geography": [
+          "Resources",
+          "Land, Soil, Water and Natural Vegetation",
+          "Agriculture",
+          "Industries",
+          "Human Resources"
+        ],
+        "Economics": [
+          "Public Facilities and Economic Presence of Government",
+          "Markets Around Us and Rural Livelihoods"
+        ],
+        "English": [
+          "Parts of Speech and Tenses",
+          "Active and Passive Voice",
+          "Direct and Indirect Speech",
+          "Notice, Message and Formal Letter Writing"
+        ]
+      },
+      "Class 11": {
+        "Mathematics": [
+          "Sets",
+          "Relations and Functions",
+          "Trigonometric Functions",
+          "Complex Numbers and Quadratic Equations",
+          "Linear Inequalities",
+          "Permutations and Combinations",
+          "Binomial Theorem",
+          "Sequences and Series",
+          "Straight Lines",
+          "Conic Sections",
+          "Introduction to Three Dimensional Geometry",
+          "Limits and Derivatives",
+          "Statistics",
+          "Probability"
+        ],
+        "Physics": [
+          "Units and Measurements",
+          "Motion in a Straight Line",
+          "Motion in a Plane",
+          "Laws of Motion",
+          "Work, Energy and Power",
+          "System of Particles and Rotational Motion",
+          "Gravitation",
+          "Mechanical Properties of Solids",
+          "Mechanical Properties of Fluids",
+          "Thermal Properties of Matter",
+          "Thermodynamics",
+          "Kinetic Theory",
+          "Oscillations",
+          "Waves"
+        ],
+        "Chemistry": [
+          "Some Basic Concepts of Chemistry",
+          "Structure of Atom",
+          "Classification of Elements and Periodicity",
+          "Chemical Bonding and Molecular Structure",
+          "Chemical Thermodynamics",
+          "Equilibrium",
+          "Redox Reactions",
+          "Organic Chemistry — Basic Principles and Techniques",
+          "Hydrocarbons"
+        ],
+        "Biology": [
+          "The Living World",
+          "Biological Classification",
+          "Plant Kingdom",
+          "Animal Kingdom",
+          "Morphology of Flowering Plants",
+          "Anatomy of Flowering Plants",
+          "Structural Organisation in Animals",
+          "Cell — The Unit of Life",
+          "Biomolecules",
+          "Cell Cycle and Cell Division",
+          "Photosynthesis in Higher Plants",
+          "Respiration in Plants",
+          "Plant Growth and Development",
+          "Breathing and Exchange of Gases",
+          "Body Fluids and Circulation",
+          "Excretory Products and Their Elimination",
+          "Locomotion and Movement",
+          "Neural Control and Coordination",
+          "Chemical Coordination and Integration"
+        ],
+        "Computer Science & AI": [
+          "Computer Systems and Boolean Logic",
+          "Number Systems and Encoding Schemes",
+          "Python Basics and Flow of Control",
+          "Strings, Lists, Tuples and Dictionaries",
+          "Society, Law and Ethics in Digital Era"
+        ],
+        "History & Civics": [
+          "Writing and City Life",
+          "An Empire Across Three Continents",
+          "Nomadic Empires and Changing Cultural Traditions",
+          "Indian Constitution — Rights, Election and Executive",
+          "Legislature, Judiciary and Federalism"
+        ],
+        "Geography": [
+          "Geography as a Discipline and Origin of Earth",
+          "Interior of the Earth and Landforms",
+          "Composition and Structure of Atmosphere",
+          "Oceans and Movements of Ocean Water",
+          "India — Physical Environment and Climate"
+        ],
+        "Economics": [
+          "Introduction to Microeconomics and Consumer Equilibrium",
+          "Demand and Elasticity of Demand",
+          "Production Function, Cost and Revenue",
+          "Forms of Market and Price Determination",
+          "Statistics — Measures of Central Tendency and Correlation"
+        ],
+        "English": [
+          "Note Making and Summarising",
+          "Classified Advertisements and Poster Writing",
+          "Speech and Debate Writing",
+          "Grammar — Integrated Clauses and Tenses"
+        ]
+      },
+      "Class 12": {
+        "Mathematics": [
+          "Relations and Functions",
+          "Inverse Trigonometric Functions",
+          "Matrices",
+          "Determinants",
+          "Continuity and Differentiability",
+          "Application of Derivatives",
+          "Integrals",
+          "Application of Integrals",
+          "Differential Equations",
+          "Vector Algebra",
+          "Three Dimensional Geometry",
+          "Linear Programming",
+          "Probability"
+        ],
+        "Physics": [
+          "Electric Charges and Fields",
+          "Electrostatic Potential and Capacitance",
+          "Current Electricity",
+          "Moving Charges and Magnetism",
+          "Magnetism and Matter",
+          "Electromagnetic Induction",
+          "Alternating Current",
+          "Electromagnetic Waves",
+          "Ray Optics and Optical Instruments",
+          "Wave Optics",
+          "Dual Nature of Radiation and Matter",
+          "Atoms",
+          "Nuclei",
+          "Semiconductor Electronics"
+        ],
+        "Chemistry": [
+          "Solutions",
+          "Electrochemistry",
+          "Chemical Kinetics",
+          "The d- and f-Block Elements",
+          "Coordination Compounds",
+          "Haloalkanes and Haloarenes",
+          "Alcohols, Phenols and Ethers",
+          "Aldehydes, Ketones and Carboxylic Acids",
+          "Amines",
+          "Biomolecules"
+        ],
+        "Biology": [
+          "Sexual Reproduction in Flowering Plants",
+          "Human Reproduction",
+          "Reproductive Health",
+          "Principles of Inheritance and Variation",
+          "Molecular Basis of Inheritance",
+          "Evolution",
+          "Human Health and Disease",
+          "Microbes in Human Welfare",
+          "Biotechnology — Principles and Processes",
+          "Biotechnology and Its Applications",
+          "Organisms and Populations",
+          "Ecosystem",
+          "Biodiversity and Conservation"
+        ],
+        "Computer Science & AI": [
+          "Functions and Exception Handling in Python",
+          "File Handling (Text, Binary and CSV Files)",
+          "Data Structures — Stack in Python",
+          "Computer Networks and Protocols",
+          "Relational Databases and SQL Complete"
+        ],
+        "History & Civics": [
+          "Bricks, Beads and Bones (Harappan Civilisation)",
+          "Kings, Farmers and Towns",
+          "Bhakti-Sufi Traditions and Vijayanagara",
+          "Mahatma Gandhi and the Nationalist Movement",
+          "Challenges of Nation Building and Indian Politics"
+        ],
+        "Geography": [
+          "Human Geography and World Population",
+          "Primary, Secondary and Tertiary Activities",
+          "Transport, Communication and International Trade",
+          "India — People, Resources and Planning"
+        ],
+        "Economics": [
+          "National Income and Related Aggregates",
+          "Money and Banking",
+          "Determination of Income and Employment",
+          "Government Budget and Balance of Payments",
+          "Indian Economy on the Eve of Independence to 1991 Reforms",
+          "Current Challenges Facing Indian Economy"
+        ],
+        "English": [
+          "Notice and Formal/Informal Invitations",
+          "Letter to the Editor and Job Application",
+          "Article and Report Writing Format",
+          "Reading Comprehension High-Score Strategy"
+        ]
+      }
+    }
+  },
+  "booster_modes": {
+    "toppers_hack": {
+      "label": "🏆 Toppers Hack & 95%+ Study Strategy",
+      "title_pattern": "{chapter} — Toppers Secret Hack to Score Full Marks",
+      "generic_topics": [
+        "How Toppers Score 98% in Board Exams Without Studying 12 Hours",
+        "The 3-Colour Mistake Notebook Hack Every Board Topper Uses",
+        "Last 30 Days Board Exam Timetable & Paper Presentation Strategy",
+        "How to Write Perfect Step-by-Step Answers to Never Lose Half Marks"
+      ]
+    },
+    "exam_tricks": {
+      "label": "⚡ 5-Second Exam Tricks, Shortcuts & Sign Rules",
+      "title_pattern": "{chapter} — 5-Second Exam Tricks & Formula Shortcuts",
+      "generic_topics": [
+        "Trigonometry Table in 10 Seconds Using Your Left Hand",
+        "Concave vs Convex Mirror & Lens Sign Convention Trick",
+        "Fastest Mental Calculation Tricks for Surface Area & Volume Numericals",
+        "Balancing Any Chemical Equation in 15 Seconds Without Trial and Error"
+      ]
+    },
+    "super_memory": {
+      "label": "🧠 Super Memory, Active Recall & Formula Lock",
+      "title_pattern": "{chapter} — Memorize Every Formula in 5 Mins (Super Memory)",
+      "generic_topics": [
+        "The 1-3-7 Spaced Repetition Rule to Remember 100 Formulas Permanently",
+        "Why Students Blank Out in the Exam Hall — The 3X Active Recall Method",
+        "Feynman Technique: Lock Any Tough Chapter Into Long-Term Memory",
+        "Periodic Table & Reactivity Series Funny Mnemonics You Can Never Forget"
+      ]
+    }
+  }
+}

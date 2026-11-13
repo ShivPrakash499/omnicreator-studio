@@ -1,0 +1,72 @@
+{
+  "topic_title": "Heights and Distances in 6 Mins Complete",
+  "pillar_id": "3d_concept_visualizer",
+  "exam_track": "CBSE Class 10 Mathematics",
+  "selected_board": "CBSE",
+  "target_class_label": "Class 10",
+  "target_subject_label": "Mathematics",
+  "selected_chapter": "Heights and Distances",
+  "video_category": "syllabus_chapter",
+  "duration_badge": "6 Mins",
+  "class_badge_text": "CLASS 10 • MATHEMATICS",
+  "voice_mode": "Energetic Indian Mentor — Expressive AI (en-IN)",
+  "visual_theme_key": "BRIGHT_CLASSROOM_3D_MODEL",
+  "project_dir": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete",
+  "title_variations": [
+    "Heights and Distances in 6 Mins Complete",
+    "Class 10 Heights and Distances Full Chapter in 6 Mins",
+    "Master Heights and Distances Fast | CBSE Class 10 Maths"
+  ],
+  "thumb_hook_3words": "6 MINS COMPLETE!",
+  "short_hook_3words": "TRIG TOWER HACK!",
+  "thumb_sub_tagline": "ALL DIAGRAMS + EXAM SHORTCUTS",
+  "thumbnail_16x9_path": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/thumbnail_16x9.jpg",
+  "short_cover_9x16_path": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/short_cover_9x16.jpg",
+  "thumbnail_16x9_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom tabletop model positioned on the RIGHT half of a 16:9 frame, showing a colorful red-and-white toy lighthouse and a small yellow sailboat on a warm cream desk, connected by glowing yellow, red, and royal blue 3D right-triangle laser beams and angle arcs, sunny sky-blue background with clean empty space on the left half for typography, ultra-crisp octane render, zero text, zero letters, zero human faces.",
+  "scenes": [
+    {
+      "scene_id": 1,
+      "headline": "Measure Without Climbing!",
+      "concept_takeaway": "Line of sight and horizontal level form a right triangle to find heights.",
+      "formula_badge": "tan θ = Opposite (Height) / Adjacent (Base)",
+      "quick_tip": "Always draw the horizontal base line first before marking any angle!",
+      "narration": "Wait a second... how do you measure the height of Qutub Minar without climbing it with a giant measuring tape?! Sounds impossible, right? Actually, all you need is a shadow and one tiny angle! Welcome to Heights and Distances—where simple right triangles turn you into a master surveyor!",
+      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a warm cream tabletop with a sunny sky-blue background: a colorful miniature stone tower standing vertically, a bright yellow ruler along the base, and a glowing red 3D arrow shooting diagonally from a toy telescope on the desk to the top of the tower, forming a crisp right-angled triangle with royal blue and yellow 3D beams, zero text, zero numbers, zero human faces.",
+      "google_flow_veo_prompt": "Smooth slow push-in camera on a bright Pixar-style 3D classroom desk model of a miniature tower and toy telescope; a glowing yellow horizontal base beam extends first, followed by a vivid red diagonal line of sight arrow shooting up to the tower top, illuminating a glowing blue angle arc at the base, crisp studio lighting, zero text, zero human faces.",
+      "fallback_plate": "scene_01_16x9.jpg"
+    },
+    {
+      "scene_id": 2,
+      "headline": "Elevation Vs Depression",
+      "concept_takeaway": "Looking up creates Angle of Elevation; looking down creates Depression.",
+      "formula_badge": "Angle of Elevation = Angle of Depression (Alternate)",
+      "quick_tip": "Both angles are ALWAYS measured with the horizontal line, never vertical!",
+      "narration": "Imagine spotting a sixer flying over the cricket stadium! When you tilt your chin up from the flat ground... that's the Angle of Elevation! Now picture looking down from your balcony at a parked bicycle. You look down from the horizontal sky line... and boom! That's the Angle of Depression!",
+      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a sunny cream studio desk: a colorful red-and-white miniature lighthouse on the left and a bright yellow toy boat on a blue acrylic water pad on the right, two parallel horizontal dashed yellow 3D bars at top and bottom, connected by a bold royal blue diagonal 3D arrow showing matching glowing red angle arcs inside the Z-shape, zero text, zero letters, zero human faces.",
+      "google_flow_veo_prompt": "Dynamic side-angle pan across a bright 3D tabletop lighthouse and toy boat model; two glowing yellow horizontal reference bars slide out from the lighthouse top and boat base, then a royal blue diagonal sight beam connects them while two matching red alternate interior angle arcs pulse brightly, zero text, zero human faces.",
+      "fallback_plate": "scene_02_16x9.jpg"
+    },
+    {
+      "scene_id": 3,
+      "headline": "The Golden Ratios",
+      "concept_takeaway": "Use 30°, 45°, and 60° side ratios to solve board problems in seconds.",
+      "formula_badge": "tan 30° = 1/√3 | tan 45° = 1 | tan 60° = √3",
+      "quick_tip": "At 45°, Height always equals Base distance! Instant 1-second answer!",
+      "narration": "Want to solve five-mark board numericals in ten seconds flat?! Forget long calculations! Just memorize three magic triangles! At forty-five degrees, height and shadow are exact twins—one to one! At sixty degrees, height becomes root-three times the base! Spot the angle, plug the ratio, and boom—full marks!",
+      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a warm cream studio tabletop: three colorful translucent geometric right-triangle blocks arranged side by side in yellow, royal blue, and coral red representing 30, 45, and 60 degree slopes, next to a bright red cricket ball and brass compass, with glowing 3D arrows highlighting vertical height versus horizontal base proportions, sunny sky-blue background, zero text, zero numbers, zero human faces.",
+      "google_flow_veo_prompt": "Orbiting camera around three colorful 3D right-triangle blocks on a bright classroom desk; the middle 45-degree yellow triangle glows as its vertical and horizontal edges pulse in sync to show equal length, while the tall 60-degree red triangle stretches upward with a glowing vertical arrow, zero text, zero human faces.",
+      "fallback_plate": "scene_03_16x9.jpg"
+    },
+    {
+      "scene_id": 4,
+      "headline": "Topper Exam Trap!",
+      "concept_takeaway": "Subtract observer height first and never mark depression with the wall.",
+      "formula_badge": "Total Tower Height = h (Triangle Height) + Observer Height",
+      "quick_tip": "Trap Alert: Never mark Angle of Depression between line of sight & tower!",
+      "narration": "Hold on! Don't fall into the number-one CBSE exam trap! Ninety percent of students mark the Angle of Depression against the vertical building wall. Wrong! Always draw a dotted sky-horizontal line first! And if a tall observer is given... never forget to add their height at the end!",
+      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a sunny studio desk: a miniature yellow tripod stand positioned in front of a tall colorful toy clock tower, a glowing horizontal yellow beam stretching from the top of the tripod to the tower middle, creating an upper blue right triangle and a lower green rectangular height offset, with a bright green checkmark badge and red cross marker on the vertical wall angle, zero text, zero letters, zero human faces.",
+      "google_flow_veo_prompt": "Crisp zoom-in on a bright 3D tabletop model of a yellow tripod facing a colorful clock tower; a glowing yellow horizontal eye-level beam slices across the tower, separating the upper glowing blue right-triangle from the lower green base rectangle, pulsing clearly to highlight the added tripod height, zero text, zero human faces.",
+      "fallback_plate": "scene_04_16x9.jpg"
+    }
+  ]
+}

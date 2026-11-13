@@ -1,12 +1,12 @@
 {
-  "channel_name": "TopperLab 3D",
+  "channel_name": "TopperLab",
   "channel_handle": "@TopperLab3D",
   "youtube_channel_id": "UCuYzy1OoXmzIdjRP8cgUmRw",
   "youtube_channel_url": "https://www.youtube.com/channel/UCuYzy1OoXmzIdjRP8cgUmRw",
   "owner_google_email": "jwala4work@gmail.com",
   "gcp_project_email": "jwalashiva@gmail.com",
-  "cohort": "India High-School Students (Class 8–12 • Focus: Class 10 CBSE & ICSE • JEE & NEET)",
-  "positioning_tagline": "See Science in Friendly 3D — Animated Formulas, Topper Exam Hacks & Real-Life Models",
+  "cohort": "India High-School Students (Class 8–12 • CBSE & ICSE • JEE & NEET)",
+  "positioning_tagline": "Complete Chapters in Minutes — Animated Formulas, Topper Exam Hacks & Visual Models",
   "faceless_mode": true,
   "default_voice_mode": "Energetic Indian Mentor — Expressive AI (en-IN)",
   "voice_presets": {
@@ -50,11 +50,11 @@
     }
   },
   "default_visual_theme": "BRIGHT_CLASSROOM_3D_MODEL",
-  "channel_seo_description": "Welcome to TopperLab 3D (@TopperLab3D) — where Class 8–12 CBSE, ICSE, JEE, and NEET concepts come alive as bright, easy-to-understand 3D models!\n\nBoring 2D textbook diagrams make simple science look scary. At TopperLab 3D, we turn every chapter into relatable 3D classroom models with animated Fly-In Formulas, Topper Quick Tips, and 4-Mark Board Exam Hacks.\n\n🎒 Special Series for CBSE & ICSE Class 8, 9, 10, 11 & 12!\n📄 Grab Free 1-Page Formula Sheets & Active-Recall Trackers in Every Video Description.",
-  "channel_keywords": "TopperLab 3D, Class 10 Science 3D, CBSE Class 10 Physics 3D, ICSE Class 10 Science, 3D NCERT Concepts, Board Exam Quick Tips, Science Formula Hacks, Class 9 Class 10 Maths Science, JEE NEET 3D Foundation",
+  "channel_seo_description": "Welcome to TopperLab — complete Class 8–12 CBSE, ICSE, JEE, and NEET chapters explained in minutes with crystal-clear visual models, animated Fly-In Formulas, Topper Quick Tips, and Board Exam Hacks!\n\n📘 Foundation Playlists for CBSE & ICSE Class 8, 9, 10, 11 & 12 (All Subjects)\n⚡ Toppers Hacks, Exam Shortcuts & Super Memory Boosters\n📄 Free 1-Page Formula Sheets & Active-Recall Trackers in Every Video Description.",
+  "channel_keywords": "TopperLab, Class 10 Maths, Class 10 Science, CBSE Class 10, ICSE Class 10, Complete Chapter Revision, One Shot Revision, Board Exam Tricks, Toppers Hack, Super Memory, Class 8 9 10 11 12, JEE NEET Foundation",
   "default_resource_links": [
     {
-      "category": "📄 1-Page 3D Formula & Quick-Tip Cheat Sheet (PDF)",
+      "category": "📄 1-Page Formula & Quick-Tip Cheat Sheet (PDF)",
       "label": "Download Free 1-Page Formula & Exam Hack Sheet (PDF)",
       "url": "https://drive.google.com/drive/folders/1vJh5qXFnEnkEcetL2qXeyYh_FWMMNHR1"
     },

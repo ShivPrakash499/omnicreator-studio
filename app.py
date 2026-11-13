@@ -31,24 +31,29 @@ from studio_engine import (
     CURRICULUM_CLASSES,
     SCRIPT_MODEL_PRESETS,
     apply_consistent_topperlab_thumbnail_branding,
-    infer_class_badge_label,
     build_youtube_auth_url,
     check_gemini_api_key_health,
     check_youtube_playlist_scope,
     exchange_youtube_auth_code,
     fetch_live_youtube_channel_videos,
+    format_booster_video_title,
+    format_syllabus_chapter_title,
     generate_dual_script_and_thumbnails,
     generate_student_seo_bundle,
     generate_topperlab_branding,
     generate_veo_clip_via_api,
     generate_viral_highschool_topics,
     get_active_script_model,
+    get_curriculum_chapters,
+    get_curriculum_subjects,
     get_gemini_api_key,
     get_youtube_oauth_status,
     has_vertex_adc,
+    infer_class_badge_label,
     list_live_youtube_playlists,
     list_publish_queue,
     load_active_channel,
+    load_curriculum_catalog,
     load_meta_credentials,
     load_pillars_config,
     publish_or_schedule_deliverable,
@@ -59,12 +64,13 @@ from studio_engine import (
     save_youtube_client_secret,
     set_active_script_model,
     set_runtime_gemini_api_key,
+    strip_3d_text,
     sync_cbse_icse_playlists_and_sections,
     update_single_faceless_scene,
 )
 
 st.set_page_config(
-    page_title="TopperLab 3D Studio | Faceless 3D STEM & Exam Engine",
+    page_title="TopperLab Studio | Complete Syllabus Chapters & Exam Boosters",
     page_icon="🔬",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -212,9 +218,12 @@ def _load_portable_json(path: Path):
     return _fix(raw_obj)
 
 
+curriculum_catalog = load_curriculum_catalog()
+
 # Pre-load flagship sample project if already rendered on disk
-_sample_slug = "why-spinning-gyroscopes-defy-gravity-rotational-motion-t"
-_sample_dir = ROOT_DIR / "workspaces" / "topperlab_3d" / _sample_slug
+_sample_dir = ROOT_DIR / "workspaces" / "topperlab_3d" / "heights-and-distances-in-6-mins-complete"
+if not (_sample_dir / "topperlab_draft_state.json").exists():
+    _sample_dir = ROOT_DIR / "workspaces" / "topperlab_3d" / "why-spinning-gyroscopes-defy-gravity-rotational-motion-t"
 _preloaded_bp = _load_portable_json(_sample_dir / "topperlab_blueprint.json")
 _preloaded_draft = _load_portable_json(_sample_dir / "topperlab_draft_state.json")
 
@@ -224,15 +233,18 @@ for k, default_val in [
     ("voice_mode", channel_cfg.get("default_voice_mode", "Energetic Indian Mentor — Expressive AI (en-IN)")),
     ("visual_theme_key", channel_cfg.get("default_visual_theme", "BRIGHT_CLASSROOM_3D_MODEL")),
     ("bgm_enabled", True),
+    ("playlist_track_mode", "📘 Foundation Syllabus Chapter (Complete Chapter Playlist)"),
+    ("selected_board", "CBSE"),
     ("target_class_label", "Class 10"),
-    ("target_subject_label", "Science"),
+    ("target_subject_label", "Mathematics"),
+    ("selected_chapter", "Heights and Distances"),
+    ("duration_badge", "6 Mins"),
+    ("video_category", "syllabus_chapter"),
+    ("booster_mode_key", "toppers_hack"),
     ("selected_pillar_id", "3d_concept_visualizer"),
-    ("selected_exam_track", pillars_cfg["exam_tracks"][0]),
-    ("generated_topics", pillars_cfg["pillars"][0]["starter_topics"]),
-    (
-        "selected_topic_title",
-        pillars_cfg["pillars"][0]["starter_topics"][0]["title"],
-    ),
+    ("selected_exam_track", "CBSE Class 10 Mathematics"),
+    ("generated_topics", pillars_cfg["pillars"][1]["starter_topics"]),
+    ("selected_topic_title", "Heights and Distances in 6 Mins Complete"),
     ("current_blueprint", _preloaded_bp),
     ("current_draft", _preloaded_draft),
     ("resource_links", list(channel_cfg.get("default_resource_links", []))),
@@ -414,18 +426,18 @@ st.markdown(
 # ============================================================================
 # HEADER & 4 CLEAN LINEAR WORKFLOW TABS
 # ============================================================================
-st.title(f"🔬 {channel_cfg['channel_name']} — Faceless 3D Studio")
+st.title(f"🔬 {channel_cfg['channel_name']} — Complete Chapters & Exam Booster Studio")
 st.caption(
     f"**Cohort:** {channel_cfg['cohort']}  •  **Default Narration:** `{st.session_state['voice_mode']}`  •  "
-    f"**100% Faceless 3D Pipeline (Long `16:9` + Shorts/Reels `9:16`)**"
+    f"**Foundation Chapter Playlists + Toppers Hacks (`16:9` + Shorts `9:16`)**"
 )
 
 tab1, tab2, tab3, tab4 = st.tabs(
     [
-        "🎨 Step 1: Brand & YouTube/Reels Connect",
-        "🧪 Step 2: Topic, Dual Script & 3D Thumbnail",
-        "🎞️ Step 3: 3D Video Studio & Google Flow Clips",
-        "🚀 Step 4: Formula Sheets & Cloud Schedule",
+        "🎨 Step 1: Brand, Playlists & YouTube Connect",
+        "📘 Step 2: Select Syllabus Chapter or Booster",
+        "🎞️ Step 3: Video Studio & Scene Editor",
+        "🚀 Step 4: SEO Hashtags & Cloud Schedule",
     ]
 )
 
@@ -632,104 +644,234 @@ with tab1:
             st.rerun()
 
 # ============================================================================
-# STEP 2: SYLLABUS / STRATEGY IDEA ENGINE, DUAL SCRIPT & PURE 3D THUMBNAILS
+# STEP 2: CASCADING CURRICULUM CHAPTER DROPDOWNS + POST-FOUNDATION BOOSTERS
 # ============================================================================
 with tab2:
-    st.markdown('<span class="step-badge">STEP 2 • PICK HIGH-SCHOOL TOPIC → GENERATE DUAL SCRIPT & 3D THUMBNAILS</span>', unsafe_allow_html=True)
-
-    pcol1, pcol2, pcol3 = st.columns([1.6, 1.4, 1.4])
-    with pcol1:
-        pillar_ids = list(pillars_by_id.keys())
-        sel_pillar = st.selectbox(
-            "1. Select Faceless Content Pillar:",
-            options=pillar_ids,
-            format_func=lambda pid: pillars_by_id[pid]["name"],
-            index=pillar_ids.index(st.session_state["selected_pillar_id"]),
-        )
-        if sel_pillar != st.session_state["selected_pillar_id"]:
-            st.session_state["selected_pillar_id"] = sel_pillar
-            st.session_state["generated_topics"] = pillars_by_id[sel_pillar]["starter_topics"]
-            st.session_state["selected_topic_title"] = st.session_state["generated_topics"][0]["title"]
-            st.rerun()
-
-    with pcol2:
-        st.session_state["selected_exam_track"] = st.selectbox(
-            "2. Target Exam / Student Track:",
-            options=pillars_cfg["exam_tracks"],
-        )
-    with pcol3:
-        chapter_filter = st.text_input(
-            "3. Specific Chapter / Concept (Optional):",
-            placeholder="e.g., Rotational Motion, Electrochemistry, Optics, DNA...",
-        )
-
-    if st.button("🔍 Generate 5 High-CTR Topic Ideas for @TopperLab3D", use_container_width=True):
-        with st.spinner("Generating high-retention 3D student video concepts..."):
-            topics = generate_viral_highschool_topics(
-                pillar_id=st.session_state["selected_pillar_id"],
-                exam_track=st.session_state["selected_exam_track"],
-                custom_chapter_query=chapter_filter,
-            )
-            st.session_state["generated_topics"] = topics
-            st.session_state["selected_topic_title"] = topics[0]["title"]
-
-    topics_list = st.session_state["generated_topics"]
-    st.dataframe(topics_list, use_container_width=True, hide_index=True)
-
-    topic_titles = [t["title"] for t in topics_list]
-    picked_from_list = st.selectbox(
-        "Pick an Idea From Above (or customize the exact title below):",
-        options=topic_titles,
-        index=topic_titles.index(st.session_state["selected_topic_title"])
-        if st.session_state["selected_topic_title"] in topic_titles
-        else 0,
+    st.markdown(
+        '<span class="step-badge">STEP 2 • SELECT BOARD, CLASS, SUBJECT & CHAPTER → BUILD FOUNDATION OR BOOSTER VIDEO</span>',
+        unsafe_allow_html=True,
     )
-    final_topic_title = st.text_input("🎯 Working Video Title:", value=picked_from_list)
-    st.session_state["selected_topic_title"] = final_topic_title
 
-    sc_col1, sc_col2, sc_col3, sc_col4 = st.columns([1.15, 0.85, 0.9, 1.5])
+    mode_options = [
+        "📘 Foundation Syllabus Chapter (Complete Chapter Playlist)",
+        "⚡ Post-Foundation Boosters (Toppers Hack • Exam Tricks • Super Memory)",
+    ]
+    sel_mode = st.radio(
+        "🎯 Choose Video Production Track:",
+        options=mode_options,
+        index=0 if st.session_state["playlist_track_mode"].startswith("📘") else 1,
+        horizontal=True,
+    )
+    st.session_state["playlist_track_mode"] = sel_mode
+    is_foundation_mode = sel_mode.startswith("📘")
+
+    # Cascading Curriculum Dropdowns: Board -> Class -> Subject -> Every Chapter
+    board_opts = curriculum_catalog.get("boards", ["CBSE", "ICSE"])
+    class_opts = curriculum_catalog.get("classes", ["Class 10", "Class 9", "Class 8", "Class 11", "Class 12"])
+    dur_opts = curriculum_catalog.get("duration_badges", ["6 Mins", "5 Mins", "8 Mins", "10 Mins", "15 Mins"])
+
+    dd1, dd2, dd3, dd4 = st.columns([0.85, 0.95, 1.25, 2.15])
+    with dd1:
+        sel_board = st.selectbox(
+            "1. Board:",
+            options=board_opts,
+            index=board_opts.index(st.session_state["selected_board"])
+            if st.session_state["selected_board"] in board_opts
+            else 0,
+        )
+        st.session_state["selected_board"] = sel_board
+
+    with dd2:
+        sel_class = st.selectbox(
+            "2. Class:",
+            options=class_opts,
+            index=class_opts.index(st.session_state["target_class_label"])
+            if st.session_state["target_class_label"] in class_opts
+            else 0,
+        )
+        st.session_state["target_class_label"] = sel_class
+
+    subj_opts = get_curriculum_subjects(sel_board, sel_class)
+    with dd3:
+        sel_subject = st.selectbox(
+            "3. Subject:",
+            options=subj_opts,
+            index=subj_opts.index(st.session_state["target_subject_label"])
+            if st.session_state["target_subject_label"] in subj_opts
+            else 0,
+        )
+        st.session_state["target_subject_label"] = sel_subject
+
+    raw_chapters = get_curriculum_chapters(sel_board, sel_class, sel_subject)
+    custom_ch_sentinel = "✍️ Type Custom Chapter / Topic..."
+    chapter_choices = raw_chapters + [custom_ch_sentinel]
+
+    default_ch_idx = 0
+    if st.session_state.get("selected_chapter") in raw_chapters:
+        default_ch_idx = raw_chapters.index(st.session_state["selected_chapter"])
+    elif "Heights and Distances" in raw_chapters:
+        default_ch_idx = raw_chapters.index("Heights and Distances")
+
+    with dd4:
+        picked_chapter = st.selectbox(
+            f"4. Select {sel_board} {sel_class} {sel_subject} Chapter ({len(raw_chapters)} Chapters):",
+            options=chapter_choices,
+            index=default_ch_idx,
+            format_func=lambda ch_nm: (
+                ch_nm if ch_nm == custom_ch_sentinel else f"Ch {raw_chapters.index(ch_nm) + 1:02d}. {ch_nm}"
+            ),
+        )
+
+    if picked_chapter == custom_ch_sentinel:
+        active_chapter = st.text_input(
+            "Enter Custom Chapter Name:",
+            value=st.session_state.get("selected_chapter", "Heights and Distances"),
+        ).strip() or "Heights and Distances"
+    else:
+        active_chapter = picked_chapter
+
+    st.session_state["selected_chapter"] = active_chapter
+    st.session_state["selected_exam_track"] = f"{sel_board} {sel_class} {sel_subject}"
+
+    if is_foundation_mode:
+        st.session_state["video_category"] = "syllabus_chapter"
+        st.session_state["selected_pillar_id"] = "3d_concept_visualizer"
+
+        fcol1, fcol2 = st.columns([1.0, 3.2])
+        with fcol1:
+            sel_dur = st.selectbox(
+                "5. Title Time Badge:",
+                options=dur_opts,
+                index=dur_opts.index(st.session_state["duration_badge"])
+                if st.session_state["duration_badge"] in dur_opts
+                else 0,
+                help="Formats foundation playlist titles cleanly like 'Heights and Distances in 6 Mins Complete'.",
+            )
+            st.session_state["duration_badge"] = sel_dur
+
+        auto_title = format_syllabus_chapter_title(active_chapter, sel_dur)
+        combo_fp = f"FOUND|{sel_board}|{sel_class}|{sel_subject}|{active_chapter}|{sel_dur}"
+        if st.session_state.get("_last_title_combo_fp") != combo_fp:
+            st.session_state["_last_title_combo_fp"] = combo_fp
+            st.session_state["working_title_input"] = auto_title
+            st.session_state["selected_topic_title"] = auto_title
+
+        with fcol2:
+            final_topic_title = st.text_input(
+                "🎯 Foundation Playlist Video Title (Zero '3D' text — ready for YouTube):",
+                key="working_title_input",
+            )
+            st.session_state["selected_topic_title"] = strip_3d_text(final_topic_title) or auto_title
+
+        with st.expander(
+            f"📋 View Complete {sel_board} {sel_class} {sel_subject} Foundation Playlist Roadmap ({len(raw_chapters)} Chapters)"
+        ):
+            roadmap_rows = [
+                {
+                    "Ch #": f"{idx + 1:02d}",
+                    "Syllabus Chapter": ch_item,
+                    "Auto Video Title": format_syllabus_chapter_title(ch_item, sel_dur),
+                    "Target Playlist": f"{sel_board} {sel_class} {sel_subject}",
+                }
+                for idx, ch_item in enumerate(raw_chapters)
+            ]
+            st.dataframe(roadmap_rows, use_container_width=True, hide_index=True)
+
+    else:
+        booster_modes = curriculum_catalog.get("booster_modes", {})
+        b_keys = list(booster_modes.keys()) or ["toppers_hack", "exam_tricks", "super_memory"]
+        bcol1, bcol2, bcol3 = st.columns([1.35, 1.35, 1.5])
+        with bcol1:
+            sel_b_key = st.selectbox(
+                "5. Booster Series Type:",
+                options=b_keys,
+                format_func=lambda bk: booster_modes.get(bk, {}).get("label", bk),
+                index=b_keys.index(st.session_state["booster_mode_key"])
+                if st.session_state["booster_mode_key"] in b_keys
+                else 0,
+            )
+            st.session_state["booster_mode_key"] = sel_b_key
+            st.session_state["video_category"] = sel_b_key
+            st.session_state["selected_pillar_id"] = (
+                "pyq_exam_traps_shorts" if sel_b_key == "exam_tricks" else "topper_brain_strategy"
+            )
+
+        with bcol2:
+            booster_scope = st.selectbox(
+                "6. Topic Focus:",
+                options=[
+                    f"🎯 Chapter Booster: {active_chapter}",
+                    "🌟 General Board Topper / Memory Video",
+                ],
+            )
+
+        generic_list = booster_modes.get(sel_b_key, {}).get("generic_topics", [])
+        chosen_generic = ""
+        with bcol3:
+            if booster_scope.startswith("🌟") and generic_list:
+                chosen_generic = st.selectbox("Pick Curated Booster Topic:", options=generic_list)
+            else:
+                if st.button("🔍 Generate 5 Fresh AI Booster Ideas", use_container_width=True):
+                    with st.spinner("Generating high-CTR Toppers Hack / Exam Trick ideas..."):
+                        ideas = generate_viral_highschool_topics(
+                            pillar_id=st.session_state["selected_pillar_id"],
+                            exam_track=f"{sel_board} {sel_class} {sel_subject}",
+                            custom_chapter_query=f"{active_chapter} ({sel_b_key.replace('_', ' ')})",
+                        )
+                        st.session_state["generated_topics"] = ideas
+                        if ideas:
+                            st.session_state["working_title_input"] = strip_3d_text(ideas[0]["title"])
+
+        auto_b_title = format_booster_video_title(
+            chapter_name=active_chapter,
+            booster_mode_key=sel_b_key,
+            generic_topic=chosen_generic,
+        )
+        combo_fp = f"BOOST|{sel_board}|{sel_class}|{sel_subject}|{active_chapter}|{sel_b_key}|{booster_scope}|{chosen_generic}"
+        if st.session_state.get("_last_title_combo_fp") != combo_fp:
+            st.session_state["_last_title_combo_fp"] = combo_fp
+            st.session_state["working_title_input"] = auto_b_title
+            st.session_state["selected_topic_title"] = auto_b_title
+
+        if st.session_state.get("generated_topics") and not booster_scope.startswith("🌟"):
+            with st.expander("💡 AI-Suggested Booster Variations (Click to inspect)"):
+                st.dataframe(st.session_state["generated_topics"], use_container_width=True, hide_index=True)
+
+        final_topic_title = st.text_input(
+            "🎯 Booster Video Title (Zero '3D' text — ready for YouTube):",
+            key="working_title_input",
+        )
+        st.session_state["selected_topic_title"] = strip_3d_text(final_topic_title) or auto_b_title
+
+    sc_col1, sc_col2 = st.columns([1.3, 2.7])
     with sc_col1:
+        default_depth_idx = 1 if (is_foundation_mode and st.session_state.get("duration_badge") in ("8 Mins", "10 Mins", "15 Mins")) else 0
         num_scenes = st.selectbox(
-            "Target Episode Depth:",
+            "Target Scene Breakdown:",
             options=[4, 6, 8],
+            index=default_depth_idx,
             format_func=lambda n: (
-                "4 Scenes (~1 Min 3D + 45s Short)"
+                "4 Crisp Scenes (Fast High-Retention Chapter + Short)"
                 if n == 4
-                else (f"{n} Scenes (~4–6 Min Chapter)" if n == 6 else f"{n} Scenes (~8+ Min Masterclass)")
+                else (f"{n} Scenes (Detailed Complete Chapter)" if n == 6 else f"{n} Scenes (Deep Masterclass)")
             ),
         )
     with sc_col2:
-        cls_choices = ["Class 10", "Class 9", "Class 8", "Class 11", "Class 12"]
-        st.session_state["target_class_label"] = st.selectbox(
-            "🎯 Thumbnail Class Badge:",
-            options=cls_choices,
-            index=cls_choices.index(st.session_state["target_class_label"])
-            if st.session_state["target_class_label"] in cls_choices
-            else 0,
-        )
-    with sc_col3:
-        subj_choices = ["Science", "Physics", "Chemistry", "Mathematics", "Biology", "Topper Hacks"]
-        st.session_state["target_subject_label"] = st.selectbox(
-            "📘 Subject Tag:",
-            options=subj_choices,
-            index=subj_choices.index(st.session_state["target_subject_label"])
-            if st.session_state["target_subject_label"] in subj_choices
-            else 0,
-        )
-    with sc_col4:
         custom_thumb_override = st.text_input(
-            "Optional Custom 3D Model Prompt Override:",
-            placeholder="Leave blank for bright Class-10 classroom 3D model + Yellow/Red heading...",
+            "Optional Custom Visual Model Override (for Thumbnail Artwork):",
+            placeholder=f"Leave blank for bright {sel_class} {sel_subject} classroom visual model + Yellow/Red '{sel_class.upper()}' badge...",
         )
 
     if st.button(
-        "✨ Build Expressive Script, Fly-In Formulas & Consistent Yellow+Red Class Thumbnails",
+        f"✨ Build '{st.session_state['selected_topic_title']}' Script, Formulas & Yellow+Red Thumbnail",
         type="primary",
         use_container_width=True,
     ):
-        with st.spinner("Designing bright Class-10 3D models, expressive narration, Fly-In Formulas & Yellow+Red Class Thumbnails..."):
+        with st.spinner(
+            f"Designing '{st.session_state['selected_topic_title']}' with Gemini 4, Fly-In Formulas & {sel_class} Yellow+Red Thumbnails..."
+        ):
             bp = generate_dual_script_and_thumbnails(
-                topic_title=final_topic_title,
+                topic_title=st.session_state["selected_topic_title"],
                 pillar_id=st.session_state["selected_pillar_id"],
                 exam_track=st.session_state["selected_exam_track"],
                 voice_mode=st.session_state["voice_mode"],
@@ -739,24 +881,28 @@ with tab2:
                 force_regenerate_thumbs=True,
                 target_class_label=st.session_state["target_class_label"],
                 target_subject_label=st.session_state["target_subject_label"],
+                selected_board=st.session_state["selected_board"],
+                selected_chapter=st.session_state["selected_chapter"],
+                video_category=st.session_state["video_category"],
+                duration_badge=st.session_state["duration_badge"],
             )
             st.session_state["current_blueprint"] = bp
             st.session_state["seo_bundle"] = None
-        st.success("✅ Expressive Storyboard, Fly-In Formulas & Consistent Yellow+Red Class Thumbnails Ready!")
+        st.success(f"✅ Blueprint, Fly-In Formulas & Consistent `{bp['class_badge_text']}` Thumbnails Ready!")
 
     bp = st.session_state.get("current_blueprint")
     if bp:
         st.divider()
         t_col1, t_col2 = st.columns([2.1, 1])
         with t_col1:
-            st.subheader("🖥️ `16:9` Pure 3D YouTube Thumbnail")
+            st.subheader("🖥️ `16:9` YouTube Thumbnail")
             tp = resolve_workspace_path(bp["thumbnail_16x9_path"])
             if tp.exists():
                 st.image(str(tp), use_container_width=True)
                 st.download_button(
                     "⬇️ Download 16:9 Thumbnail (.jpg)",
                     data=tp.read_bytes(),
-                    file_name="TopperLab3D_Thumbnail_16x9.jpg",
+                    file_name="TopperLab_Thumbnail_16x9.jpg",
                     mime="image/jpeg",
                 )
         with t_col2:
@@ -767,15 +913,15 @@ with tab2:
                 st.download_button(
                     "⬇️ Download 9:16 Short Cover (.jpg)",
                     data=sp.read_bytes(),
-                    file_name="TopperLab3D_Short_Cover_9x16.jpg",
+                    file_name="TopperLab_Short_Cover_9x16.jpg",
                     mime="image/jpeg",
                 )
 
-        st.subheader("📜 Expressive Script + Animated Fly-In Formulas & Quick Tips Preview")
+        st.subheader(f"📜 Script + Animated Fly-In Formulas & Quick Tips (`{bp['topic_title']}`)")
         for sc in bp["scenes"]:
             st.markdown(
                 f"**Scene {sc['scene_id']:02d} — {sc['headline']}** (`{sc['concept_takeaway']}`)  \n"
-                f"📐 **Fly-In Formula:** `{sc.get('formula_badge', 'Core 3D Rule')}`  •  "
+                f"📐 **Fly-In Formula:** `{sc.get('formula_badge', 'Core Formula')}`  •  "
                 f"⚡ **Fly-In Quick Tip:** `{sc.get('quick_tip', 'Board Exam Hack')}`  \n"
                 f"🎙️ *{sc['narration']}*"
             )
@@ -785,7 +931,7 @@ with tab2:
             type="primary",
             use_container_width=True,
         ):
-            with st.spinner("Synthesizing expressive AI voiceover, mixing curiosity BGM + chimes, animating Fly-In Formula/Hack cards & rendering 3D MP4s..."):
+            with st.spinner("Synthesizing expressive AI voiceover, mixing curiosity BGM + chimes, animating Fly-In Formula/Hack cards & rendering MP4s..."):
                 draft = render_full_topperlab_project(
                     bp,
                     short_max_scenes=4,
@@ -798,6 +944,11 @@ with tab2:
                     exam_track=draft["exam_track"],
                     scenes=draft["scenes"],
                     resource_links=st.session_state["resource_links"],
+                    board=draft.get("selected_board", st.session_state["selected_board"]),
+                    class_name=draft.get("target_class_label", st.session_state["target_class_label"]),
+                    subject=draft.get("target_subject_label", st.session_state["target_subject_label"]),
+                    chapter_name=draft.get("selected_chapter", st.session_state["selected_chapter"]),
+                    video_category=draft.get("video_category", st.session_state["video_category"]),
                 )
             st.success("🎉 Master `16:9` Video + `9:16` Short Rendered! Open **Step 3** to preview or **Step 4** to publish.")
 
@@ -827,7 +978,7 @@ with tab3:
             key="step3_top_render_btn",
         )
     if step3_render_clicked:
-        with st.spinner("Synthesizing expressive AI voiceover, curiosity BGM + chimes, animated Fly-In Formula/Hack cards & 3D MP4s..."):
+        with st.spinner("Synthesizing expressive AI voiceover, curiosity BGM + chimes, animated Fly-In Formula/Hack cards & MP4s..."):
             active_bp = st.session_state.get("current_blueprint")
             if not active_bp or active_bp.get("topic_title") != st.session_state["selected_topic_title"]:
                 active_bp = generate_dual_script_and_thumbnails(
@@ -840,6 +991,10 @@ with tab3:
                     force_regenerate_thumbs=force_fresh_3d_chk,
                     target_class_label=st.session_state["target_class_label"],
                     target_subject_label=st.session_state["target_subject_label"],
+                    selected_board=st.session_state["selected_board"],
+                    selected_chapter=st.session_state["selected_chapter"],
+                    video_category=st.session_state["video_category"],
+                    duration_badge=st.session_state["duration_badge"],
                 )
                 st.session_state["current_blueprint"] = active_bp
             active_bp["voice_mode"] = st.session_state["voice_mode"]
@@ -862,6 +1017,11 @@ with tab3:
                 exam_track=rendered_draft["exam_track"],
                 scenes=rendered_draft["scenes"],
                 resource_links=st.session_state["resource_links"],
+                board=rendered_draft.get("selected_board", st.session_state["selected_board"]),
+                class_name=rendered_draft.get("target_class_label", st.session_state["target_class_label"]),
+                subject=rendered_draft.get("target_subject_label", st.session_state["target_subject_label"]),
+                chapter_name=rendered_draft.get("selected_chapter", st.session_state["selected_chapter"]),
+                video_category=rendered_draft.get("video_category", st.session_state["video_category"]),
             )
         st.success("✅ Master `16:9` Long Video + `9:16` Vertical Short rendered and ready below!")
         st.rerun()
@@ -986,21 +1146,21 @@ with tab4:
         l_cat = st.selectbox(
             "Resource Type:",
             options=[
-                "📄 1-Page 3D Formula & Concept Cheat Sheet (PDF)",
+                "📄 1-Page Formula & Quick-Tip Cheat Sheet (PDF)",
                 "📊 99%iler Active-Recall & Revision Tracker (Sheet)",
-                "📚 Recommended NCERT / JEE / NEET Book (Affiliate)",
+                "📚 Recommended NCERT / ICSE / JEE / NEET Book (Affiliate)",
                 "🧪 Digital Notes Pack / Mock Test Bundle",
             ],
         )
     with lc2:
-        l_lbl = st.text_input("Call-to-Action Label:", placeholder="Download Rotational Motion 1-Page 3D Sheet")
+        l_lbl = st.text_input("Call-to-Action Label:", placeholder="Download Heights & Distances 1-Page Formula Sheet")
     with lc3:
         l_url = st.text_input("URL (Google Drive / Sheet / Gumroad / Amazon):", placeholder="https://drive.google.com/...")
     with lc4:
         st.write("")
         if st.button("➕ Add Link", use_container_width=True) and l_lbl.strip() and l_url.strip():
             st.session_state["resource_links"].append(
-                {"category": l_cat, "label": l_lbl.strip(), "url": l_url.strip()}
+                {"category": strip_3d_text(l_cat), "label": strip_3d_text(l_lbl.strip()), "url": l_url.strip()}
             )
             st.session_state["seo_bundle"] = None
             st.rerun()
@@ -1009,33 +1169,47 @@ with tab4:
         st.dataframe(st.session_state["resource_links"], use_container_width=True, hide_index=True)
 
     st.divider()
-    st.subheader("📝 4.2 Auto-Generated SEO Description, 3D Chapters & Pinned Comment")
-    active_title = draft["topic_title"] if draft else st.session_state["selected_topic_title"]
-    active_track = draft["exam_track"] if draft else st.session_state["selected_exam_track"]
+    st.subheader("📝 4.2 Auto-Generated Clean SEO Description, Chapter Timestamps, Hashtags & Pinned Comment")
+    active_title = strip_3d_text(draft["topic_title"] if draft else st.session_state["selected_topic_title"])
+    active_track = strip_3d_text(draft["exam_track"] if draft else st.session_state["selected_exam_track"])
     active_scenes = draft["scenes"] if draft else []
+    active_board = (draft.get("selected_board") if draft else None) or st.session_state.get("selected_board", "CBSE")
+    active_class = (draft.get("target_class_label") if draft else None) or st.session_state.get("target_class_label", "Class 10")
+    active_subject = (draft.get("target_subject_label") if draft else None) or st.session_state.get("target_subject_label", "Mathematics")
+    active_chapter = (draft.get("selected_chapter") if draft else None) or st.session_state.get("selected_chapter", "")
+    active_vid_cat = (draft.get("video_category") if draft else None) or st.session_state.get("video_category", "syllabus_chapter")
 
-    if st.button("✨ Refresh SEO Copy & Timestamps With Links", use_container_width=True) or st.session_state["seo_bundle"] is None:
+    seo_fp = f"{active_title}|{active_board}|{active_class}|{active_subject}|{active_chapter}|{active_vid_cat}|{len(st.session_state['resource_links'])}"
+    if st.button("✨ Refresh Clean SEO Copy, Hashtags & Timestamps", use_container_width=True) or st.session_state["seo_bundle"] is None or st.session_state.get("_seo_fp") != seo_fp:
+        st.session_state["_seo_fp"] = seo_fp
         st.session_state["seo_bundle"] = generate_student_seo_bundle(
             video_title=active_title,
             exam_track=active_track,
             scenes=active_scenes,
             resource_links=st.session_state["resource_links"],
+            board=active_board,
+            class_name=active_class,
+            subject=active_subject,
+            chapter_name=active_chapter,
+            video_category=active_vid_cat,
         )
 
     seo = st.session_state["seo_bundle"]
+    st.text_input("🎬 Final Clean Video Title (Zero '3D' text):", value=active_title, disabled=True)
+    st.text_input("🏷️ Dynamic Chapter & Board Hashtags (Included in Description & Short):", value=seo["hashtags_str"])
     sc1, sc2 = st.columns(2)
     with sc1:
-        yt_desc_box = st.text_area("▶️ YouTube Long-Form Description (Chapters + PDF Links):", value=seo["youtube_description"], height=220)
+        yt_desc_box = st.text_area("▶️ YouTube Long-Form Description (Timestamps + PDF Links + Hashtags):", value=seo["youtube_description"], height=225)
         pin_box = st.text_area("📌 High-Conversion Pinned Comment:", value=seo["pinned_comment"], height=120)
     with sc2:
-        short_cap_box = st.text_area("⚡ YouTube Shorts / IG & FB Reel Caption:", value=seo["short_reel_caption"], height=220)
+        short_cap_box = st.text_area("⚡ YouTube Shorts / IG & FB Reel Caption:", value=seo["short_reel_caption"], height=225)
         tags_box = st.text_input("🔍 YouTube SEO Keyword Tags (Comma-Separated):", value=seo["seo_tags_str"])
 
     st.divider()
     st.subheader("🚀 4.3 Direct Publish or Native Cloud Schedule (`@TopperLab3D`)")
     dc1, dc2 = st.columns(2)
     with dc1:
-        do_yt_long = st.checkbox("▶️ YouTube Long-Form (`16:9` + Custom 3D Thumbnail + Chapters)", value=True)
+        do_yt_long = st.checkbox("▶️ YouTube Long-Form (`16:9` + Custom Thumbnail + Chapters)", value=True)
         do_yt_short = st.checkbox("⚡ YouTube Shorts (`9:16` Vertical Cut)", value=True)
     with dc2:
         do_fb_reel = st.checkbox("📘 Facebook Page Reel (`9:16`)", value=False)
@@ -1053,13 +1227,21 @@ with tab4:
         pub_boards = st.multiselect(
             "📚 Auto-Add to Board Playlists:",
             options=CURRICULUM_BOARDS,
-            default=CURRICULUM_BOARDS,
-            help="One video can live in BOTH CBSE and ICSE playlists simultaneously!",
+            default=[active_board] if active_board in CURRICULUM_BOARDS else CURRICULUM_BOARDS,
+            help="Automatically assigns this video to the matching Board + Class + Subject Foundation Playlist!",
         )
     with plc2:
-        pub_class = st.selectbox("🎓 Target Class:", options=CURRICULUM_CLASSES, index=CURRICULUM_CLASSES.index(st.session_state.get("target_class_label", "Class 10")) if st.session_state.get("target_class_label", "Class 10") in CURRICULUM_CLASSES else 2)
+        pub_class = st.selectbox(
+            "🎓 Target Class:",
+            options=CURRICULUM_CLASSES,
+            index=CURRICULUM_CLASSES.index(active_class) if active_class in CURRICULUM_CLASSES else 2,
+        )
     with plc3:
-        pub_subject = st.selectbox("🔬 Target Subject:", options=ALL_CURRICULUM_SUBJECTS, index=0)
+        pub_subject = st.selectbox(
+            "🔬 Target Subject:",
+            options=ALL_CURRICULUM_SUBJECTS,
+            index=ALL_CURRICULUM_SUBJECTS.index(active_subject) if active_subject in ALL_CURRICULUM_SUBJECTS else 0,
+        )
 
     tc1, tc2, tc3 = st.columns(3)
     with tc1:
