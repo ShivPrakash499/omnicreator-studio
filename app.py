@@ -917,26 +917,37 @@ with tab2:
                     mime="image/jpeg",
                 )
 
-        st.subheader(f"📜 Script + Animated Fly-In Formulas & Quick Tips (`{bp['topic_title']}`)")
+        st.subheader(f"📜 4-Act Big-Channel Script + 3-Portion Formula Highlighter (`{bp['topic_title']}`)")
         for sc in bp["scenes"]:
+            act_lbl = sc.get("act_badge", f"ACT {sc['scene_id']}: CONCEPT")
+            f_parts = sc.get("formula_parts", [])
+            parts_str = "  →  ".join(f"`{p.get('label', '')}: {p.get('expr', '')}`" for p in f_parts) if f_parts else f"`{sc.get('formula_badge', '')}`"
             st.markdown(
-                f"**Scene {sc['scene_id']:02d} — {sc['headline']}** (`{sc['concept_takeaway']}`)  \n"
-                f"📐 **Fly-In Formula:** `{sc.get('formula_badge', 'Core Formula')}`  •  "
-                f"⚡ **Fly-In Quick Tip:** `{sc.get('quick_tip', 'Board Exam Hack')}`  \n"
+                f"**Scene {sc['scene_id']:02d} [{act_lbl}] — {sc['headline']}** (`{sc['concept_takeaway']}`)  \n"
+                f"🎯 **Highlighted Formula Portions:** {parts_str}  \n"
+                f"⚡ **Topper Exam Hack:** `{sc.get('quick_tip', 'Board Exam Hack')}`  \n"
                 f"🎙️ *{sc['narration']}*"
             )
 
+        auto_veo_step2 = st.checkbox(
+            "🎥 Auto-Generate Live Google Flow / Veo 3.1 AI B-Roll Clips (Vertex AI Cloud Credits)",
+            value=True,
+            key="auto_veo_step2_chk",
+            help="Automatically generates moving 3D classroom B-Roll clips via Veo 3.1 / Gemini Omni and composites them with live animated lines, circles, compass arcs, and highlighted formula portions!",
+        )
+
         if st.button(
-            "🎬 Approve & Render Full `16:9` Video + `9:16` Short (Expressive AI Voice + BGM + Fly-In Cards)",
+            "🎬 Approve & Render Full `16:9` Video + `9:16` Short (Live Veo B-Roll + Animated Lines/Angles/Formula Highlight + ASMR BGM)",
             type="primary",
             use_container_width=True,
         ):
-            with st.spinner("Synthesizing expressive AI voiceover, mixing curiosity BGM + chimes, animating Fly-In Formula/Hack cards & rendering MP4s..."):
+            with st.spinner("Generating Google Flow / Veo 3.1 B-Roll, synthesizing expressive voiceover + ASMR geometry SFX, and drawing live lines, compass arcs & highlighted formula portions..."):
                 draft = render_full_topperlab_project(
                     bp,
                     short_max_scenes=4,
                     bgm_enabled=bool(st.session_state.get("bgm_enabled", True)),
                     force_live_images=True,
+                    auto_veo_broll=auto_veo_step2,
                 )
                 st.session_state["current_draft"] = draft
                 st.session_state["seo_bundle"] = generate_student_seo_bundle(
@@ -956,29 +967,36 @@ with tab2:
 # STEP 3: 3D VIDEO STUDIO PLAYER, SCENE EDITOR & GOOGLE FLOW / VEO CLIPS
 # ============================================================================
 with tab3:
-    st.markdown('<span class="step-badge">STEP 3 • PREVIEW MASTER VIDEOS, EDIT SCENES & DROP IN GOOGLE FLOW / VEO 3.1 CLIPS</span>', unsafe_allow_html=True)
+    st.markdown('<span class="step-badge">STEP 3 • PREVIEW MASTER VIDEOS, LIVE GEOMETRY/FORMULA CANVAS & GOOGLE FLOW / VEO 3.1 CLIPS</span>', unsafe_allow_html=True)
 
     st.markdown(
-        '<div class="lab-card"><b>🎒 Bright Class-10 3D Classroom Models + Expressive AI Mentor + Curiosity BGM + Animated Fly-In Formulas & Hacks</b><br/>'
-        'Every scene automatically animates <b>📐 Fly-In / Fly-Out Formula Cards</b> (from left) and <b>⚡ Quick Tip / Exam Hack Cards</b> (from right) synced with bell chimes & auto-ducked background music!</div>',
+        '<div class="lab-card"><b>🎥 Google Flow / Veo 3.1 Live B-Roll + Real-Time Animated Lines, Compass Arcs & Formula Portion Highlighting + 4-Act Retention Format</b><br/>'
+        'Inspired by top viral math & science channels (<i>8MXN6QjPJqc</i> • <i>3Blue1Brown</i> • <i>Don\'t Memorise</i> • <i>Dear Sir</i>): '
+        'Every scene pairs moving <b>Google Flow / Veo 3.1 B-Roll</b> with live animated <b>Green Guide Markers (1, 2, 3), Circles, Right-Triangle Lines, Metallic Compass Arcs (θ), 3-Portion Formula Highlighting, 5-Second Boss Countdown, and an Animated YouTube Subscribe + Bell CTA</b>!</div>',
         unsafe_allow_html=True,
     )
-    rc_top1, rc_top2 = st.columns([3.0, 1.3])
+    rc_top1, rc_top2, rc_top3 = st.columns([2.5, 1.15, 1.15])
     with rc_top2:
+        auto_veo_step3_chk = st.checkbox(
+            "🎥 Live Veo 3.1 B-Roll",
+            value=True,
+            help="Automatically generate moving 3D classroom B-Roll clips via Vertex AI Veo 3.1 (`veo-3.1-lite-generate-001` / `veo-3.1-fast-generate-001`) for each scene.",
+        )
+    with rc_top3:
         force_fresh_3d_chk = st.checkbox(
-            "✨ Fresh AI 3D Models",
+            "✨ Fresh AI 3D Plates",
             value=False,
             help="Check to generate brand-new bright 3D classroom images via Nano Banana 2.1 when re-rendering.",
         )
     with rc_top1:
         step3_render_clicked = st.button(
-            "🎬 Generate / Re-Render Master `16:9` Video + `9:16` Short (Expressive Voice + BGM + Fly-In Cards)",
+            "🎬 Generate / Re-Render Master `16:9` Video + `9:16` Short (Veo B-Roll + Live Geometry & Formula Highlight)",
             type="primary",
             use_container_width=True,
             key="step3_top_render_btn",
         )
     if step3_render_clicked:
-        with st.spinner("Synthesizing expressive AI voiceover, curiosity BGM + chimes, animated Fly-In Formula/Hack cards & MP4s..."):
+        with st.spinner("Generating Google Flow / Veo 3.1 B-Roll, synthesizing expressive AI voiceover + ASMR geometry SFX, and animating live lines, compass arcs & formula portions..."):
             active_bp = st.session_state.get("current_blueprint")
             if not active_bp or active_bp.get("topic_title") != st.session_state["selected_topic_title"]:
                 active_bp = generate_dual_script_and_thumbnails(
@@ -1010,6 +1028,7 @@ with tab3:
                 short_max_scenes=4,
                 bgm_enabled=bool(st.session_state.get("bgm_enabled", True)),
                 force_live_images=force_fresh_3d_chk,
+                auto_veo_broll=auto_veo_step3_chk,
             )
             st.session_state["current_draft"] = rendered_draft
             st.session_state["seo_bundle"] = generate_student_seo_bundle(
