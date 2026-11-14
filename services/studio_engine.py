@@ -1105,7 +1105,8 @@ def build_youtube_auth_url(redirect_uri: str = "https://onebillionviews.streamli
         "scope": (
             "https://www.googleapis.com/auth/youtube "
             "https://www.googleapis.com/auth/youtube.upload "
-            "https://www.googleapis.com/auth/youtube.readonly"
+            "https://www.googleapis.com/auth/youtube.readonly "
+            "https://www.googleapis.com/auth/drive"
         ),
         "access_type": "offline",
         "prompt": "consent select_account",
@@ -3774,6 +3775,265 @@ def upload_reel_to_facebook_api(
     return {"ok": True, "status": status_lbl, "url": f"https://www.facebook.com/reel/{vid_id}"}
 
 
+GDRIVE_YOUTUBE_ROOT_FOLDER_ID = "1R2s6zorWjUDWhxO6lJLVehW6wSq74Uee"
+GDRIVE_TOPPERLAB_FOLDER_ID = "1JYZ4Vbm-qeVcOYVNIyruLtIKCBGRhaJa"
+
+
+def _clean_drive_video_folder_name(title: str) -> str:
+    clean = strip_3d_text(title or "")
+    clean = re.sub(r"#shorts\b", "", clean, flags=re.IGNORECASE).strip(" —-|")
+    return clean[:120] or "TopperLab Video"
+
+
+def _ensure_drive_folder_via_rest(access_token: str, folder_name: str, parent_id: str = "") -> str:
+    headers = {"Authorization": f"Bearer {access_token}", "Content-Type": "application/json; charset=UTF-8"}
+    safe_name = folder_name.replace("'", "\\'")
+    q_parts = [
+        "mimeType = 'application/vnd.google-apps.folder'",
+        "trashed = false",
+        f"name = '{safe_name}'",
+    ]
+    if parent_id:
+        q_parts.append(f"'{parent_id}' in parents")
+    r = requests.get(
+        "https://www.googleapis.com/drive/v3/files",
+        params={"q": " and ".join(q_parts), "fields": "files(id,name)", "pageSize": 5},
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=15,
+    )
+    if r.status_code == 200 and r.json().get("files"):
+        return r.json()["files"][0]["id"]
+
+    body: Dict[str, Any] = {
+        "name": folder_name,
+        "mimeType": "application/vnd.google-apps.folder",
+    }
+    if parent_id:
+        body["parents"] = [parent_id]
+    cr = requests.post(
+        "https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink",
+        headers=headers,
+        data=json.dumps(body).encode("utf-8"),
+        timeout=15,
+    )
+    if cr.status_code in (200, 201):
+        return cr.json().get("id", "")
+    return ""
+
+
+def _upload_file_to_drive_folder_via_rest(access_token: str, file_path: Path, parent_folder_id: str) -> str:
+    if not file_path.exists() or not parent_folder_id:
+        return ""
+    fname = file_path.name
+    safe_fname = fname.replace("'", "\\'")
+    mime_type = "video/mp4" if file_path.suffix.lower() == ".mp4" else "image/jpeg"
+
+    # Check if file with same name already exists in this folder
+    chk = requests.get(
+        "https://www.googleapis.com/drive/v3/files",
+        params={
+            "q": f"name = '{safe_fname}' and '{parent_folder_id}' in parents and trashed = false",
+            "fields": "files(id,name)",
+            "pageSize": 1,
+        },
+        headers={"Authorization": f"Bearer {access_token}"},
+        timeout=15,
+    )
+    existing_id = ""
+    if chk.status_code == 200 and chk.json().get("files"):
+        existing_id = chk.json()["files"][0]["id"]
+
+    fsize = file_path.stat().st_size
+    if existing_id:
+        init_url = f"https://www.googleapis.com/upload/drive/v3/files/{existing_id}?uploadType=resumable"
+        init_method = requests.patch
+        meta_body = {"name": fname}
+    else:
+        init_url = "https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable"
+        init_method = requests.post
+        meta_body = {"name": fname, "parents": [parent_folder_id]}
+
+    init_r = init_method(
+        init_url,
+        headers={
+            "Authorization": f"Bearer {access_token}",
+            "Content-Type": "application/json; charset=UTF-8",
+            "X-Upload-Content-Type": mime_type,
+            "X-Upload-Content-Length": str(fsize),
+        },
+        data=json.dumps(meta_body).encode("utf-8"),
+        timeout=25,
+    )
+    if init_r.status_code not in (200, 201) or "Location" not in init_r.headers:
+        return ""
+
+    put_url = init_r.headers["Location"]
+    with file_path.open("rb") as fh:
+        up_r = requests.put(
+            put_url,
+            headers={"Content-Length": str(fsize), "Content-Type": mime_type},
+            data=fh,
+            timeout=600,
+        )
+    if up_r.status_code in (200, 201):
+        return up_r.json().get("id", "")
+    return ""
+
+
+def archive_rendered_video_to_google_drive(
+    video_title: str,
+    video_path: Path,
+    thumbnail_path: Path | None = None,
+) -> Dict[str, Any]:
+    """
+    Automatically archives the final rendered video (and thumbnail) into Google Drive under:
+      Youtube --> TopperLAB --> <Video Title>
+    Works via:
+      1. Google Drive REST API v3 (when OAuth token includes `drive` scope), OR
+      2. Local `gdrive` CLI (connected to `jwalashiva@gmail.com`).
+    """
+    vpath = resolve_workspace_path(video_path)
+    tpath = resolve_workspace_path(thumbnail_path) if thumbnail_path else None
+    if not vpath.exists():
+        return {"ok": False, "error": f"Video file not found: {vpath}"}
+
+    clean_folder_title = _clean_drive_video_folder_name(video_title)
+    ch = load_active_channel()
+    topperlab_folder_id = ch.get("gdrive_topperlab_folder_id", GDRIVE_TOPPERLAB_FOLDER_ID)
+
+    # 1. Try Google Drive REST API v3 using active OAuth token
+    access_token = get_valid_youtube_access_token()
+    if access_token:
+        try:
+            # Verify whether token can access TopperLAB folder or create Youtube -> TopperLAB
+            chk_top = requests.get(
+                f"https://www.googleapis.com/drive/v3/files/{topperlab_folder_id}",
+                params={"fields": "id,name"},
+                headers={"Authorization": f"Bearer {access_token}"},
+                timeout=10,
+            )
+            parent_top_id = topperlab_folder_id if chk_top.status_code == 200 else ""
+            if not parent_top_id:
+                yt_root_id = _ensure_drive_folder_via_rest(access_token, "Youtube", "")
+                if yt_root_id:
+                    parent_top_id = _ensure_drive_folder_via_rest(access_token, "TopperLAB", yt_root_id)
+            if parent_top_id:
+                vid_folder_id = _ensure_drive_folder_via_rest(access_token, clean_folder_title, parent_top_id)
+                if vid_folder_id:
+                    up_vid_id = _upload_file_to_drive_folder_via_rest(access_token, vpath, vid_folder_id)
+                    if tpath and tpath.exists():
+                        _upload_file_to_drive_folder_via_rest(access_token, tpath, vid_folder_id)
+                    if up_vid_id:
+                        folder_url = f"https://drive.google.com/drive/folders/{vid_folder_id}"
+                        return {
+                            "ok": True,
+                            "folder_path": f"Youtube ➔ TopperLAB ➔ {clean_folder_title}",
+                            "folder_id": vid_folder_id,
+                            "folder_url": folder_url,
+                            "video_file_id": up_vid_id,
+                        }
+        except Exception:
+            pass
+
+    # 2. Fallback: Use local `gdrive` CLI when available on the host
+    gdrive_bin = shutil.which("gdrive")
+    if gdrive_bin:
+        try:
+            srch = subprocess.run(
+                [gdrive_bin, "readonly", "search", "--parent-id", topperlab_folder_id, "--name-exact", clean_folder_title, "--json"],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                timeout=25,
+            )
+            vid_folder_id = ""
+            if srch.returncode == 0 and srch.stdout.strip():
+                items = json.loads(srch.stdout.strip())
+                for it in items:
+                    if it.get("mimeType") == "application/vnd.google-apps.folder":
+                        vid_folder_id = it.get("id", "")
+                        break
+            if not vid_folder_id:
+                mk = subprocess.run(
+                    [gdrive_bin, "mutate", "mkdir", clean_folder_title, "--parent", topperlab_folder_id],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=25,
+                )
+                m_id = re.search(r"\(ID:\s*([A-Za-z0-9_\-]+)\)", mk.stdout or "")
+                if m_id:
+                    vid_folder_id = m_id.group(1)
+
+            if vid_folder_id:
+                # Check if file already exists in folder to update in-place or upload fresh
+                ex_srch = subprocess.run(
+                    [gdrive_bin, "readonly", "search", "--parent-id", vid_folder_id, "--name-exact", vpath.name, "--json"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True,
+                    timeout=20,
+                )
+                existing_f_id = ""
+                if ex_srch.returncode == 0 and ex_srch.stdout.strip():
+                    ex_items = json.loads(ex_srch.stdout.strip())
+                    if ex_items:
+                        existing_f_id = ex_items[0].get("id", "")
+
+                if existing_f_id:
+                    up = subprocess.run(
+                        [gdrive_bin, "mutate", "update", existing_f_id, str(vpath)],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=300,
+                    )
+                else:
+                    up = subprocess.run(
+                        [gdrive_bin, "mutate", "upload", str(vpath), "--parent", vid_folder_id],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=300,
+                    )
+                if tpath and tpath.exists():
+                    ex_t = subprocess.run(
+                        [gdrive_bin, "readonly", "search", "--parent-id", vid_folder_id, "--name-exact", tpath.name, "--json"],
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,
+                        timeout=20,
+                    )
+                    ex_t_id = ""
+                    if ex_t.returncode == 0 and ex_t.stdout.strip():
+                        t_items = json.loads(ex_t.stdout.strip())
+                        if t_items:
+                            ex_t_id = t_items[0].get("id", "")
+                    if not ex_t_id:
+                        subprocess.run(
+                            [gdrive_bin, "mutate", "upload", str(tpath), "--parent", vid_folder_id],
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                            text=True,
+                            timeout=120,
+                        )
+                if up.returncode == 0:
+                    return {
+                        "ok": True,
+                        "folder_path": f"Youtube ➔ TopperLAB ➔ {clean_folder_title}",
+                        "folder_id": vid_folder_id,
+                        "folder_url": f"https://drive.google.com/drive/folders/{vid_folder_id}",
+                    }
+        except Exception as exc:
+            return {"ok": False, "error": sanitize_api_error(exc)[:200]}
+
+    return {
+        "ok": False,
+        "error": "Re-authorize once in Step 1 (`Sign In & Authorize @TopperLab3D`) to grant cloud Google Drive auto-backup permission.",
+        "topperlab_folder_url": f"https://drive.google.com/drive/folders/{topperlab_folder_id}",
+    }
+
+
 def publish_or_schedule_deliverable(
     platform: str,
     format_type: str,
@@ -3800,6 +4060,18 @@ def publish_or_schedule_deliverable(
     note = f"Ready in workspace ({sched_str}) — connect API in Step 1 for auto-upload or use 1-Click Download."
 
     if platform.startswith("YouTube") and vpath.exists():
+        # Automatically archive final rendered video into Google Drive: Youtube -> TopperLAB -> <Video Title>
+        drive_res = archive_rendered_video_to_google_drive(
+            video_title=title,
+            video_path=vpath,
+            thumbnail_path=tpath if "Long" in platform else None,
+        )
+        drive_suffix = (
+            f" | 📁 Drive: {drive_res['folder_path']} ({drive_res['folder_url']})"
+            if drive_res.get("ok")
+            else ""
+        )
+
         yt_oauth = get_youtube_oauth_status()
         if yt_oauth.get("connected"):
             res = upload_video_to_youtube_api(
@@ -3824,10 +4096,13 @@ def publish_or_schedule_deliverable(
                     )
                     if added_pls:
                         pl_suffix = f" | Added to: {', '.join(added_pls)}"
-                note = f"{res['url']}{pl_suffix}"
+                note = f"{res['url']}{pl_suffix}{drive_suffix}"
             else:
                 status = "API_NOTICE (SAVED LOCALLY)"
-                note = res.get("error", "")
+                note = f"{res.get('error', '')}{drive_suffix}"
+        elif drive_suffix:
+            status = "ARCHIVED TO GOOGLE DRIVE"
+            note = f"{note}{drive_suffix}"
 
     elif platform.startswith("Facebook") and vpath.exists():
         creds = load_meta_credentials()

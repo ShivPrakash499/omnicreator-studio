@@ -31,6 +31,7 @@ from studio_engine import (
     CURRICULUM_CLASSES,
     SCRIPT_MODEL_PRESETS,
     apply_consistent_topperlab_thumbnail_branding,
+    archive_rendered_video_to_google_drive,
     build_youtube_auth_url,
     check_gemini_api_key_health,
     check_youtube_playlist_scope,
@@ -1270,7 +1271,52 @@ with tab4:
     with tc3:
         exec_mode = st.radio("Publish Mode:", options=["Cloud Schedule for Peak IST Window", "Publish Immediately"])
 
-    if st.button("🚀 Dispatch / Cloud-Schedule Selected Videos", type="primary", use_container_width=True):
+    gdrive_topperlab_url = channel_cfg.get(
+        "gdrive_topperlab_folder_url",
+        "https://drive.google.com/drive/folders/1JYZ4Vbm-qeVcOYVNIyruLtIKCBGRhaJa",
+    )
+    clean_drive_title = active_title.replace("#Shorts", "").replace("#shorts", "").strip()
+    st.markdown(
+        f"""
+        <div style="background: rgba(16, 185, 129, 0.12); border: 1px solid #10b981; border-radius: 10px; padding: 12px 16px; margin-bottom: 12px;">
+            <strong style="color: #6ee7b7;">📂 Google Drive Auto-Archive Hierarchy Enabled:</strong><br/>
+            <span style="color: #e2e8f0; font-family: monospace;">Youtube ➔ TopperLAB ➔ {clean_drive_title}</span><br/>
+            <span style="color: #94a3b8; font-size: 0.88rem;">Every YouTube upload automatically creates/updates this exact folder on Google Drive with the final rendered MP4 &amp; thumbnail. </span>
+            <a href="{gdrive_topperlab_url}" target="_blank" style="color: #38bdf8; font-weight: 700;">Open Youtube ➔ TopperLAB in Google Drive ↗</a>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    btn_col1, btn_col2 = st.columns([2, 1])
+    with btn_col2:
+        if st.button("☁️ Backup Final Videos to Google Drive Now", use_container_width=True):
+            if not draft:
+                st.error("Render your video in Step 2 first before backing up to Google Drive!")
+            else:
+                with st.spinner(f"Archiving to Google Drive: Youtube ➔ TopperLAB ➔ {clean_drive_title}..."):
+                    res_long = archive_rendered_video_to_google_drive(
+                        video_title=clean_drive_title,
+                        video_path=draft["renders"]["long_16x9_mp4"],
+                        thumbnail_path=draft.get("thumbnail_16x9_path"),
+                    )
+                    res_short = archive_rendered_video_to_google_drive(
+                        video_title=clean_drive_title,
+                        video_path=draft["renders"]["short_9x16_mp4"],
+                        thumbnail_path=draft.get("short_cover_9x16_path"),
+                    )
+                if res_long.get("ok") or res_short.get("ok"):
+                    st.success(
+                        f"Backed up to Google Drive `{res_long.get('folder_path')}`! "
+                        f"[Open Folder ↗]({res_long.get('folder_url')})"
+                    )
+                else:
+                    st.warning(f"Google Drive note: {res_long.get('note')}")
+
+    with btn_col1:
+        dispatch_clicked = st.button("🚀 Dispatch / Cloud-Schedule Selected Videos", type="primary", use_container_width=True)
+
+    if dispatch_clicked:
         if not draft:
             st.error("Render your video in Step 2 first before dispatching!")
         else:
