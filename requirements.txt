@@ -4,3 +4,11 @@ edge-tts>=6.1.9
 google-genai>=1.0.0,<3.0.0
 imageio-ffmpeg>=0.5.1
 requests>=2.31.0
+pydantic>=2.5.0
+python-dotenv>=1.0.0
+tenacity>=8.2.0
+httpx>=0.27.0
+# Optional local enterprise dependencies (auto-fallback active if not installed):
+# google-ads>=24.0.0
+# pytrends>=4.9.2
+# moviepy>=1.0.3

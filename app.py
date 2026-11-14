@@ -1499,3 +1499,13 @@ with tab4:
             st.session_state["live_yt_vids"] = fetch_live_youtube_channel_videos(max_results=10)
         if st.session_state.get("live_yt_vids"):
             st.dataframe(st.session_state["live_yt_vids"], use_container_width=True, hide_index=True)
+
+    # ==========================================================================
+    # OMNI CREATOR — ULTRA-REALISTIC 4K 3D HINGLISH SCIENCE & SEO ENGINE (9-12)
+    # ==========================================================================
+    try:
+        from omni_creator.ui_panel import render_omni_creator_science_studio
+        render_omni_creator_science_studio()
+    except Exception as _omni_ui_err:
+        st.warning(f"Omni Creator 4K 3D Science Studio Panel note: {_omni_ui_err}")
+
