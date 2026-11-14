@@ -1433,7 +1433,7 @@ def _parse_formula_into_three_portions(
     ]
 
 
-def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> List[Dict[str, Any]]:
+def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = True) -> List[Dict[str, Any]]:
     t_low = topic_title.lower()
     if "height" in t_low or "distance" in t_low or "elevation" in t_low:
         return [
@@ -1442,20 +1442,28 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
                 "act_badge": ACT_BADGE_LABELS[1],
                 "target_angle_deg": 45,
                 "headline": "ELEVATION VS DEPRESSION",
-                "concept_takeaway": "Looking UP from eye-level = Elevation; Looking DOWN = Depression (Equal by Z-Rule!)",
+                "concept_takeaway": (
+                    "Neeche se upar dekhna = Elevation; Upar se neeche = Depression (Z-Rule se dono Equal!)"
+                    if is_hinglish
+                    else "Looking UP from eye-level = Elevation; Looking DOWN = Depression (Equal by Z-Rule!)"
+                ),
                 "formula_badge": "tan θ = Perpendicular (Height) / Base (Ground Distance)",
                 "formula_parts": [
                     {"label": "1. BASE (GROUND = B)", "expr": "Base = Ground Distance (B)"},
                     {"label": "2. HEIGHT (TOWER = H)", "expr": "Perpendicular = Height (H)"},
                     {"label": "3. TAN RATIO & Z-RULE", "expr": "tan θ = H / B  (Elev = Depr)"},
                 ],
-                "quick_tip": "Z-Angle Hack: Angle of Depression from top ALWAYS equals Angle of Elevation from ground!",
+                "quick_tip": (
+                    "Z-Angle Hack: Top se Angle of Depression = Ground se Angle of Elevation (Hamesha Equal!)"
+                    if is_hinglish
+                    else "Z-Angle Hack: Angle of Depression from top ALWAYS equals Angle of Elevation from ground!"
+                ),
                 "narration": (
                     "Wait a second—can you find the exact height of a giant lighthouse without ever climbing it?! "
                     "Watch the green markers 1, 2, 3 lock onto the ground base, then the yellow vertical height rises at ninety degrees, and the red laser sight-line slices down! "
                     "By the alternate Z-angle law, Angle of Depression from the top ALWAYS equals Angle of Elevation from the ground!"
                     if not is_hinglish
-                    else "Ruko zara—kya aap bina chadhe kisi oonche lighthouse ki exact height sirf paanch second mein nikaal sakte hain?! Dekhiye green markers 1, 2, 3 ground base banate hain, yellow line seedhi height uthati hai, aur red laser sight-line angle lock karti hai! Z-rule se Depression aur Elevation hamesha barabar hote hain!"
+                    else "Ruko! Kya aap bina chaddhe kisi giant lighthouse ki exact height sirf paanch second mein nikaal sakte ho? Dekho—green markers 1, 2, 3 ground base lock karte hain, yellow line seedhi height uthaati hai, aur red laser sight-line angle banaati hai! Alternate Z-Rule se Angle of Depression aur Angle of Elevation hamesha equal hote hain!"
                 ),
                 "image_3d_prompt": "Bright sunny Pixar-style 3D classroom geometry tabletop model: a cheerful red-and-white striped coastal lighthouse on a green cliff overlooking a small yellow boat on calm blue water, crisp yellow horizontal eye-level beam and a vivid red diagonal line-of-sight forming a clear right-angled triangle, warm sunlit sky backdrop, zero text, zero faces.",
                 "google_flow_veo_prompt": "Dynamic camera sweep across a bright Pixar-style 3D coastal lighthouse and yellow boat as a glowing red laser sight-beam and yellow horizontal line trace a right-angled triangle over blue water.",
@@ -1466,20 +1474,28 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
                 "act_badge": ACT_BADGE_LABELS[2],
                 "target_angle_deg": 60,
                 "headline": "30-45-60 COMPASS PROOF",
-                "concept_takeaway": "95% of Class 10 Board questions use ONLY tan 30°, tan 45°, and tan 60°!",
+                "concept_takeaway": (
+                    "Class 10 Board ke 95% questions sirf tan 30°, tan 45° aur tan 60° se solve hote hain!"
+                    if is_hinglish
+                    else "95% of Class 10 Board questions use ONLY tan 30°, tan 45°, and tan 60°!"
+                ),
                 "formula_badge": "tan 30° = 1/√3   |   tan 45° = 1   |   tan 60° = √3",
                 "formula_parts": [
                     {"label": "1. SHALLOW 30 DEG", "expr": "tan 30° = 1 / √3 (Long Base)"},
                     {"label": "2. EQUAL 45 DEG", "expr": "tan 45° = 1  (Height = Base!)"},
                     {"label": "3. STEEP 60 DEG", "expr": "tan 60° = √3 (Tall Height)"},
                 ],
-                "quick_tip": "1-Second 45° Hack: Whenever angle is 45°, Tower Height = Ground Shadow Length instantly!",
+                "quick_tip": (
+                    "1-Sec 45° Hack: Jab bhi angle 45° dikhe, Tower Height = Shadow Length turant likh do!"
+                    if is_hinglish
+                    else "1-Second 45° Hack: Whenever angle is 45°, Tower Height = Ground Shadow Length instantly!"
+                ),
                 "narration": (
                     "Now watch our metallic compass scratch the three golden angles that control ninety-five percent of board exams! "
                     "At thirty degrees, tan is one over root three. At forty-five degrees, tan is one—so Height equals Shadow instantly! "
                     "And as the compass sweeps up to sixty degrees, tan jumps to root three!"
                     if not is_hinglish
-                    else "Ab dekhiye hamara compass kaise woh TEEN golden angles draw karta hai jinse 95 percent board sawal solve hote hain! Thirty degree par one by root three, forty-five degree par Height aur Shadow bilkul barabar, aur sixty degree par seedha root three!"
+                    else "Ab dekho hamara compass woh TEEN golden angles draw kar raha hai jinse board exam ke 95 percent questions aate hain! Thirty degree par tan hota hai one by root three. Forty-five degree par tan one—yaani Height aur Shadow bilkul barabar! Aur sixty degree par seedha root three!"
                 ),
                 "image_3d_prompt": "Vibrant sunny 3D school maths tabletop model: a bright red clock tower standing vertically on a neat green courtyard board with three color-coded yellow, blue, and emerald right-triangle beams touching three ground pegs at short, medium, and long shadow distances, bright Pixar educational lighting, zero text, zero faces.",
                 "google_flow_veo_prompt": "Smooth orbital camera around a sunny 3D red clock tower casting three glowing cyan, yellow, and emerald triangle rays onto ground pegs at 30, 45, and 60 degrees.",
@@ -1490,19 +1506,27 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
                 "act_badge": ACT_BADGE_LABELS[3],
                 "target_angle_deg": 60,
                 "headline": "5-SEC BOSS CHALLENGE!",
-                "concept_takeaway": "Walking closer from 30° to 60°? Distance walked is ALWAYS twice the remaining base!",
+                "concept_takeaway": (
+                    "Tower ki taraf chalne par angle 30° se 60° hua? Bacha hua base hamesha aadha (d/2) hoga!"
+                    if is_hinglish
+                    else "Walking closer from 30° to 60°? Distance walked is ALWAYS twice the remaining base!"
+                ),
                 "formula_badge": "d = 2x (Walked)   |   Base = x (Half!)   |   h = x√3",
                 "formula_parts": [
                     {"label": "1. WALKED (30->60)", "expr": "Walked Distance d = 2x"},
                     {"label": "2. REMAINING BASE", "expr": "Inner Base x = d / 2 (Half!)"},
                     {"label": "3. 5-SEC BOSS ANSWER", "expr": "Tower Height h = (d/2) × √3"},
                 ],
-                "quick_tip": "30° → 60° Topper Trick: Walked 40m closer? Remaining base is half (20m), Height = 20√3 m!",
+                "quick_tip": (
+                    "30° -> 60° Topper Trick: 40m aage chale? Bacha base aadha (20m), Height = 20√3 m!"
+                    if is_hinglish
+                    else "30° → 60° Topper Trick: Walked 40m closer? Remaining base is half (20m), Height = 20√3 m!"
+                ),
                 "narration": (
                     "Five-second Board Exam Boss Challenge—start the timer! You walk forty metres closer to a tower and the angle jumps from thirty to sixty degrees. "
                     "Don't touch long equations! When thirty becomes sixty, the remaining base is ALWAYS exact half—twenty metres—and tower height is twenty root three metres in five seconds flat!"
                     if not is_hinglish
-                    else "Five-second Board Exam Boss Challenge—timer shuru! Aap tower ki taraf 40 metre chalte hain aur angle 30 se 60 degree ho jata hai! Lambe equations chhodiye—baca hua base hamesha aadha yaani 20 metre hota hai, aur height seedha 20 root 3 metre!"
+                    else "Five-second Board Exam Boss Challenge—timer start! Aap tower ki taraf 40 metre chalte ho aur angle 30 se 60 degree ho jaata hai. Lambe equations bilkul mat likho! Jab angle 30 se 60 bane, bachaa hua base hamesha exact half yaani 20 metre hota hai, aur tower height seedha 20 root 3 metre!"
                 ),
                 "image_3d_prompt": "Crisp colorful 3D classroom demonstration on a sunlit desk: a tall royal-blue communication tower on the right with two bright yellow milestone pins on a straight road moving closer to the tower base, connected by clean red and emerald diagonal beams forming nested right triangles, zero text, zero faces.",
                 "google_flow_veo_prompt": "Fast energetic camera glide along a bright 3D tabletop road as two glowing milestone pins lock nested 30-degree and 60-degree laser triangles onto a tall royal-blue tower.",
@@ -1513,20 +1537,28 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
                 "act_badge": ACT_BADGE_LABELS[4],
                 "target_angle_deg": 45,
                 "headline": "EXAM TRAP + SUBSCRIBE!",
-                "concept_takeaway": "Always add Observer Eye-Height (+1.5m) to Triangle Height (h) + Subscribe to TopperLab!",
+                "concept_takeaway": (
+                    "Observer ki Eye-Height (+1.5m) ko Triangle Height (h) mein add karna mat bhoolna!"
+                    if is_hinglish
+                    else "Always add Observer Eye-Height (+1.5m) to Triangle Height (h) + Subscribe to TopperLab!"
+                ),
                 "formula_badge": "Total Height (H) = Triangle Height (h) + Observer Eye-Height",
                 "formula_parts": [
                     {"label": "1. TRIANGLE HEIGHT (h)", "expr": "Upper Triangle h = B × tan θ"},
                     {"label": "2. OBSERVER EYE (+1.5m)", "expr": "+ Boy/Stand Height (1.5 m)"},
                     {"label": "3. FULL-MARKS TOTAL (H)", "expr": "Total H = h + 1.5 m (Locked!)"},
                 ],
-                "quick_tip": "Smash SUBSCRIBE + Ring the Bell 🔔 & Download the Free 1-Page Formula Sheet Below!",
+                "quick_tip": (
+                    "Smash SUBSCRIBE + Bell Icon & Description se Free 1-Page Formula Sheet download karo!"
+                    if is_hinglish
+                    else "Smash SUBSCRIBE + Ring the Bell & Download the Free 1-Page Formula Sheet Below!"
+                ),
                 "narration": (
                     "Warning—never lose your final mark to the number-one board exam trap! "
                     "When a student's height like one point five metres is given, your triangle starts at eye level—so ALWAYS add that one point five metres at the end! "
                     "Smash that red Subscribe button, ring the notification bell, and grab the free one-page Formula Sheet below!"
                     if not is_hinglish
-                    else "Savdhaan—board exam ke number-one trap mein apna aakhri mark mat gawana! Jab student ki height 1.5 metre di ho, toh aakhir mein 1.5 metre jodna mat bhoolna! Abhi red Subscribe button dabayein, bell icon bajayein, aur neeche se free Formula Sheet download karein!"
+                    else "Warning—board exam ke number-one trap mein apna aakhri mark mat gawana! Jab question mein student ya observer ki height 1.5 metre di ho, toh triangle eye-level se banta hai—isliye end mein 1.5 metre zaroor add karo! Abhi Subscribe button dabaao, bell icon on karo, aur description se free Formula Sheet download kar lo!"
                 ),
                 "image_3d_prompt": "Cheerful sunlit 3D classroom model: a colorful miniature viewing stand on the left facing a tall yellow-and-red apartment tower on the right, showing a clear elevated horizontal green platform line and a bright golden star trophy on the desk, Pixar educational style, zero text, zero faces.",
                 "google_flow_veo_prompt": "Cheerful sunlit 3D classroom model zooming from an elevated green observer platform to a tall apartment tower and a gleaming golden trophy.",
@@ -1538,16 +1570,26 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
         return [
             {
                 "scene_id": 1,
+                "act_badge": ACT_BADGE_LABELS[1],
+                "target_angle_deg": 45,
                 "headline": "CYCLE WHEEL MYSTERY!",
-                "concept_takeaway": "A fast-spinning bicycle wheel stays upright on one rope instead of falling!",
+                "concept_takeaway": (
+                    "Tez spinning cycle wheel ek rassi par bina gire hawa mein balance rehta hai!"
+                    if is_hinglish
+                    else "A fast-spinning bicycle wheel stays upright on one rope instead of falling!"
+                ),
                 "formula_badge": "Angular Momentum (L) = I × ω  (Mass Spread × Spin Speed)",
-                "quick_tip": "Try it in class: Stationary cycle wheel falls instantly — spinning wheel balances!",
+                "quick_tip": (
+                    "Class Experiment: Ruka hua wheel turant girta hai — spinning wheel hawa mein tairta hai!"
+                    if is_hinglish
+                    else "Try it in class: Stationary cycle wheel falls instantly — spinning wheel balances!"
+                ),
                 "narration": (
                     "Hold on—imagine hanging a real bicycle wheel from just one rope on one side of its axle! "
                     "If the wheel isn't spinning, boom—gravity slams it straight down! "
                     "But give that exact same cycle wheel a super-fast spin... and wait—why is it floating sideways in mid-air without falling?! Let's unlock the secret!"
                     if not is_hinglish
-                    else "Ruko zara! Socho agar aap ek normal cycle ke wheel ko sirf ek side ki rassi se latka dein! Bina spin kiye chhodoge, toh dhadam se neeche girega! Lekin usi wheel ko zor se spin kijiye... arey wah—yeh hawa mein seedha kaise tair raha hai?! Chaliye iska secret dekhte hain!"
+                    else "Ruko! Socho agar aap ek cycle ke wheel ko sirf ek side ki rassi se latka do! Bina spin kiye chhodoge, toh gravity use turant neeche gira degi! Lekin usi wheel ko super-fast spin karo... aur dekho—yeh bina gire hawa mein sideways kaise float kar raha hai?! Chalo iska physics secret unlock karte hain!"
                 ),
                 "image_3d_prompt": "Bright sunny Pixar-style 3D classroom tabletop demonstration: a colorful red-and-yellow school bicycle wheel spinning fast while hanging horizontally from one bright white rope attached to one side of its axle, bold yellow 3D spin arrows around the tire and a bright blue balance arrow along the axle, warm sky-blue classroom background, super clear for Class 10 students, zero text, zero faces.",
                 "google_flow_veo_prompt": "Bright colorful Pixar-style 3D science classroom model: a red and yellow bicycle wheel hanging from a single rope spins rapidly and glides smoothly in a horizontal circle without falling, bright yellow and blue 3D arrows.",
@@ -1555,16 +1597,26 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
             },
             {
                 "scene_id": 2,
+                "act_badge": ACT_BADGE_LABELS[2],
+                "target_angle_deg": 60,
                 "headline": "DOOR & SPANNER RULE",
-                "concept_takeaway": "Turning effect (Torque) = Force × Distance from the hinge or pivot!",
+                "concept_takeaway": (
+                    "Turning Effect (Torque) = Force × Pivot se Perpendicular Distance (r)!"
+                    if is_hinglish
+                    else "Turning effect (Torque) = Force × Distance from the hinge or pivot!"
+                ),
                 "formula_badge": "Torque (τ) = Force (F) × Perpendicular Distance (r)",
-                "quick_tip": "Board Exam Hack: Door handles are placed FAR from hinges so small push gives HUGE Torque!",
+                "quick_tip": (
+                    "Board Exam Hack: Door handle hinge se door hota hai taaki kam Force mein zyada Torque mile!"
+                    if is_hinglish
+                    else "Board Exam Hack: Door handles are placed FAR from hinges so small push gives HUGE Torque!"
+                ),
                 "narration": (
                     "First, think about pushing your heavy classroom door! Why is the handle always on the far edge—never right next to the hinges? "
                     "Because turning power, called Torque, equals Force times Distance! "
                     "On our cycle wheel, gravity pulls down at a distance from the rope—creating a sideways twist instead of a straight drop!"
                     if not is_hinglish
-                    else "Sabse pehle apne classroom ke darwaze ko socho! Handle hamesha kabze se door kyun laga hota hai? Kyunki ghumane wali taqat—yaani Torque—hota hai Force guna Distance! Cycle wheel par bhi gravity rassi se thodi door neeche kheenchti hai, jo wheel ko sideways twist deti hai!"
+                    else "Sabse pehle apne classroom ke door ko dekho! Handle hamesha hinge se door kyun laga hota hai? Kyunki turning power—yaani Torque—hota hai Force into Perpendicular Distance! Hamare cycle wheel par bhi gravity rassi se thodi door neeche lagti hai, jo wheel ko sideways twist deti hai!"
                 ),
                 "image_3d_prompt": "Friendly colorful 3D classroom comparison model on a bright clean desk: a bright wooden toy door with hinges and a yellow spanner turning a large silver nut, vivid green Distance arrow (r) and red Push Force arrow (F) creating a bright golden turning arrow, sunlit studio backdrop, zero text, zero faces.",
                 "google_flow_veo_prompt": "Colorful 3D educational classroom animation: a bright yellow spanner turns a bolt easily when pushed at the long handle end, glowing red force arrow and green distance arrow.",
@@ -1572,16 +1624,26 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
             },
             {
                 "scene_id": 3,
+                "act_badge": ACT_BADGE_LABELS[3],
+                "target_angle_deg": 60,
                 "headline": "SIDEWAYS STEERING!",
-                "concept_takeaway": "Spin + Gravity Twist steers the wheel smoothly in a horizontal circle!",
+                "concept_takeaway": (
+                    "Spin (L) + Gravity Torque (τ) wheel ko horizontal circle mein steer karte hain!"
+                    if is_hinglish
+                    else "Spin + Gravity Twist steers the wheel smoothly in a horizontal circle!"
+                ),
                 "formula_badge": "Change in Spin Direction (ΔL) = Torque (τ) × Time (Δt)",
-                "quick_tip": "Right-Hand Thumb Trick: Curl fingers with wheel spin → Your thumb points along the axle!",
+                "quick_tip": (
+                    "Right-Hand Thumb Trick: Fingers ko spin direction mein curl karo -> Thumb axle direction dega!"
+                    if is_hinglish
+                    else "Right-Hand Thumb Trick: Curl fingers with wheel spin → Your thumb points along the axle!"
+                ),
                 "narration": (
                     "Here comes the magic moment! When you ride a bicycle fast, spinning wheels resist tipping over! "
                     "Instead of letting gravity knock the wheel down, that sideways Torque gently steers the spinning axle around in a smooth horizontal merry-go-round circle! "
                     "Scientists call this cool circular glide precession!"
                     if not is_hinglish
-                    else "Ab dekhiye asli jaadu! Jaise chalti hui cycle kabhi nahi girti, waise hi fast spinning wheel neeche girne se mana kar deta hai! Sideways Torque us ghoomte hue axle ko gol-gol horizontal circle mein steer karta rehta hai—jise kehte hain Precession!"
+                    else "Ab aata hai 5-second Boss Concept! Jaise tez chalti cycle kabhi nahi girti, waise hi spinning wheel neeche girne ke bajay sideways steer hota hai! Gravity ka Torque Angular Momentum vector ko horizontal circle mein ghumata hai—aur isi motion ko Physics mein Precession kehte hain!"
                 ),
                 "image_3d_prompt": "Bright colorful Kurzgesagt-meets-Pixar 3D classroom model: a glossy blue-and-yellow spinning bicycle wheel and a colorful toy spinning top orbiting smoothly along a dotted golden circular path above a bright wooden lab table, clear red and yellow 3D directional arrows, sunny sky backdrop, zero text, zero faces.",
                 "google_flow_veo_prompt": "Sunny colorful 3D classroom model: a spinning blue-and-yellow bicycle wheel and colorful spinning top trace a smooth golden circular path above a wooden table.",
@@ -1589,16 +1651,26 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
             },
             {
                 "scene_id": 4,
+                "act_badge": ACT_BADGE_LABELS[4],
+                "target_angle_deg": 45,
                 "headline": "FASTER SPIN = STEADIER!",
-                "concept_takeaway": "Faster wheel spin (ω) keeps your cycle & gyroscope super steady — 4 Marks Locked!",
+                "concept_takeaway": (
+                    "Jitni tez spin (ω) aur heavy rim (I), utna strong balance — 4 Marks Pakke!"
+                    if is_hinglish
+                    else "Faster wheel spin (ω) keeps your cycle & gyroscope super steady — 4 Marks Locked!"
+                ),
                 "formula_badge": "Balance Rule: Faster Spin (↑ ω) → Slower Wobble (↓ Ω)",
-                "quick_tip": "Topper Shortcut: Heavy rim + Fast spin = Maximum stability (Used in satellites & bikes)!",
+                "quick_tip": (
+                    "Smash SUBSCRIBE + Bell Icon & Description se Free 1-Page Formula Sheet download karo!"
+                    if is_hinglish
+                    else "Topper Shortcut: Heavy rim + Fast spin = Maximum stability (Used in satellites & bikes)!"
+                ),
                 "narration": (
                     "Boom—here is your guaranteed exam takeaway! The faster a wheel spins, and the heavier its outer tire rim, the steadier it stays! "
                     "That's the exact same science keeping your bicycle upright and spacecraft pointed straight! "
                     "Grab the free one-page Formula and Hack Sheet in the description below, and hit subscribe for your next chapter!"
                     if not is_hinglish
-                    else "Boom—ab lock kar lijiye pakke exam marks! Wheel jitna tez ghoomega aur uska bahari rim jitna bhaari hoga, balance utna hi rock-solid rahega! Yahi science aapki cycle aur satellites dono ko seedha rakhti hai! Description se free 1-page Formula Sheet download karein aur TopperLab ko subscribe karein!"
+                    else "Warning—exam mein yeh relation ulta mat likhna! Wheel jitna fast spin karega aur uska rim jitna heavy hoga, wobble utna hi kam hoga! Yahi exact gyroscope principle satellites aur bikes ko steady rakhta hai! Abhi Subscribe button dabaao, bell icon on karo, aur description se free Formula Sheet download kar lo!"
                 ),
                 "image_3d_prompt": "Bright cheerful 3D student study desk in sunlit classroom: a miniature colorful 3D bicycle model, a spinning toy top, a golden star trophy, and an open colorful 3D science model kit with neat color-coded arrows, warm inviting Pixar educational style, zero text, zero faces.",
                 "google_flow_veo_prompt": "Cheerful sunlit 3D student desk with a miniature spinning bicycle wheel model, colorful magnets, and a golden trophy rotating gently.",
@@ -1610,44 +1682,100 @@ def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = False) -> Li
     return [
         {
             "scene_id": 1,
+            "act_badge": ACT_BADGE_LABELS[1],
+            "target_angle_deg": 45,
             "headline": "REAL-LIFE HOOK!",
-            "concept_takeaway": f"Understand {clean_core} using an everyday real-life classroom model!",
+            "concept_takeaway": (
+                f"{clean_core} ko real-life visual model aur diagram se 10 second mein samjho!"
+                if is_hinglish
+                else f"Understand {clean_core} using an everyday real-life classroom model!"
+            ),
             "formula_badge": f"Core Rule: {clean_core[:44]}",
-            "quick_tip": "Visual Memory Trick: Picture the real-life object first — never cram blind definitions!",
-            "narration": f"Wait a second! Have you ever wondered why {clean_core} confuses so many students in boring black-and-white textbook pages? Once you see how it works in real life, every single formula clicks in ten seconds flat! Let's break down the whole chapter step by step!",
+            "quick_tip": (
+                "Visual Trick:Ratta mat maaro — pehle diagram mein Base aur Height lock karo!"
+                if is_hinglish
+                else "Visual Memory Trick: Picture the real-life object first — never cram blind definitions!"
+            ),
+            "narration": (
+                f"Ruko! Board exam mein {clean_core} ka question dekhte hi 90 percent students confuse kyun ho jaate hain? Kyunki woh bina visual logic samjhe sirf formula ratte hain! Dekho jab hum green markers 1, 2, 3 aur live lines draw karte hain, toh poora concept 10 second mein crystal-clear ho jaata hai!"
+                if is_hinglish
+                else f"Wait a second! Have you ever wondered why {clean_core} confuses so many students in boring black-and-white textbook pages? Once you see how it works in real life, every single formula clicks in ten seconds flat! Let's break down the whole chapter step by step!"
+            ),
             "image_3d_prompt": f"Bright colorful Pixar-style 3D classroom tabletop cutaway model illustrating '{topic_title}' using everyday real-life student objects and bold red, yellow, and blue 3D arrows, sunny sky-blue backdrop, zero text, zero faces.",
             "google_flow_veo_prompt": f"Bright colorful 3D classroom model camera zoom onto an everyday real-life demonstration of '{topic_title}'.",
             "fallback_plate": "scene_01_16x9.jpg",
         },
         {
             "scene_id": 2,
+            "act_badge": ACT_BADGE_LABELS[2],
+            "target_angle_deg": 60,
             "headline": "CORE LAWS & FORMULAS",
-            "concept_takeaway": f"Step-by-step visual breakdown of {clean_core}",
-            "formula_badge": "Master Formula: Direct Cause (Red) → Output (Yellow)",
-            "quick_tip": "Board Exam Tip: Always draw neat labelled diagrams in your answer sheet for full marks!",
-            "narration": f"Look closely at our classroom model! When we open it up from the side, every part connects like simple building blocks. Follow the bright yellow arrow from start to finish—zero scary jargon, just pure common sense!",
+            "concept_takeaway": (
+                f"{clean_core} ke teeno formula portions ko diagram ke saath step-by-step jodo!"
+                if is_hinglish
+                else f"Step-by-step visual breakdown of {clean_core}"
+            ),
+            "formula_badge": "Master Formula: Direct Cause (Cyan) -> Output (Yellow)",
+            "quick_tip": (
+                "Board Exam Tip: Answer sheet mein clean labelled diagram banaane par step marks pakke milte hain!"
+                if is_hinglish
+                else "Board Exam Tip: Always draw neat labelled diagrams in your answer sheet for full marks!"
+            ),
+            "narration": (
+                f"Ab dekho hamara live geometry stage! Jaise-jaise compass angle sweep karta hai, upar formula ka Portion 1, Portion 2 aur Portion 3 ek-ek karke highlight hota hai. Zero confusion, zero boring theory—seedha visual proof!"
+                if is_hinglish
+                else f"Look closely at our classroom model! When we open it up from the side, every part connects like simple building blocks. Follow the bright yellow arrow from start to finish—zero scary jargon, just pure common sense!"
+            ),
             "image_3d_prompt": f"Vibrant well-lit 3D school science lab cutaway model of '{topic_title}' on a clean bright desk, primary-colored red, yellow, and royal-blue parts sliced open clearly, zero text, zero faces.",
             "google_flow_veo_prompt": f"Smooth orbital 3D camera around a colorful classroom model demonstrating '{topic_title}'.",
             "fallback_plate": "scene_02_16x9.jpg",
         },
         {
             "scene_id": 3,
-            "headline": "#1 BOARD EXAM TRAP!",
-            "concept_takeaway": "Spot and fix the #1 silly mistake students make in the exam hall!",
+            "act_badge": ACT_BADGE_LABELS[3],
+            "target_angle_deg": 60,
+            "headline": "5-SEC BOSS CHALLENGE!",
+            "concept_takeaway": (
+                "5-Second Topper Ratio Shortcut se lamba numerical bina calculation mistake solve karo!"
+                if is_hinglish
+                else "Spot and fix the #1 silly mistake students make in the exam hall!"
+            ),
             "formula_badge": "Check Units & +/- Signs Before Final Answer!",
-            "quick_tip": "Topper Hack: Circle the asked unit in the question before writing your formula!",
-            "narration": f"Hold on—here is where ninety percent of students lose easy marks in the exam hall! They rush the sign or mix up the two cases. Compare the green right setup with the red mistake—now you will never fall for that trap again!",
+            "quick_tip": (
+                "Topper Hack: Formula likhne se pehle question mein di gayi SI Unit ko circle kar lo!"
+                if is_hinglish
+                else "Topper Hack: Circle the asked unit in the question before writing your formula!"
+            ),
+            "narration": (
+                f"Five-second Board Exam Boss Challenge—timer start! Exam hall mein jab yeh numerical aaye, toh 2-page calculation mein time waste mat karo. Seedha ratio shortcut lagao, SI unit check karo, aur 5 second mein full marks lock karo!"
+                if is_hinglish
+                else f"Hold on—here is where ninety percent of students lose easy marks in the exam hall! They rush the sign or mix up the two cases. Compare the green right setup with the red mistake—now you will never fall for that trap again!"
+            ),
             "image_3d_prompt": f"Bright colorful 3D side-by-side classroom model comparing the wrong vs right setup for '{topic_title}' using vivid emerald green and crimson red 3D indicators on a sunny tabletop, zero text, zero faces.",
             "google_flow_veo_prompt": f"Colorful 3D classroom demonstration locking bright green parts together for '{topic_title}'.",
             "fallback_plate": "scene_03_16x9.jpg",
         },
         {
             "scene_id": 4,
-            "headline": "COMPLETE RECAP!",
-            "concept_takeaway": "Rapid Formula Recap + Free 1-Page Summary Sheet in Description!",
+            "act_badge": ACT_BADGE_LABELS[4],
+            "target_angle_deg": 45,
+            "headline": "EXAM TRAP + SUBSCRIBE!",
+            "concept_takeaway": (
+                "Sign aur Unit trap se bacho + TopperLab ko Subscribe karke Free Formula PDF lo!"
+                if is_hinglish
+                else "Rapid Formula Recap + Free 1-Page Summary Sheet in Description!"
+            ),
             "formula_badge": "1-3-7 Recall Rule: Revise Today • Day 3 • Day 7",
-            "quick_tip": "Quick Test: Pause for 3 seconds and recall all key formulas with your eyes closed!",
-            "narration": f"Awesome job! Close your eyes for two seconds—can you recall every core formula clearly? Boom, that means your brain just locked in full marks! Download the free one-page Formula and Quick-Tip Sheet linked below, and subscribe to TopperLab!",
+            "quick_tip": (
+                "Smash SUBSCRIBE + Bell Icon & Description se Free 1-Page Formula Sheet download karo!"
+                if is_hinglish
+                else "Quick Test: Pause for 3 seconds and recall all key formulas with your eyes closed!"
+            ),
+            "narration": (
+                f"Warning—aakhri step mein unit ya sign galti se apna mark mat katwana! Agar yeh 6-minute visual revision pasand aaya, toh abhi red Subscribe button dabaao, notification bell on karo, aur description se free 1-page Formula Sheet download kar lo!"
+                if is_hinglish
+                else f"Awesome job! Close your eyes for two seconds—can you recall every core formula clearly? Boom, that means your brain just locked in full marks! Download the free one-page Formula and Quick-Tip Sheet linked below, and subscribe to TopperLab!"
+            ),
             "image_3d_prompt": f"Cheerful sunlit 3D student desk with a colorful miniature 3D science model of '{topic_title}', a bright golden star trophy, and colourful study markers, Pixar educational style, zero text, zero faces.",
             "google_flow_veo_prompt": "Bright cheerful 3D student desk with miniature science models and a golden star trophy.",
             "fallback_plate": "scene_04_16x9.jpg",
@@ -1679,7 +1807,11 @@ def generate_dual_script_and_thumbnails(
 
     voice_cfg = _resolve_voice_preset(ch, voice_mode)
     theme_cfg = _resolve_visual_theme(ch, visual_theme_key)
-    is_hinglish = voice_cfg.get("language_code") == "hi-IN"
+    is_hinglish = (
+        voice_cfg.get("language_code") == "hi-IN"
+        or "hinglish" in (voice_mode or "").lower()
+        or "hi-in" in (voice_mode or "").lower()
+    )
     class_badge_text = infer_class_badge_label(
         exam_track=exam_track,
         topic_title=topic_title,
@@ -1746,6 +1878,8 @@ def generate_dual_script_and_thumbnails(
         f"2. Every `image_3d_prompt` and `google_flow_veo_prompt` MUST describe bright, colorful, everyday classroom/real-life visual models (lighthouses, towers, bicycles, cricket balls, magnets, batteries, prisms, water pipes, heart models, globes, geometry blocks) on a bright studio desk — NEVER dark sci-fi labs, ZERO human faces, and ZERO text/letters inside the raw image.\n"
         f"3. Follow the 4-Act Big-Channel Format: Scene 1 = Curiosity Hook ('Wait a second—can you...?'), Scene 2 = Step-by-Step Visual Proof, Scene 3 = 5-Second Board Exam Boss Challenge ('Start the timer!'), Scene 4 = #1 Exam Trap Fix + Explicit Call to Subscribe, Like, Ring the Bell & Download the Free 1-Page Formula Sheet!\n"
         f"4. Every scene MUST include an accurate syllabus `formula_badge` (max 52 chars), `formula_parts` (an array of 3 objects `[{{'label': '1. ...', 'expr': '...'}}, {{'label': '2. ...', 'expr': '...'}}, {{'label': '3. ...', 'expr': '...'}}]` breaking the formula into 3 portions that highlight one-by-one as lines/angles draw!), AND a punchy `quick_tip` (max 68 chars).\n"
+        f"5. LANGUAGE RULE ({'HINGLISH' if is_hinglish else 'ENGLISH'}): "
+        f"{'Write `narration`, `concept_takeaway`, and `quick_tip` in natural, high-energy Indian Teen Hinglish (Roman script mixing exact English STEM terms & formulas like Angle of Elevation, Line of Sight, tan theta = Perpendicular / Base, Torque, NCERT, Board Exam with natural Hindi connectors like Ruko! Board exam mein..., Dekho kitna simple hai..., Bas yeh 5-second Topper Trick lagao!). Keep `headline`, `formula_badge`, and `formula_parts` in crisp English math notation.' if is_hinglish else 'Write in crisp, energetic Indian student mentor English.'}\n"
         f"Return JSON with keys:\n"
         f"- title_variations (array of 3 clean student titles — first one matching '{topic_title}', ZERO '3D' text)\n"
         f"- thumb_hook_3words (2 to 3 punchy words for the Yellow+Red thumbnail heading, e.g. '{default_hook}' or '5-SEC TRIG HACK!')\n"
@@ -1889,11 +2023,52 @@ def _probe_wav_duration(wav_path: Path) -> float:
         return 12.0
 
 
+def _normalize_hinglish_for_tts(text: str, is_hinglish: bool = True) -> str:
+    """
+    Ensures Roman-script Hinglish words and Indian board-exam acronyms (NCERT, CBSE, ICSE, PYQ)
+    are pronounced with 100% authentic Indian mentor clarity by `hi-IN-MadhurNeural` / `hi-IN-SwaraNeural`.
+    """
+    s = re.sub(r"[*_#`]+", "", (text or "")).strip()
+    acronym_map = {
+        r"\bNCERT\b": "N C E R T",
+        r"\bCBSE\b": "C B S E",
+        r"\bICSE\b": "I C S E",
+        r"\bPYQs\b": "P Y Qs",
+        r"\bPYQ\b": "P Y Q",
+    }
+    for pat, repl in acronym_map.items():
+        s = re.sub(pat, repl, s, flags=re.IGNORECASE)
+    if not is_hinglish:
+        return s
+    phonetic_map = {
+        r"\bbanate\b": "banaate",
+        r"\bbanati\b": "banaati",
+        r"\bbanti\b": "ban-ti",
+        r"\bbanta\b": "ban-ta",
+        r"\buthati\b": "uthaati",
+        r"\bchadhe\b": "chaddhe",
+        r"\bbacha\b": "bachaa",
+        r"\bnikal\b": "nikaal",
+        r"\bjata\b": "jaata",
+        r"\bjate\b": "jaate",
+        r"\baata\b": "aataa",
+        r"\bdabao\b": "dabaao",
+        r"\blagao\b": "lagaao",
+        r"\bgawana\b": "gawaana",
+        r"\bkatwana\b": "katwaana",
+    }
+    for pat, repl in phonetic_map.items():
+        s = re.sub(pat, repl, s, flags=re.IGNORECASE)
+    return s
+
+
 def synthesize_scene_voiceover(narration: str, out_wav: Path, voice_preset: Dict[str, Any]) -> float:
     """
-    Synthesizes expressive, lively Indian-student mentor narration:
-      1. Primary: Vertex AI / Gemini `gemini-3.8-flash-tts` expressive AI voice acting (Puck / Aoede)
-      2. Fallback: Microsoft `en-IN-NeerjaExpressiveNeural` / `hi-IN-SwaraNeural` with dynamic prosody
+    Synthesizes expressive, teenager-friendly Indian mentor narration:
+      - For Hinglish (`language_code == 'hi-IN'`): Uses native bilingual Indian neural voices
+        (`hi-IN-MadhurNeural` / `hi-IN-SwaraNeural`) first so Hindi + English technical terms
+        sound 100% authentic (never American-accented Hindi!).
+      - For English (`en-IN`): Uses Vertex AI / Gemini TTS or `en-IN-PrabhatNeural` / `en-IN-NeerjaExpressiveNeural`.
       Normalized cleanly to -14 LUFS at 44.1 kHz stereo.
     """
     out_wav.parent.mkdir(parents=True, exist_ok=True)
@@ -1901,9 +2076,62 @@ def synthesize_scene_voiceover(narration: str, out_wav: Path, voice_preset: Dict
     mp3_tmp = out_wav.with_suffix(".mp3")
     ffmpeg_bin = get_ffmpeg_exe()
 
-    clean_spoken = re.sub(r"[*_#`]+", "", (narration or "")).strip()
+    is_hinglish = voice_preset.get("language_code", "hi-IN") == "hi-IN"
+    clean_spoken = _normalize_hinglish_for_tts(narration, is_hinglish=is_hinglish)
 
-    # 1. Primary Expressive Voice: Gemini 3.8 Flash TTS (Vertex AI credits or AI Studio)
+    def _run_edge_neural_tts() -> float | None:
+        try:
+            import edge_tts
+
+            edge_v = voice_preset.get("edge_voice") or ("hi-IN-MadhurNeural" if is_hinglish else "en-IN-PrabhatNeural")
+            rate_v = voice_preset.get("rate", "+10%" if is_hinglish else "+9%")
+            pitch_v = voice_preset.get("pitch", "+0Hz")
+
+            async def _run_tts() -> None:
+                comm = edge_tts.Communicate(
+                    text=clean_spoken,
+                    voice=edge_v,
+                    rate=rate_v,
+                    pitch=pitch_v,
+                )
+                await comm.save(str(mp3_tmp))
+
+            asyncio.run(_run_tts())
+            if mp3_tmp.exists() and mp3_tmp.stat().st_size > 400:
+                subprocess.run(
+                    [
+                        ffmpeg_bin,
+                        "-y",
+                        "-i",
+                        str(mp3_tmp),
+                        "-af",
+                        "highpass=f=75,equalizer=f=3100:t=q:w=1.2:g=2.0,loudnorm=I=-14:TP=-1.5:LRA=11",
+                        "-ar",
+                        "44100",
+                        "-ac",
+                        "2",
+                        str(out_wav),
+                    ],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    check=True,
+                )
+                try:
+                    mp3_tmp.unlink(missing_ok=True)
+                except Exception:
+                    pass
+                return _probe_wav_duration(out_wav)
+        except Exception:
+            pass
+        return None
+
+    # For Hinglish (`hi-IN`), prioritize native Indian bilingual neural voice (`hi-IN-MadhurNeural` / `hi-IN-SwaraNeural`)
+    if is_hinglish and clean_spoken:
+        dur_hi = _run_edge_neural_tts()
+        if dur_hi is not None:
+            return dur_hi
+
+    # Gemini TTS path (for English or fallback)
     client = build_genai_client(location="global", timeout_ms=42000)
     if client is not None and clean_spoken:
         try:
@@ -1960,83 +2188,48 @@ def synthesize_scene_voiceover(narration: str, out_wav: Path, voice_preset: Dict
         except Exception:
             pass
 
-    # 2. Expressive Neural Fallback: edge-tts (`en-IN-NeerjaExpressiveNeural`)
-    try:
-        import edge_tts
-
-        async def _run_tts() -> None:
-            comm = edge_tts.Communicate(
-                text=clean_spoken,
-                voice=voice_preset.get("edge_voice", "en-IN-NeerjaExpressiveNeural"),
-                rate=voice_preset.get("rate", "+9%"),
-                pitch=voice_preset.get("pitch", "+3Hz"),
-            )
-            await comm.save(str(mp3_tmp))
-
-        asyncio.run(_run_tts())
-        if mp3_tmp.exists() and mp3_tmp.stat().st_size > 400:
-            subprocess.run(
-                [
-                    ffmpeg_bin,
-                    "-y",
-                    "-i",
-                    str(mp3_tmp),
-                    "-af",
-                    "highpass=f=75,equalizer=f=3100:t=q:w=1.2:g=2.0,loudnorm=I=-14:TP=-1.5:LRA=11",
-                    "-ar",
-                    "44100",
-                    "-ac",
-                    "2",
-                    str(out_wav),
-                ],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                check=True,
-            )
-            try:
-                mp3_tmp.unlink(missing_ok=True)
-            except Exception:
-                pass
-            return _probe_wav_duration(out_wav)
-    except Exception:
-        pass
+    dur_fallback = _run_edge_neural_tts()
+    if dur_fallback is not None:
+        return dur_fallback
 
     words = max(8, len(clean_spoken.split()))
     est_sec = round(max(6.0, words / 2.7), 1)
     return _write_fallback_wav(out_wav, duration_sec=est_sec)
 
 
-def _add_pluck_note(
+def _add_tactile_ui_lock(
     buf_l: List[float],
     buf_r: List[float],
     sr: int,
     start_sec: float,
-    freq: float,
-    dur_sec: float = 0.30,
-    amp: float = 0.25,
+    low_freq: float = 118.0,
+    click_freq: float = 780.0,
+    amp: float = 0.34,
     pan: float = 0.5,
 ) -> None:
+    """
+    Teen-approved modern motion-graphics UI lock sound (tight low-mid sub-thump + 10ms mechanical click).
+    Replaces high-pitched childish musical chimes when formula portions or badges lock into place.
+    """
     n_total = len(buf_l)
     i0 = max(0, int(start_sec * sr))
-    n_len = min(int(dur_sec * sr), n_total - i0)
+    n_len = min(int(0.085 * sr), n_total - i0)
     if n_len <= 0:
         return
     gain_l = amp * math.sqrt(max(0.0, 1.0 - pan))
     gain_r = amp * math.sqrt(min(1.0, pan))
-    two_pi_f = 2.0 * math.pi * freq / sr
+    phase_low = 0.0
     for k in range(n_len):
         t = k / float(sr)
-        att = min(1.0, t / 0.005)
-        dec = math.exp(-7.8 * t)
-        wave_v = (
-            math.sin(two_pi_f * k)
-            + 0.34 * math.sin(2.0 * two_pi_f * k) * math.exp(-15.0 * t)
-            + 0.11 * math.sin(3.0 * two_pi_f * k) * math.exp(-24.0 * t)
-        )
-        s = att * dec * wave_v
-        idx = i0 + k
-        buf_l[idx] += s * gain_l
-        buf_r[idx] += s * gain_r
+        # Fast pitch-drop sub thump (125Hz -> 52Hz over 70ms)
+        f_inst = 52.0 + (low_freq - 52.0) * math.exp(-38.0 * t)
+        phase_low += 2.0 * math.pi * f_inst / sr
+        sub_body = math.exp(-32.0 * t) * math.sin(phase_low)
+        # Ultra-short 9ms mechanical transient click
+        mech_click = math.exp(-260.0 * t) * 0.42 * math.sin(2.0 * math.pi * click_freq * t)
+        s = sub_body + mech_click
+        buf_l[i0 + k] += s * gain_l
+        buf_r[i0 + k] += s * gain_r
 
 
 def _add_swept_whoosh(
@@ -2044,11 +2237,12 @@ def _add_swept_whoosh(
     buf_r: List[float],
     sr: int,
     start_sec: float,
-    dur_sec: float = 0.30,
-    f_start: float = 210.0,
-    f_end: float = 590.0,
-    amp: float = 0.32,
+    dur_sec: float = 0.28,
+    f_start: float = 68.0,
+    f_end: float = 185.0,
+    amp: float = 0.30,
 ) -> None:
+    """Deep cinematic low-end air transition whoosh (zero high-pitched cartoon tones)."""
     n_total = len(buf_l)
     i0 = max(0, int(start_sec * sr))
     n_len = min(int(dur_sec * sr), n_total - i0)
@@ -2056,14 +2250,16 @@ def _add_swept_whoosh(
         return
     phase = 0.0
     noise_state = 1337
+    lp_noise = 0.0
     for k in range(n_len):
         u = k / float(n_len)
-        env = math.sin(math.pi * u) ** 1.3
+        env = math.sin(math.pi * u) ** 1.35
         freq = f_start + (f_end - f_start) * (u ** 0.85)
         phase += 2.0 * math.pi * freq / sr
         noise_state = (1103515245 * noise_state + 12345) & 0x7FFFFFFF
-        n_val = ((noise_state / 1073741824.0) - 1.0) * 0.28
-        val = env * amp * (0.72 * math.sin(phase) + n_val)
+        raw_n = ((noise_state / 1073741824.0) - 1.0) * 0.24
+        lp_noise = 0.86 * lp_noise + 0.14 * raw_n
+        val = env * amp * (0.74 * math.sin(phase) + lp_noise)
         pan = 0.25 + 0.5 * u
         idx = i0 + k
         buf_l[idx] += val * (1.0 - 0.35 * pan)
@@ -2076,53 +2272,28 @@ def _add_mechanical_ticks(
     sr: int,
     start_sec: float,
     dur_sec: float = 1.6,
-    tick_rate_hz: float = 13.0,
-    base_freq: float = 1280.0,
+    tick_rate_hz: float = 12.0,
+    base_freq: float = 680.0,
     amp: float = 0.22,
 ) -> None:
-    """Crisp mechanical ruler/compass ratchet clicks (8MXN6QjPJqc tactile ASMR line-drawing sound)."""
+    """Crisp low-mid mechanical drafting/compass ratchet clicks (tactile line-drawing SFX)."""
     n_total = len(buf_l)
     step_sec = 1.0 / max(2.0, tick_rate_hz)
     n_ticks = max(1, int(dur_sec / step_sec))
     for idx_t in range(n_ticks):
         t0 = start_sec + idx_t * step_sec
         i0 = max(0, int(t0 * sr))
-        click_len = min(int(0.018 * sr), n_total - i0)
+        click_len = min(int(0.015 * sr), n_total - i0)
         if click_len <= 0:
             break
-        f_tick = base_freq * (1.0 + 0.03 * (idx_t % 4))
+        f_tick = base_freq * (1.0 + 0.02 * (idx_t % 3))
         pan = 0.35 + 0.30 * (idx_t / float(max(1, n_ticks)))
         for k in range(click_len):
             t = k / float(sr)
-            env = math.exp(-210.0 * t)
-            v = amp * env * (0.75 * math.sin(2.0 * math.pi * f_tick * t) + 0.25 * math.sin(2.0 * math.pi * (f_tick * 2.4) * t))
+            env = math.exp(-240.0 * t)
+            v = amp * env * (0.80 * math.sin(2.0 * math.pi * f_tick * t) + 0.20 * math.sin(2.0 * math.pi * (f_tick * 1.6) * t))
             buf_l[i0 + k] += v * (1.0 - 0.35 * pan)
             buf_r[i0 + k] += v * (0.65 + 0.35 * pan)
-
-
-def _add_curiosity_chirp(
-    buf_l: List[float],
-    buf_r: List[float],
-    sr: int,
-    start_sec: float,
-    dur_sec: float = 0.28,
-    amp: float = 0.32,
-) -> None:
-    """Playful upward pitch-bend chirp for the '?' puzzle badge in Scene 1 (8MXN6QjPJqc hook cue)."""
-    n_total = len(buf_l)
-    i0 = max(0, int(start_sec * sr))
-    n_len = min(int(dur_sec * sr), n_total - i0)
-    if n_len <= 0:
-        return
-    phase = 0.0
-    for k in range(n_len):
-        u = k / float(n_len)
-        env = math.sin(math.pi * u) ** 0.85
-        freq = 390.0 + 690.0 * (u ** 1.5)
-        phase += 2.0 * math.pi * freq / sr
-        v = amp * env * (0.82 * math.sin(phase) + 0.18 * math.sin(2.0 * phase))
-        buf_l[i0 + k] += v * 0.85
-        buf_r[i0 + k] += v * 0.95
 
 
 def _add_laser_sweep(
@@ -2130,12 +2301,12 @@ def _add_laser_sweep(
     buf_r: List[float],
     sr: int,
     start_sec: float,
-    dur_sec: float = 0.55,
-    f_start: float = 780.0,
-    f_end: float = 290.0,
+    dur_sec: float = 0.46,
+    f_start: float = 195.0,
+    f_end: float = 78.0,
     amp: float = 0.26,
 ) -> None:
-    """Warm synth laser beam hum when the red sight-line slices across the triangle (8MXN6QjPJqc 0:30)."""
+    """Deep low-mid sci-tech laser sight-beam hum when the red sight-line locks onto the triangle."""
     n_total = len(buf_l)
     i0 = max(0, int(start_sec * sr))
     n_len = min(int(dur_sec * sr), n_total - i0)
@@ -2144,10 +2315,10 @@ def _add_laser_sweep(
     phase = 0.0
     for k in range(n_len):
         u = k / float(n_len)
-        env = math.sin(math.pi * u) ** 1.15
-        freq = f_start + (f_end - f_start) * (u ** 0.75)
+        env = math.sin(math.pi * u) ** 1.2
+        freq = f_start + (f_end - f_start) * (u ** 0.78)
         phase += 2.0 * math.pi * freq / sr
-        v = amp * env * (0.70 * math.sin(phase) + 0.30 * math.sin(1.5 * phase))
+        v = amp * env * (0.76 * math.sin(phase) + 0.24 * math.sin(1.5 * phase))
         buf_l[i0 + k] += v * (0.9 - 0.3 * u)
         buf_r[i0 + k] += v * (0.6 + 0.3 * u)
 
@@ -2164,15 +2335,14 @@ def build_scene_master_audio(
     bgm_enabled: bool = True,
 ) -> Path:
     """
-    Mixes the expressive -14 LUFS narration with:
-      1. 4-Act Dynamic Marimba + Warm Bass + Shaker BGM (auto-ducked under voice!)
-      2. Tactile ASMR Geometry SFX (inspired by reference Short 8MXN6QjPJqc):
-         - Mechanical ruler/ratchet clicks as green markers 1, 2, 3 and Base line draw
-         - Playful '?' curiosity chirp on Scene 1 hook
-         - Warm laser beam hum on diagonal sight-ray sweep
-         - 3 Ascending Crystal Chimes synced 1-to-1 with Formula Portion 1, 2, and 3 highlights
-         - High-energy 5-second countdown ticks + victory chord in Scene 3 (Climax)
-         - Mouse-click + Golden YouTube Notification Bell Ding in Scene 4 (Subscribe CTA)!
+    Mixes the -14 LUFS Hinglish/English narration with Teen-Approved Studio Effect Sounds (SFX) ONLY:
+      - ZERO childish nursery/marimba background melody loops or high-pitched fairy chimes!
+      - Deep cinematic low-end air whoosh on scene transitions (68Hz -> 185Hz)
+      - Tactile mechanical drafting & compass ticks as green markers 1, 2, 3, Base line, and Angle arcs draw
+      - Tight low-mid UI lock thuds synced 1-to-1 with Formula Portions 1, 2, and 3 highlighting
+      - Deep low-mid laser beam hum on diagonal sight-ray sweep
+      - Mechanical chrono-watch escapement ticks + deep sub-bass drop impact in Scene 3 (5-Sec Boss Challenge)
+      - Crisp double mechanical mouse-click + deep confirmation lock in Scene 4 (Subscribe CTA)
     """
     if not bgm_enabled or not voice_wav.exists():
         if voice_wav.exists() and voice_wav.resolve() != out_mix_wav.resolve():
@@ -2200,115 +2370,79 @@ def build_scene_master_audio(
 
     n_total = len(v_samples) // 2
     sr = 44100
-    bgm_l = [0.0] * n_total
-    bgm_r = [0.0] * n_total
     sfx_l = [0.0] * n_total
     sfx_r = [0.0] * n_total
 
-    # 1. 4-Act Student Curiosity Groove (Scene 3 Climax shifts slightly faster/brighter!)
-    bpm = 122.0 if scene_id == 3 else 116.0
-    beat_sec = 60.0 / bpm
-    eighth_sec = beat_sec / 2.0
-    bars = [
-        (130.81, [261.63, 329.63, 392.00, 523.25, 392.00, 329.63, 587.33, 523.25]),
-        (110.00, [220.00, 261.63, 329.63, 440.00, 392.00, 329.63, 523.25, 440.00]),
-        (87.31, [174.61, 261.63, 329.63, 440.00, 523.25, 440.00, 329.63, 261.63]),
-        (98.00, [196.00, 246.94, 293.66, 392.00, 493.88, 392.00, 329.63, 293.66]),
-    ]
-    bar_offset = (scene_id - 1) % len(bars)
-    total_eighths = int(duration_sec / eighth_sec) + 2
+    # 1. Scene Entry: Deep Cinematic Low-End Air Whoosh (68Hz -> 185Hz)
+    _add_swept_whoosh(sfx_l, sfx_r, sr, 0.02, dur_sec=0.28, f_start=68.0, f_end=185.0, amp=0.34)
 
-    for step in range(total_eighths):
-        t0 = step * eighth_sec
-        bar_idx = (bar_offset + (step // 8)) % len(bars)
-        bass_f, arp_notes = bars[bar_idx]
-        note_f = arp_notes[step % 8]
-        pan = 0.30 if (step % 2 == 0) else 0.70
-        _add_pluck_note(bgm_l, bgm_r, sr, t0, note_f, dur_sec=0.31, amp=0.35, pan=pan)
-
-        if step % 2 == 0:
-            _add_pluck_note(bgm_l, bgm_r, sr, t0, bass_f, dur_sec=0.48, amp=0.37, pan=0.5)
-        if step % 2 == 1:
-            sh_i0 = int(t0 * sr)
-            sh_len = min(int(0.032 * sr), n_total - sh_i0)
-            st_seed = 4242 + step * 97
-            for k in range(max(0, sh_len)):
-                st_seed = (1103515245 * st_seed + 12345) & 0x7FFFFFFF
-                nv = ((st_seed / 1073741824.0) - 1.0) * math.exp(-95.0 * (k / float(sr))) * 0.085
-                bgm_l[sh_i0 + k] += nv
-                bgm_r[sh_i0 + k] += nv
-
-    # 2. Tactile ASMR Geometry SFX Synced to Visual Drawing Phases (u = t / duration_sec)
-    _add_swept_whoosh(sfx_l, sfx_r, sr, 0.02, dur_sec=0.28, f_start=190.0, f_end=560.0, amp=0.30)
-
-    # Phase 1 (u = 0.06..0.34): Green markers 1, 2, 3 + Cyan Base line drawing + Portion 1 Highlight Chime
-    t_p1 = max(0.25, duration_sec * 0.07)
-    _add_pluck_note(sfx_l, sfx_r, sr, t_p1, 523.25, dur_sec=0.26, amp=0.38, pan=0.28)
-    _add_pluck_note(sfx_l, sfx_r, sr, t_p1 + 0.06, 659.25, dur_sec=0.30, amp=0.40, pan=0.35)
-    _add_mechanical_ticks(sfx_l, sfx_r, sr, start_sec=duration_sec * 0.09, dur_sec=min(1.8, duration_sec * 0.20), tick_rate_hz=12.0, base_freq=1180.0, amp=0.22)
+    # 2. Phase 1 (u = 0.06..0.34): Green markers 1, 2, 3 + Cyan Base line drawing + Portion 1 Tactile Lock
+    t_p1 = max(0.24, duration_sec * 0.07)
+    _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_p1, low_freq=115.0, click_freq=690.0, amp=0.38, pan=0.32)
+    _add_mechanical_ticks(
+        sfx_l,
+        sfx_r,
+        sr,
+        start_sec=duration_sec * 0.09,
+        dur_sec=min(1.6, duration_sec * 0.18),
+        tick_rate_hz=11.0,
+        base_freq=640.0,
+        amp=0.22,
+    )
 
     if scene_id == 1:
-        # Playful '?' puzzle pop chirp in Act 1 Hook
-        _add_curiosity_chirp(sfx_l, sfx_r, sr, start_sec=duration_sec * 0.22, dur_sec=0.26, amp=0.34)
+        # Tactile double-lock when the '?' puzzle badge pops in Act 1 Hook
+        _add_tactile_ui_lock(sfx_l, sfx_r, sr, duration_sec * 0.21, low_freq=132.0, click_freq=820.0, amp=0.34, pan=0.50)
 
-    # Phase 2 (u = 0.36..0.66): Yellow Height line + 90-deg lock + Portion 2 Highlight Chime + Laser sight sweep
+    # 3. Phase 2 (u = 0.36..0.66): Yellow Height line + 90-deg lock + Portion 2 Tactile Lock + Deep Laser Sweep
     t_p2 = duration_sec * 0.36
-    _add_pluck_note(sfx_l, sfx_r, sr, t_p2, 659.25, dur_sec=0.26, amp=0.39, pan=0.48)
-    _add_pluck_note(sfx_l, sfx_r, sr, t_p2 + 0.06, 783.99, dur_sec=0.32, amp=0.41, pan=0.52)
-    _add_laser_sweep(sfx_l, sfx_r, sr, start_sec=duration_sec * 0.41, dur_sec=0.52, f_start=820.0, f_end=310.0, amp=0.25)
+    _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_p2, low_freq=124.0, click_freq=740.0, amp=0.39, pan=0.50)
+    _add_laser_sweep(sfx_l, sfx_r, sr, start_sec=duration_sec * 0.41, dur_sec=0.45, f_start=190.0, f_end=76.0, amp=0.27)
 
-    # Phase 3 (u = 0.66..0.96): Compass angle arc scratch + Portion 3 Highlight Chime + Quick Hack Ding
+    # 4. Phase 3 (u = 0.66..0.96): Compass angle arc scratch + Portion 3 Tactile Lock + Quick Hack Lock
     t_p3 = duration_sec * 0.66
-    _add_pluck_note(sfx_l, sfx_r, sr, t_p3, 783.99, dur_sec=0.26, amp=0.40, pan=0.65)
-    _add_pluck_note(sfx_l, sfx_r, sr, t_p3 + 0.06, 1046.50, dur_sec=0.34, amp=0.43, pan=0.70)
-    _add_pluck_note(sfx_l, sfx_r, sr, t_p3 + 0.12, 1318.51, dur_sec=0.38, amp=0.38, pan=0.75)
-    _add_mechanical_ticks(sfx_l, sfx_r, sr, start_sec=duration_sec * 0.68, dur_sec=min(1.2, duration_sec * 0.14), tick_rate_hz=16.0, base_freq=1480.0, amp=0.20)
+    _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_p3, low_freq=136.0, click_freq=810.0, amp=0.40, pan=0.68)
+    _add_mechanical_ticks(
+        sfx_l,
+        sfx_r,
+        sr,
+        start_sec=duration_sec * 0.68,
+        dur_sec=min(1.1, duration_sec * 0.13),
+        tick_rate_hz=14.0,
+        base_freq=720.0,
+        amp=0.21,
+    )
 
     if scene_id == 3:
-        # Climax 5-second Boss Countdown Ticks + Triumphant Victory Chord
+        # Climax 5-Second Boss Countdown: Crisp Chrono-Watch Mechanical Ticks + Deep Bass Impact Drop!
         t_cd_start = duration_sec * 0.56
         cd_span = max(1.8, duration_sec * 0.30)
         for c_idx in range(6):
             tc = t_cd_start + c_idx * (cd_span / 5.5)
-            f_beep = 880.0 if c_idx < 5 else 1318.51
-            _add_pluck_note(sfx_l, sfx_r, sr, tc, f_beep, dur_sec=0.16 if c_idx < 5 else 0.45, amp=0.36 if c_idx < 5 else 0.46, pan=0.5)
+            if c_idx < 5:
+                _add_tactile_ui_lock(sfx_l, sfx_r, sr, tc, low_freq=98.0, click_freq=860.0, amp=0.32, pan=0.50)
+            else:
+                # Final "DONE!" deep cinematic bass lock + air whoosh
+                _add_tactile_ui_lock(sfx_l, sfx_r, sr, tc, low_freq=145.0, click_freq=920.0, amp=0.46, pan=0.50)
+                _add_swept_whoosh(sfx_l, sfx_r, sr, tc + 0.03, dur_sec=0.32, f_start=160.0, f_end=58.0, amp=0.35)
 
     if scene_id == 4:
-        # Scene 4 Subscribe Button Mouse-Click + YouTube Golden Notification Bell Ding!
+        # Scene 4 Subscribe Button Mechanical Mouse-Click + Deep Confirmation Thud (zero high-pitched bells!)
         t_click = duration_sec * 0.77
-        _add_mechanical_ticks(sfx_l, sfx_r, sr, start_sec=t_click, dur_sec=0.05, tick_rate_hz=35.0, base_freq=1750.0, amp=0.36)
-        _add_pluck_note(sfx_l, sfx_r, sr, t_click + 0.07, 1046.50, dur_sec=0.42, amp=0.45, pan=0.55)
-        _add_pluck_note(sfx_l, sfx_r, sr, t_click + 0.14, 1567.98, dur_sec=0.58, amp=0.48, pan=0.60)
-        _add_pluck_note(sfx_l, sfx_r, sr, t_click + 0.22, 2093.00, dur_sec=0.65, amp=0.40, pan=0.50)
-
-    # 3. Auto-Ducked Envelope Mix (50ms window so BGM breathes up in pauses and ducks cleanly under words!)
-    win = 2205
-    n_wins = (n_total + win - 1) // win
-    bgm_gains = [0.22] * n_wins
-    for w_idx in range(n_wins):
-        s0 = w_idx * win
-        s1 = min(n_total, s0 + win)
-        peak = 0
-        for j in range(s0, s1, 8):
-            av = abs(v_samples[2 * j])
-            if av > peak:
-                peak = av
-        bgm_gains[w_idx] = 0.21 if peak > 1800 else 0.36
-
-    for w_idx in range(1, n_wins):
-        bgm_gains[w_idx] = 0.65 * bgm_gains[w_idx - 1] + 0.35 * bgm_gains[w_idx]
+        _add_mechanical_ticks(sfx_l, sfx_r, sr, start_sec=t_click, dur_sec=0.04, tick_rate_hz=40.0, base_freq=920.0, amp=0.38)
+        _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_click + 0.06, low_freq=135.0, click_freq=790.0, amp=0.44, pan=0.52)
+        _add_swept_whoosh(sfx_l, sfx_r, sr, t_click + 0.10, dur_sec=0.26, f_start=95.0, f_end=210.0, amp=0.30)
 
     out_samples = array("h", [0] * (n_total * 2))
     scale_pcm = 26000.0
     fade_samples = min(int(0.25 * sr), n_total // 4)
 
     for i in range(n_total):
-        g_bgm = bgm_gains[i // win]
         end_fade = min(1.0, (n_total - i) / float(max(1, fade_samples)))
         vl = v_samples[2 * i]
         vr = v_samples[2 * i + 1]
-        ml = int(vl + end_fade * scale_pcm * (g_bgm * bgm_l[i] + 0.46 * sfx_l[i]))
-        mr = int(vr + end_fade * scale_pcm * (g_bgm * bgm_r[i] + 0.46 * sfx_r[i]))
+        ml = int(vl + end_fade * scale_pcm * (0.52 * sfx_l[i]))
+        mr = int(vr + end_fade * scale_pcm * (0.52 * sfx_r[i]))
         out_samples[2 * i] = 32200 if ml > 32200 else (-32200 if ml < -32200 else ml)
         out_samples[2 * i + 1] = 32200 if mr > 32200 else (-32200 if mr < -32200 else mr)
 

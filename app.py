@@ -349,9 +349,9 @@ with st.sidebar:
         else 0,
     )
     st.session_state["bgm_enabled"] = st.checkbox(
-        "🎵 Background Groove + Fly-In Chime SFX",
+        "🔊 Tactile Studio Effect Sounds (SFX Only — Zero Childish Music)",
         value=bool(st.session_state.get("bgm_enabled", True)),
-        help="Adds lively student-curiosity marimba music (auto-ducked under voice) + whoosh & bell chimes synced with Fly-In Formulas & Quick Tips!",
+        help="Adds teen-approved crisp mechanical compass/drafting clicks, deep low-end air whooshes, laser sight-beam hum, and sub-bass UI locks synced with Formula Portions (zero childish melody loops!).",
     )
 
     st.divider()
@@ -938,11 +938,11 @@ with tab2:
         )
 
         if st.button(
-            "🎬 Approve & Render Full `16:9` Video + `9:16` Short (Live Veo B-Roll + Animated Lines/Angles/Formula Highlight + ASMR BGM)",
+            "🎬 Approve & Render Full `16:9` Video + `9:16` Short (Hinglish Voiceover + Live Veo B-Roll + Tactile SFX)",
             type="primary",
             use_container_width=True,
         ):
-            with st.spinner("Generating Google Flow / Veo 3.1 B-Roll, synthesizing expressive voiceover + ASMR geometry SFX, and drawing live lines, compass arcs & highlighted formula portions..."):
+            with st.spinner("Generating Google Flow / Veo 3.1 B-Roll, synthesizing Hinglish voiceover + tactile studio SFX, and drawing live lines, compass arcs & highlighted formula portions..."):
                 draft = render_full_topperlab_project(
                     bp,
                     short_max_scenes=4,
