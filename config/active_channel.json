@@ -11,36 +11,39 @@
   "cohort": "India High-School Students (Class 8–12 • CBSE & ICSE • JEE & NEET)",
   "positioning_tagline": "Complete Chapters in Minutes — Hinglish Visual Proofs, Animated Formulas & Topper Exam Hacks",
   "faceless_mode": true,
-  "default_voice_mode": "Hinglish — Energetic Topper Bhaiya (hi-IN)",
+  "default_voice_mode": "@jwalashiv Avatar Voice — Shiv Prakash Human Baritone (Hinglish)",
   "voice_presets": {
-    "Hinglish — Energetic Topper Bhaiya (hi-IN)": {
-      "gemini_voice": "Puck",
+    "@jwalashiv Avatar Voice — Shiv Prakash Human Baritone (Hinglish)": {
+      "gemini_voice": "Charon",
       "edge_voice": "hi-IN-MadhurNeural",
-      "rate": "+10%",
-      "pitch": "+0Hz",
+      "fallback_edge_voice": "en-IN-PrabhatNeural",
+      "rate": "+5%",
+      "pitch": "-2Hz",
       "language_code": "hi-IN",
-      "script_instruction": "Write in high-energy, teenager-friendly conversational Hinglish (Roman script mixing exact English STEM terms & formulas like Angle of Elevation, Line of Sight, tan theta = Perpendicular / Base, Torque, NCERT, CBSE/ICSE with natural Hindi flow like 'Ruko! Board exam mein...', 'Dekho kitna simple hai...', 'Bas yeh 5-second Topper Shortcut lagao!'). Sound like an inspiring IIT/NIT Topper Bhaiya talking to Class 9–12 students!"
+      "avatar_handle": "@jwalashiv",
+      "script_instruction": "Write in natural, warm, human conversational Hinglish in the signature @jwalashiv (Shiv Prakash) mentor persona (mixing exact English STEM terms & formulas like Angle of Incidence, Refractive Index, 1/f = 1/v - 1/u, Mirror Formula, Snell's Law, NCERT, CBSE/ICSE with natural Hindi flow like 'Ruko! Board exam mein...', 'Dekho kitna simple hai...', 'Bas yeh 5-second Topper Shortcut yaad rakho!'). Open Scene 1 with a razor-sharp 3-second attention hook!"
+    },
+    "@jwalashiv Avatar Voice — Shiv Prakash Human Baritone (English en-IN)": {
+      "gemini_voice": "Charon",
+      "edge_voice": "en-IN-PrabhatNeural",
+      "rate": "+5%",
+      "pitch": "-2Hz",
+      "language_code": "en-IN",
+      "avatar_handle": "@jwalashiv",
+      "script_instruction": "Write in the warm, authoritative, human @jwalashiv (Shiv Prakash) Indian mentor voice. Open with an irresistible 3-second attention hook, use clear everyday examples, and explain every formula step-by-step."
     },
     "Hinglish — Expressive Topper Didi (hi-IN)": {
       "gemini_voice": "Aoede",
       "edge_voice": "hi-IN-SwaraNeural",
-      "rate": "+9%",
+      "rate": "+6%",
       "pitch": "+0Hz",
       "language_code": "hi-IN",
-      "script_instruction": "Write in lively, relatable conversational Hinglish (Roman script mixing exact English STEM terms & formulas with natural Hindi connectors like 'Ruko zara!', 'Chalo dekhte hain...', 'Yeh 5-mark pakka lock karo!') tailored for Indian Class 8–12 students."
-    },
-    "English — Energetic Indian Mentor (en-IN)": {
-      "gemini_voice": "Puck",
-      "edge_voice": "en-IN-PrabhatNeural",
-      "rate": "+9%",
-      "pitch": "+0Hz",
-      "language_code": "en-IN",
-      "script_instruction": "Write like a confident, engaging Indian science mentor talking directly to a Class 10–12 student. Open with a sharp real-life hook, use short punchy sentences, rhetorical questions, and relatable examples."
+      "script_instruction": "Write in lively, relatable conversational Hinglish (mixing exact English STEM terms & formulas with natural Hindi connectors like 'Ruko zara!', 'Chalo dekhte hain...', 'Yeh 5-mark pakka lock karo!') tailored for Indian Class 8–12 students."
     },
     "English — Expressive Teacher (en-IN)": {
       "gemini_voice": "Aoede",
       "edge_voice": "en-IN-NeerjaExpressiveNeural",
-      "rate": "+8%",
+      "rate": "+6%",
       "pitch": "+0Hz",
       "language_code": "en-IN",
       "script_instruction": "Write with warm enthusiasm, curiosity, and vivid storytelling tailored for Indian Class 8–12 CBSE & ICSE students."
@@ -49,7 +52,7 @@
   "visual_themes": {
     "BRIGHT_CLASSROOM_3D_MODEL": {
       "label": "🎒 Bright 3D Classroom & Real-Life Models (Best for Class 8–10 Students)",
-      "style_prompt": "Bright, colorful, friendly Pixar and Kurzgesagt-inspired 3D educational classroom model using relatable everyday objects (colorful bicycle wheel, cricket ball, red-and-blue bar magnet, battery and bulb circuit, glass rainbow prism, clear water pipes), sunny clean sky-blue and warm cream studio tabletop, bold color-coded 3D arrows in yellow, red, and royal blue, instantly understandable by a Class 10 student in 2 seconds, zero dark sci-fi alien machinery, zero human faces, zero text inside the 3D render."
+      "style_prompt": "Bright, colorful, friendly Pixar and Kurzgesagt-inspired 3D educational classroom model using relatable everyday objects (laser ray box, glass prism, concave mirror, lens, colorful bicycle wheel, red-and-blue bar magnet, battery and bulb circuit), sunny clean sky-blue and warm cream studio tabletop, bold color-coded 3D arrows in yellow, red, and royal blue, instantly understandable by a Class 10 student in 2 seconds, zero dark sci-fi alien machinery, zero human faces, zero text inside the 3D render."
     },
     "COLORFUL_3D_SCIENCE_CUTAWAY": {
       "label": "🧪 Colorful 3D School Lab Cutaway (Byju's / CrashCourse 3D Style)",
@@ -61,8 +64,8 @@
     }
   },
   "default_visual_theme": "BRIGHT_CLASSROOM_3D_MODEL",
-  "channel_seo_description": "Welcome to TopperLab — complete Class 8–12 CBSE, ICSE, JEE, and NEET chapters explained in minutes in crisp Hinglish with live geometry proofs, animated Fly-In Formulas, Topper Quick Tips, and Board Exam Hacks!\n\n📘 Foundation Playlists for CBSE & ICSE Class 8, 9, 10, 11 & 12 (All Subjects)\n⚡ Toppers Hacks, Exam Shortcuts & Super Memory Boosters\n📄 Free 1-Page Formula Sheets & Active-Recall Trackers in Every Video Description.",
-  "channel_keywords": "TopperLab, Class 10 Maths Hinglish, Class 10 Science Hinglish, CBSE Class 10, ICSE Class 10, Complete Chapter Revision, One Shot Revision, Board Exam Tricks, Toppers Hack, Super Memory, Class 8 9 10 11 12, JEE NEET Foundation",
+  "channel_seo_description": "Welcome to TopperLab — complete Class 8–12 CBSE, ICSE, JEE, and NEET chapters explained in minutes in crisp Hinglish with live visual proofs, animated Fly-In Formulas, Topper Quick Tips, and Board Exam Hacks!\n\n📘 Foundation Playlists for CBSE & ICSE Class 8, 9, 10, 11 & 12 (All Subjects)\n⚡ Toppers Hacks, Exam Shortcuts & Super Memory Boosters\n📄 Free 1-Page Formula Sheets & Active-Recall Trackers in Every Video Description.",
+  "channel_keywords": "TopperLab, Class 10 Physics Hinglish, Class 10 Maths Hinglish, Class 10 Science Hinglish, Light Reflection and Refraction, CBSE Class 10, ICSE Class 10, Complete Chapter Revision, One Shot Revision, Board Exam Tricks, Toppers Hack, Super Memory",
   "default_resource_links": [
     {
       "category": "📄 1-Page Formula & Quick-Tip Cheat Sheet (PDF)",

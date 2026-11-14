@@ -8,50 +8,53 @@
   "selected_chapter": "Heights and Distances",
   "video_category": "syllabus_chapter",
   "duration_badge": "6 Mins",
+  "target_duration_sec": 360.0,
   "class_badge_text": "CLASS 10 • MATHEMATICS",
-  "voice_mode": "Hinglish — Energetic Topper Bhaiya (hi-IN)",
+  "voice_mode": "@jwalashiv Avatar Voice — Shiv Prakash Human Baritone (Hinglish)",
   "visual_theme_key": "BRIGHT_CLASSROOM_3D_MODEL",
   "project_dir": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete",
   "title_variations": [
     "Heights and Distances in 6 Mins Complete",
-    "Class 10 Heights and Distances Full Chapter + 5-Sec Hacks",
-    "One Shot Heights and Distances: Zero Memorization Trick!"
+    "Class 10 Heights and Distances One Shot + 5-Sec Tricks",
+    "Full Marks in Heights and Distances | CBSE Class 10 Math"
   ],
-  "thumb_hook_3words": "6 MINS COMPLETE!",
-  "short_hook_3words": "5-SEC TRIG HACK!",
-  "thumb_sub_tagline": "ALL FORMULAS + EXAM TRAPS",
+  "thumb_hook_3words": "HEIGHTS AND | IN 6 MINS!",
+  "short_hook_3words": "HEIGHTS AND | IN 6 MINS!",
+  "thumb_sub_tagline": "ALL FORMULAS + EXAM HACKS",
   "thumbnail_16x9_path": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/thumbnail_16x9.jpg",
   "short_cover_9x16_path": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/short_cover_9x16.jpg",
-  "thumbnail_16x9_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom tabletop model positioned on the RIGHT half of a 16:9 frame, showing a cheerful red-and-white striped coastal lighthouse on a sunny grass block, a yellow toy boat on clear blue resin water, and bold glowing yellow, red, and royal blue 3D geometric triangle arrows connecting the boat to the lighthouse top, clean sky-blue and warm cream studio background on the left half for title space, bright studio lighting, zero text, zero human faces.",
+  "thumbnail_16x9_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom tabletop model on the right half of a 16:9 frame: a colorful red-and-white striped miniature lighthouse on a sunny cream studio desk, a yellow toy boat on a blue base, and bold glowing yellow, red, and royal blue 3D arrows forming a right-angled triangle between the boat and lighthouse top. Left half is a clean soft sky-blue background for text overlay. Zero text, zero letters, zero human faces.",
   "scenes": [
     {
       "scene_id": 1,
       "headline": "THE TOWER MYSTERY",
-      "concept_takeaway": "Bina chadhaye tower ki height naapo sirf ground distance aur angle se!",
-      "formula_badge": "tan θ = Height (P) / Base (B)",
+      "concept_takeaway": "Bina chade kisi bhi tall tower ki height bas ek angle se nikalo!",
+      "formula_badge": "tan θ = Height (P) / Distance (B)",
       "formula_parts": [
         {
           "label": "1. LINE OF SIGHT",
-          "expr": "Observer -> Top"
+          "expr": "Hypotenuse (Observer to Top)"
         },
         {
-          "label": "2. ELEVATION ANGLE",
-          "expr": "Upward Angle θ"
+          "label": "2. ANGLE OF ELEVATION",
+          "expr": "Upward Angle (θ = 45°)"
         },
         {
-          "label": "3. TANGENT RATIO",
-          "expr": "tan θ = P / B"
+          "label": "3. MAGIC RATIO",
+          "expr": "tan 45° = P / B = 1"
         }
       ],
       "target_angle_deg": 45,
-      "quick_tip": "Jab Angle θ = 45° ho, tab Tower Height H hamesha Base D ke equal hogi!",
-      "narration": "Ruko! Kya aap bina inch-tape leke upar chadhe, Qutub Minar ya kisi tall tower ki exact height sirf 5 seconds mein bata sakte ho? Bilkul! Jab aap neeche se tower ke top ko dekhte ho, toh banti hai Line of Sight aur Angle of Elevation. Chalo iska asli magic dekhte hain!",
-      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom tabletop model on a warm cream desk with a sunny sky-blue backdrop: a colorful miniature brick clock tower on a green grass base, a small brass telescope on a tripod on the left, a glowing yellow 3D arrow for the horizontal base, a bold red vertical 3D arrow for height, and a royal blue diagonal 3D arrow for the line of sight with a glowing curved protractor arc at 45 degrees, zero text, zero human faces.",
-      "google_flow_veo_prompt": "Smooth 3D educational animation on a bright sunny classroom tabletop: camera pans across a colorful miniature clock tower and brass telescope on a tripod; a glowing yellow 3D arrow extends along the base, a royal blue diagonal 3D arrow shoots up to the tower peak, and a glowing 45-degree protractor arc sweeps open smoothly, bright Kurzgesagt aesthetic, zero text, zero human faces.",
+      "quick_tip": "Jab θ = 45° ho, tab Tower ki Height aur Base Distance exact barabar hote hain!",
+      "narration": "Ruko! Kya aap Qutub Minar par bina chade, sirf zameen par khade hokar uski exact height bata sakte ho? Bilkul! Jab aap neeche se top ko dekhte ho, toh Line of Sight aur horizontal ground ke beech banta hai Angle of Elevation. Agar yeh angle 45 degree hai, toh height aur distance bilkul equal honge!",
+      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a warm cream tabletop with a sunny sky-blue background: a colorful red-and-white miniature lighthouse on the right, a small yellow laser pointer box on the left aiming a glowing yellow 3D arrow up at 45 degrees to the lighthouse top, a royal blue 3D arrow along the flat base, and a red 3D arrow along the vertical lighthouse height. Zero text, zero letters, zero human faces.",
+      "google_flow_veo_prompt": "Smooth 3D educational animation on a bright sunny studio desk: a yellow laser box on the left projects a glowing yellow 3D arrow upward at 45 degrees to the top of a red-and-white miniature lighthouse, while a royal blue 3D base arrow and red vertical height arrow light up in sequence. Bright Pixar and Kurzgesagt aesthetic, zero text, zero human faces.",
       "act_badge": "ACT 1: HOOK & ? PUZZLE",
       "fallback_plate": "scene_01_16x9.jpg",
-      "motion_source": "Google Flow / Veo 3.1 Live B-Roll + Animated Geometry, Compass Arcs & Formula Highlighting + ASMR BGM",
-      "duration_sec": 21.58,
+      "motion_source": "Google Flow / Veo 3.1 Full-Screen Live B-Roll + 3-Sec Hook + Formula Highlighting + Studio SFX",
+      "duration_sec": 90.0,
+      "short_duration_sec": 24.2,
+      "voice_duration_sec": 24.19,
       "img_16x9": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_01_16x9.jpg",
       "img_9x16": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_01_9x16.jpg",
       "mp4_16x9": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_01_16x9.mp4",
@@ -60,31 +63,33 @@
     {
       "scene_id": 2,
       "headline": "GOLDEN RATIO TRIANGLES",
-      "concept_takeaway": "30°, 45°, 60° ke standard ratios yaad rakho, calculation half ho jayegi!",
-      "formula_badge": "tan 30°=1/√3 | tan 45°=1 | tan 60°=√3",
+      "concept_takeaway": "Sirf 30°, 45°, aur 60° ke √3 ratios yaad rakho—har NCERT question solve!",
+      "formula_badge": "tan 30° = 1/√3 | tan 60° = √3",
       "formula_parts": [
         {
-          "label": "1. AT Θ = 30°",
-          "expr": "P: B = 1: √3"
+          "label": "1. STEEP ANGLE (60°)",
+          "expr": "Height = Base × √3"
         },
         {
-          "label": "2. AT Θ = 45°",
-          "expr": "P: B = 1: 1"
+          "label": "2. EQUAL ANGLE (45°)",
+          "expr": "Height = Base × 1"
         },
         {
-          "label": "3. AT Θ = 60°",
-          "expr": "P: B = √3: 1"
+          "label": "3. SHALLOW ANGLE (30°)",
+          "expr": "Base = Height × √3"
         }
       ],
       "target_angle_deg": 60,
-      "quick_tip": "Door jaoge toh angle chhota (30°), paas aaoge toh angle bada (60°) hoga!",
-      "narration": "Dekho kitna simple hai! Poore NCERT chapter mein 90 percent questions sirf teen golden angles par based hain: 30, 45, aur 60 degree! 45 degree par Perpendicular aur Base dono 1 ratio 1 hote hain. 60 degree par Height root 3 times Base hoti hai, aur 30 degree par Base root 3 times Height!",
-      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a clean studio tabletop: three colorful transparent acrylic right-angled triangle blocks standing side by side for 30, 45, and 60 degrees next to a cheerful red-and-white model lighthouse, bold color-coded 3D arrows in red for vertical height and royal blue for horizontal base, glowing yellow angle arcs at the base corners, sunny sky-blue background, zero text, zero human faces.",
-      "google_flow_veo_prompt": "Dynamic 3D tabletop animation: three colorful geometric right-triangle blocks pop up smoothly next to a miniature lighthouse, glowing yellow compass arcs sweep out 30, 45, and 60 degrees while red vertical and blue horizontal 3D arrows pulse in sequence to show the side ratios, bright Pixar educational lighting, zero text, zero human faces.",
+      "quick_tip": "Tower ke jitna paas jaoge, Angle of Elevation utna bada (30° se 60°) hoga!",
+      "narration": "Dekho kitna simple hai! Poore NCERT chapter mein90 percent questions sirf tan 30, 45, aur 60 degree par based hain. Ek golden rule yaad rakho: jaise-jaise aap tower ke paas chaloge, angle 30 degree se badhkar 60 degree ho jayega. 60 degree par Perpendicular hamesha Base ka root 3 times hota hai!",
+      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a sunny cream studio tabletop: a colorful wooden toy communication tower on the right, with two glowing yellow 3D arrows rising from two small toy cars on the left—one shallow 30-degree arrow from the far blue car and one steep 60-degree arrow from the closer red car—with a glowing green 3D compass arc at the base. Zero text, zero letters, zero human faces.",
+      "google_flow_veo_prompt": "Dynamic 3D educational camera pan across a bright classroom tabletop model: a miniature red toy car moves closer to a colorful toy tower along a royal blue 3D base arrow, causing the glowing yellow 3D Line of Sight arrow to tilt steeper from 30 degrees up to 60 degrees. Bright Kurzgesagt style, zero text, zero human faces.",
       "act_badge": "ACT 2: VISUAL PROOF & ARCS",
       "fallback_plate": "scene_02_16x9.jpg",
-      "motion_source": "Google Flow / Veo 3.1 Live B-Roll + Animated Geometry, Compass Arcs & Formula Highlighting + ASMR BGM",
-      "duration_sec": 26.54,
+      "motion_source": "Google Flow / Veo 3.1 Full-Screen Live B-Roll + 3-Sec Hook + Formula Highlighting + Studio SFX",
+      "duration_sec": 90.0,
+      "short_duration_sec": 26.5,
+      "voice_duration_sec": 26.52,
       "img_16x9": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_02_16x9.jpg",
       "img_9x16": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_02_9x16.jpg",
       "mp4_16x9": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_02_16x9.mp4",
@@ -93,31 +98,33 @@
     {
       "scene_id": 3,
       "headline": "5-SEC BOSS CHALLENGE",
-      "concept_takeaway": "30° se 60° walk karne par cover kiya distance hamesha 2 units hota hai!",
-      "formula_badge": "D = H(cot 30° - cot 60°) = 2H / √3",
+      "concept_takeaway": "30° se 60° double angle question mein Distance walked = 2x aur Closer Base = x!",
+      "formula_badge": "d = h(cot 30° - cot 60°) = 2x",
       "formula_parts": [
         {
-          "label": "1. FULL 30° BASE",
-          "expr": "B₁ = H√3"
+          "label": "1. CLOSER BASE (60°)",
+          "expr": "Inner Distance = x"
         },
         {
-          "label": "2. INNER 60° BASE",
-          "expr": "B₂ = H / √3"
+          "label": "2. WALKED PATH (30°->60°",
+          "expr": "Outer Step = 2x = 40 m"
         },
         {
-          "label": "3. SHORTCUT RATIO",
-          "expr": "Walk D = 2 × B₂"
+          "label": "3. TOWER HEIGHT",
+          "expr": "Height = x√3 = 20√3 m"
         }
       ],
       "target_angle_deg": 30,
-      "quick_tip": "Topper Hack: 30° se 60° walk distance = 2 parts, aur bacha base = 1 part!",
-      "narration": "Ab start karo 5-second timer! Board exam ka sabse favourite 5-mark question: Ek ship lighthouse ki taraf 40 meters chalti hai aur angle 30 degree se 60 degree ho jata hai. Bina long equation likhe Bas yeh 5-second Topper Shortcut lagao: 30 se 60 ka distance 2 parts hai, toh remaining base seedha half yaani 20 meters, aur Height 20 root 3 meters! Boom!",
-      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational tabletop model: a red-and-white striped lighthouse on the right edge, two cute yellow miniature boats on a glossy blue water track at two positions on the left, two royal blue diagonal 3D line-of-sight arrows rising from the boats to the lighthouse lantern at 30 and 60 degrees, and bold segmented yellow and red 3D base arrows showing a 2-to-1 length split, sunny studio lighting, zero text, zero human faces.",
-      "google_flow_veo_prompt": "High-energy 3D classroom model animation: a yellow toy boat slides halfway forward along a bright blue tabletop water track toward a red-and-white lighthouse; the royal blue 3D line-of-sight arrow pivots smoothly from 30 degrees to 60 degrees while two glowing yellow base blocks and one red inner base block snap into place, zero text, zero human faces.",
+      "quick_tip": "30° se 60° walk wale sawal mein: Walked Distance = 2x, Tower Height = x√3!",
+      "narration": "Chalo 5-second timer start karo! CBSE Board ka sabse favourite 5-mark question: Ek ship lighthouse ki taraf 40 meter chalti hai aur angle 30 se 60 degree ho jata hai. Height batao! Bas yeh 5-second Topper Shortcut lagao: 30 se 60 ke beech ka distance hamesha 2x hota hai. Toh 2x barabar 40, x aaya 20, aur height sidha 20 root 3 meter!",
+      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a sunny sky-blue and cream studio desk: a miniature red-and-white lighthouse on the right, and two yellow toy boats on a blue water track on the left showing a boat moving closer, with bold color-coded red and royal blue 3D segments along the base in a 2-to-1 length ratio and two glowing yellow 3D hypotenuse arrows. Zero text, zero letters, zero human faces.",
+      "google_flow_veo_prompt": "Fast-paced 3D educational animation on a bright studio tabletop: a yellow toy boat glides halfway toward a miniature lighthouse along a glowing red 3D arrow segment, while the remaining royal blue 3D base segment and vertical tower height light up with bright golden sparkles. Pixar and Kurzgesagt style, zero text, zero human faces.",
       "act_badge": "ACT 3: 5-SEC BOSS CLIMAX",
       "fallback_plate": "scene_03_16x9.jpg",
-      "motion_source": "Google Flow / Veo 3.1 Live B-Roll + Animated Geometry, Compass Arcs & Formula Highlighting + ASMR BGM",
-      "duration_sec": 28.54,
+      "motion_source": "Google Flow / Veo 3.1 Full-Screen Live B-Roll + 3-Sec Hook + Formula Highlighting + Studio SFX",
+      "duration_sec": 90.0,
+      "short_duration_sec": 31.2,
+      "voice_duration_sec": 31.2,
       "img_16x9": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_03_16x9.jpg",
       "img_9x16": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_03_9x16.jpg",
       "mp4_16x9": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_03_16x9.mp4",
@@ -125,32 +132,34 @@
     },
     {
       "scene_id": 4,
-      "headline": "#1 EXAM TRAP FIX",
-      "concept_takeaway": "Angle of Depression hamesha TOP horizontal line se measure hota hai!",
-      "formula_badge": "∠Depression (Top) = ∠Elevation (Bottom)",
+      "headline": "#1 EXAM TRAP FIXED",
+      "concept_takeaway": "Angle of Depression hamesha TOP horizontal dotted line ke saath banta hai!",
+      "formula_badge": "∠Depression (Top) = ∠Elevation (Base)",
       "formula_parts": [
         {
           "label": "1. TOP HORIZONTAL",
-          "expr": "Draw Dashed Line"
+          "expr": "Draw Sky Reference Line"
         },
         {
-          "label": "2. ALTERNATE Z-RULE",
-          "expr": "θ_top = θ_bottom"
+          "label": "2. ANGLE OF DEPRESSION",
+          "expr": "Downward Angle from Horizontal"
         },
         {
-          "label": "3. OBSERVER HEIGHT",
-          "expr": "H_total = h + P"
+          "label": "3. ALTERNATE INTERIOR",
+          "expr": "Top θ = Ground θ (Z-Rule)"
         }
       ],
-      "target_angle_deg": 45,
-      "quick_tip": "Warning: Depression angle kabhi vertical tower wall ke saath mat banana!",
-      "narration": "Ruko! Board exam mein 80 percent students Angle of Depression ko galti se vertical tower wall ke saath bana dete hain aur zero milta hai! Yaad rakho, Depression angle hamesha top par ek imaginary horizontal line ke neeche banta hai, jo Z-rule se neeche ke Elevation angle ke barabar hota hai! Full marks pakke karne ke liye abhi Subscribe dabao, bell icon on karo, aur description se Free 1-Page Formula Sheet download kar lo!",
-      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom tabletop model: a colorful miniature observation tower on the left and a bright red toy car on the right, a glowing green horizontal dashed 3D beam extending straight out from the top of the tower, a royal blue diagonal 3D arrow pointing down to the car, and two matching glowing yellow Z-angle arcs at the top horizontal and bottom ground showing alternate interior angles, warm cream and sky-blue background, zero text, zero human faces.",
-      "google_flow_veo_prompt": "Crisp 3D educational animation on a bright tabletop: from the top of a colorful miniature tower, a glowing green horizontal 3D reference beam shoots out first, then a royal blue diagonal arrow tilts down toward a red toy car, illuminating matching golden Z-shaped alternate interior angle arcs at the top and bottom, bright studio lighting, zero text, zero human faces.",
+      "target_angle_deg": 30,
+      "quick_tip": "Warning: Angle of Depression kabhi bhi tower ki vertical deewar ke saath mat banana!",
+      "narration": "Ruko! Board exam mein 80 percent students Angle of Depression mein ek silly mistake karte hain—woh angle tower ki vertical wall ke saath bana dete hain! Yaad rakho, Angle of Depression hamesha upar ek imaginary horizontal line ke saath banta hai, jo Z-rule se neeche ke Angle of Elevation ke barabar hota hai. Abhi Subscribe dabao, bell icon on karo, aur description se Free 1-Page Formula Sheet download kar lo!",
+      "image_3d_prompt": "Bright Pixar and Kurzgesagt-inspired 3D educational classroom model on a sunny studio desk: a colorful miniature cliff with a red lighthouse on the left looking down at a yellow toy boat on the right, featuring a glowing royal blue horizontal 3D reference beam extending straight out from the top of the lighthouse and a glowing yellow 3D arrow angling down to the boat, forming a clean Z-shape with the base. Zero text, zero letters, zero human faces.",
+      "google_flow_veo_prompt": "Clear 3D educational animation on a bright tabletop: from the top of a miniature lighthouse, a glowing royal blue horizontal 3D reference line extends into the air first, followed by a glowing yellow 3D Line of Sight arrow tilting downward to a yellow toy boat, highlighting the matching alternate interior Z-angles in green. Zero text, zero human faces.",
       "act_badge": "ACT 4: EXAM TRAP & SUBSCRIBE",
       "fallback_plate": "scene_04_16x9.jpg",
-      "motion_source": "Google Flow / Veo 3.1 Live B-Roll + Animated Geometry, Compass Arcs & Formula Highlighting + ASMR BGM",
-      "duration_sec": 30.91,
+      "motion_source": "Google Flow / Veo 3.1 Full-Screen Live B-Roll + 3-Sec Hook + Formula Highlighting + Studio SFX",
+      "duration_sec": 90.0,
+      "short_duration_sec": 31.2,
+      "voice_duration_sec": 31.25,
       "img_16x9": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_04_16x9.jpg",
       "img_9x16": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_04_9x16.jpg",
       "mp4_16x9": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/scenes/scene_04_16x9.mp4",
@@ -158,12 +167,12 @@
     }
   ],
   "bgm_enabled": true,
-  "auto_veo_broll": true,
+  "auto_veo_broll": false,
   "renders": {
     "long_16x9_mp4": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/renders/TOPPERLAB_LONG_16x9.mp4",
     "short_9x16_mp4": "workspaces/topperlab_3d/heights-and-distances-in-6-mins-complete/renders/TOPPERLAB_SHORT_9x16.mp4",
-    "long_duration_sec": 107.6,
-    "short_duration_sec": 52.5
+    "long_duration_sec": 360.0,
+    "short_duration_sec": 55.4
   },
-  "rendered_at": "2026-11-15T00:38:22"
+  "rendered_at": "2026-11-15T01:34:03"
 }

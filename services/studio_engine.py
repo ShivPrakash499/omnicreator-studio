@@ -633,7 +633,11 @@ def infer_class_badge_label(
 
 
 def _split_hook_two_lines(hook_text: str) -> tuple[str, str]:
-    clean = _sanitize_drawable_text(strip_3d_text(hook_text)).upper() or "6 MINS COMPLETE!"
+    clean = _sanitize_drawable_text(strip_3d_text(hook_text)).upper() or "FULL CHAPTER | IN 6 MINS!"
+    if "|" in clean:
+        parts = [p.strip() for p in clean.split("|", 1) if p.strip()]
+        if len(parts) == 2:
+            return parts[0], parts[1]
     words = clean.split()
     if len(words) == 1:
         return words[0], "COMPLETE!"
@@ -751,21 +755,36 @@ def apply_consistent_topperlab_thumbnail_branding(
             stroke_fill=(69, 10, 10, 255),
         )
 
-        y3 = y2_box + r_h + 28
+        y3 = y2_box + r_h + 24
         f_sub = _load_studio_font(31, weight="bold")
         bs = draw.textbbox((0, 0), sub_str, font=f_sub)
         sw, sh = (bs[2] - bs[0]) + 40, (bs[3] - bs[1]) + 22
-        if y3 + sh < H - 135:
+        if y3 + sh < H - 155:
             draw.rounded_rectangle(
                 [56, y3, 56 + sw, y3 + sh],
                 radius=14,
-                fill=(15, 23, 42, 235),
-                outline=(56, 189, 248, 255),
+                fill=(15, 23, 42, 242),
+                outline=(0, 229, 255, 255),
                 width=3,
             )
-            draw.text((56 + 20, y3 + 9 - bs[1]), sub_str, font=f_sub, fill=(253, 224, 71, 255))
+            draw.text((56 + 20, y3 + 9 - bs[1]), sub_str, font=f_sub, fill=(255, 255, 255, 255))
 
-        stamp_txt = "TOPPERLAB • CBSE & ICSE"
+            y4 = y3 + sh + 16
+            ctr_pill = "100% BOARD EXAM MARKS LOCKED!"
+            f_ctr = _load_studio_font(27, weight="bold")
+            bc = draw.textbbox((0, 0), ctr_pill, font=f_ctr)
+            cw2, ch2 = (bc[2] - bc[0]) + 36, (bc[3] - bc[1]) + 18
+            if y4 + ch2 < H - 100:
+                draw.rounded_rectangle(
+                    [56, y4, 56 + cw2, y4 + ch2],
+                    radius=12,
+                    fill=(6, 78, 59, 245),
+                    outline=(16, 185, 129, 255),
+                    width=3,
+                )
+                draw.text((56 + 18, y4 + 7 - bc[1]), ctr_pill, font=f_ctr, fill=(167, 243, 208, 255))
+
+        stamp_txt = "TOPPERLAB • CBSE & ICSE • ONE SHOT"
         f_st = _load_studio_font(28, weight="bold")
         bst = draw.textbbox((0, 0), stamp_txt, font=f_st)
         stw, sth = (bst[2] - bst[0]) + 36, (bst[3] - bst[1]) + 20
@@ -1433,8 +1452,166 @@ def _parse_formula_into_three_portions(
     ]
 
 
+def _parse_duration_badge_seconds(duration_badge: str) -> float:
+    """
+    Converts a duration badge like '6 Mins', '8 Mins', '10 Mins', '15 Mins'
+    into target seconds (e.g., '8 Mins' -> 480.0s, '6 Mins' -> 360.0s).
+    """
+    m = re.search(r"(\d+)", str(duration_badge or "6 Mins"))
+    mins = int(m.group(1)) if m else 6
+    mins = max(1, min(20, mins))
+    return float(mins * 60)
+
+
+def _short_chapter_thumbnail_label(clean_chapter: str) -> str:
+    base = strip_3d_text(clean_chapter or "").split("—")[0].split("–")[0].split(":")[0].strip().upper()
+    if not base:
+        return "FULL CHAPTER"
+    if len(base) <= 18:
+        return f"{base} ONE SHOT" if len(base) <= 10 else base
+    words = base.split()
+    acc: List[str] = []
+    for w in words:
+        cand = " ".join(acc + [w])
+        if len(cand) <= 19:
+            acc.append(w)
+        else:
+            break
+    return " ".join(acc) if acc else base[:18]
+
+
 def _default_gyroscope_scenes(topic_title: str, is_hinglish: bool = True) -> List[Dict[str, Any]]:
     t_low = topic_title.lower()
+    if "light" in t_low or "reflection" in t_low or "refraction" in t_low or "mirror" in t_low or "lens" in t_low:
+        return [
+            {
+                "scene_id": 1,
+                "act_badge": ACT_BADGE_LABELS[1],
+                "target_angle_deg": 45,
+                "hook_banner_3sec": "LIGHT: REFLECTION & REFRACTION — SOLVE IN 5 SECS!",
+                "headline": "MIRROR FORMULA & LAWS",
+                "concept_takeaway": (
+                    "Angle of Incidence (i) = Angle of Reflection (r) & Mirror Formula: 1/f = 1/v + 1/u"
+                    if not is_hinglish
+                    else "Angle i = Angle r (Hamesha Equal!) aur Mirror Formula: 1/f = 1/v + 1/u (Plus Sign!)"
+                ),
+                "formula_badge": "Angle i = Angle r   |   f = R / 2   |   1/f = 1/v + 1/u",
+                "formula_parts": [
+                    {"label": "1. LAW OF REFLECTION", "expr": "Angle i = Angle r (At Normal)"},
+                    {"label": "2. FOCAL LENGTH (f)", "expr": "f = R / 2 (Concave = -ve)"},
+                    {"label": "3. MIRROR FORMULA", "expr": "1/f = 1/v + 1/u (Plus Sign!)"},
+                ],
+                "quick_tip": (
+                    "Sign Hack: Object Distance (u) HAMESHA Negative (-ve) hota hai; Concave f = -ve, Convex f = +ve!"
+                    if is_hinglish
+                    else "Sign Hack: Object Distance (u) is ALWAYS Negative (-ve); Concave f = -ve, Convex f = +ve!"
+                ),
+                "narration": (
+                    "Ruko! Board exam mein Light Reflection and Refraction ka 5-mark numerical sirf ek plus-minus sign galti se chhoot jaata hai! "
+                    "Dekho kitna simple hai: jab light ray spherical mirror pe takraati hai, toh Normal ke saath Angle of Incidence aur Angle of Reflection hamesha equal hote hain! "
+                    "Focal length radius ka exact half yaani f equals R by 2 hota hai, aur Mirror Formula hai 1 by f equals 1 by v PLUS 1 by u! Yaad rakhna: Object distance u hamesha negative hota hai!"
+                    if is_hinglish
+                    else "Wait a second! In board exams, ninety percent of students lose marks in Light Reflection and Refraction because of one sign mistake! Watch closely: when a light ray hits a mirror, Angle of Incidence always equals Angle of Reflection, focal length f equals R over 2, and the Mirror Formula is 1 over f equals 1 over v plus 1 over u!"
+                ),
+                "image_3d_prompt": "Bright sunny Pixar-style 3D physics classroom tabletop demonstration: a yellow laser ray-box shining a glowing red incident beam onto a glossy silver concave mirror with a dashed green normal line and bright yellow reflected beam meeting at the focal point, clean sky-blue studio backdrop, zero text, zero faces.",
+                "google_flow_veo_prompt": "Dynamic camera sweep across a bright Pixar-style 3D physics classroom desk as a yellow ray-box fires a glowing red laser beam onto a silver concave mirror and reflects sharply through the focal point.",
+                "fallback_plate": "scene_01_16x9.jpg",
+            },
+            {
+                "scene_id": 2,
+                "act_badge": ACT_BADGE_LABELS[2],
+                "target_angle_deg": 30,
+                "headline": "REFRACTION & SNELL'S LAW",
+                "concept_takeaway": (
+                    "Rarer se Denser medium mein light Normal ki taraf bend hoti hai (n = sin i / sin r = c / v)!"
+                    if is_hinglish
+                    else "Light bends TOWARDS the Normal when entering a denser medium (n = sin i / sin r = c / v)!"
+                ),
+                "formula_badge": "n = sin i / sin r   |   n = c / v   |   c = 3x10^8 m/s",
+                "formula_parts": [
+                    {"label": "1. SNELL'S LAW", "expr": "n = sin i / sin r = Constant"},
+                    {"label": "2. REFRACTIVE INDEX", "expr": "n = c / v  (c = 3x10^8 m/s)"},
+                    {"label": "3. BENDING RULE", "expr": "Rarer->Denser: Towards Normal"},
+                ],
+                "quick_tip": (
+                    "RDN Trick: Rarer to Denser = Bend Towards Normal; Denser to Rarer = Bend Away from Normal!"
+                    if is_hinglish
+                    else "RDN Trick: Rarer to Denser = Bend Towards Normal; Denser to Rarer = Bend Away from Normal!"
+                ),
+                "narration": (
+                    "Ab dekho Refraction ka asli magic! Jab light ray air jaise rarer medium se glass slab ya paani jaise denser medium mein enter karti hai, toh uski speed kam ho jaati hai aur ray Normal ki taraf bend ho jaati hai! "
+                    "Snell's Law kehta hai sine i upon sine r hamesha constant hota hai, jise Refractive Index n kehte hain! Aur Refractive Index n equals speed of light in vacuum c upon speed of light in medium v!"
+                    if is_hinglish
+                    else "Now watch the magic of Refraction! When a light ray travels from air into a denser glass slab, its speed drops and the ray bends towards the normal! By Snell's Law, sine i over sine r equals the Refractive Index n, which equals speed of light c divided by v!"
+                ),
+                "image_3d_prompt": "Vibrant sunny 3D school physics tabletop model: a thick crystal-clear rectangular glass slab and a glass beaker of water with a pencil on a bright desk, a glowing cyan laser beam entering from air and bending sharply towards the vertical normal line inside the glass, Pixar educational lighting, zero text, zero faces.",
+                "google_flow_veo_prompt": "Smooth orbital camera around a crystal-clear 3D glass prism and glass slab on a sunny classroom desk as a glowing laser beam bends towards the normal and splits into vivid rainbow rays.",
+                "fallback_plate": "scene_02_16x9.jpg",
+            },
+            {
+                "scene_id": 3,
+                "act_badge": ACT_BADGE_LABELS[3],
+                "target_angle_deg": 60,
+                "headline": "LENS FORMULA & POWER",
+                "concept_takeaway": (
+                    "Lens Formula mein MINUS sign aata hai (1/f = 1/v - 1/u) aur Power P = 100/f(cm) Dioptre!"
+                    if is_hinglish
+                    else "Lens Formula uses a MINUS sign (1/f = 1/v - 1/u) and Lens Power P = 100/f(cm) Dioptre!"
+                ),
+                "formula_badge": "1/f = 1/v - 1/u   |   m = +v / u   |   P = 100 / f(cm) D",
+                "formula_parts": [
+                    {"label": "1. LENS FORMULA", "expr": "1/f = 1/v - 1/u (Minus Sign!)"},
+                    {"label": "2. MAGNIFICATION (m)", "expr": "m = h'/h = +v/u (For Lens)"},
+                    {"label": "3. POWER IN DIOPTRE", "expr": "P = 1/f(m) = 100/f(cm) D"},
+                ],
+                "quick_tip": (
+                    "5-Sec Sign Hack: Mirror mein Formula Plus (+) aur m Minus (-v/u); Lens mein Formula Minus (-) aur m Plus (+v/u)!"
+                    if is_hinglish
+                    else "5-Sec Sign Hack: Mirror uses Plus (+) in 1/f and Minus (-v/u) in m; Lens flips both signs!"
+                ),
+                "narration": (
+                    "Five-second Board Exam Boss Challenge—timer start! Mirror aur Lens formula mein kabhi confuse mat hona: Mirror mein 1 by v PLUS 1 by u hota hai, jabki Lens Formula mein 1 by v MINUS 1 by u hota hai! "
+                    "Aur Magnification m mein bilkul ulta—Mirror ke liye minus v by u, aur Lens ke liye plus v by u! Agar focal length 50 centimetre convex lens di ho, toh Power P seedha 100 upon 50 yaani plus 2 Dioptre in five seconds flat!"
+                    if is_hinglish
+                    else "Five-second Board Exam Boss Challenge—start the timer! Never mix up Mirror and Lens signs: Mirror uses 1 over v PLUS 1 over u, while Lens uses 1 over v MINUS 1 over u! And for a 50 centimetre convex lens, Power is simply 100 divided by 50—plus 2 Dioptre in five seconds flat!"
+                ),
+                "image_3d_prompt": "Crisp colorful 3D physics classroom demonstration on a sunlit desk: a glowing biconvex glass lens mounted on an optical bench converging three parallel yellow laser rays to a bright focal point on a white screen, zero text, zero faces.",
+                "google_flow_veo_prompt": "Fast energetic camera glide along a bright 3D optical bench as three parallel yellow laser beams pass through a biconvex glass lens and converge at the focal point.",
+                "fallback_plate": "scene_03_16x9.jpg",
+            },
+            {
+                "scene_id": 4,
+                "act_badge": ACT_BADGE_LABELS[4],
+                "target_angle_deg": 45,
+                "headline": "SIGN TRAP + SUBSCRIBE!",
+                "concept_takeaway": (
+                    "Convex f = +ve, Concave f = -ve! Power nikaalte waqt f(cm) ko 100/f karna mat bhoolna!"
+                    if is_hinglish
+                    else "Convex f is +ve, Concave f is -ve! Always use 100/f when focal length is in cm!"
+                ),
+                "formula_badge": "Convex: f = +ve, P = +D   |   Concave: f = -ve, P = -D",
+                "formula_parts": [
+                    {"label": "1. CONVEX (+VE)", "expr": "Convex Lens/Mirror: f is +ve"},
+                    {"label": "2. CONCAVE (-VE)", "expr": "Concave Lens/Mirror: f is -ve"},
+                    {"label": "3. DIOPTRE CM TRAP", "expr": "P(Dioptre) = 100 / f(in cm)"},
+                ],
+                "quick_tip": (
+                    "Smash SUBSCRIBE + Bell Icon & Description se Free 1-Page Light Formula & Ray Sheet download karo!"
+                    if is_hinglish
+                    else "Smash SUBSCRIBE + Ring the Bell & Download the Free 1-Page Light Formula Sheet Below!"
+                ),
+                "narration": (
+                    "Warning—board exam ke number-one trap mein apna aakhri mark mat gawaana! Question mein focal length hamesha centimetre mein di hoti hai, isliye Power Dioptre mein nikaalte waqt 1 by f nahi balki 100 upon f centimetre lagao! "
+                    "Convex ka f aur Power hamesha positive, aur Concave ka negative! Abhi red Subscribe button dabaao, bell icon on karo, aur description se free 1-page Formula Sheet download kar lo!"
+                    if is_hinglish
+                    else "Warning—never lose your final mark to the number-one board exam trap! Questions give focal length in centimetres, so always use 100 divided by f in centimetres to get Power in Dioptres! Smash that red Subscribe button, ring the bell, and grab the free Formula Sheet below!"
+                ),
+                "image_3d_prompt": "Cheerful sunlit 3D classroom model: side-by-side glowing convex converging lens and concave diverging lens on a wooden lab table next to a gleaming golden star trophy, Pixar educational style, zero text, zero faces.",
+                "google_flow_veo_prompt": "Cheerful sunlit 3D classroom desk zooming from glowing convex and concave lenses to a gleaming golden star trophy.",
+                "fallback_plate": "scene_04_16x9.jpg",
+            },
+        ]
+
     if "height" in t_low or "distance" in t_low or "elevation" in t_low:
         return [
             {
@@ -1826,7 +2003,9 @@ def generate_dual_script_and_thumbnails(
     default_scenes = _default_gyroscope_scenes(topic_title, is_hinglish=is_hinglish)
     is_syllabus = video_category == "syllabus_chapter"
     dur_upper = (duration_badge or "6 Mins").strip().upper()
-    default_hook = f"{dur_upper} COMPLETE!" if is_syllabus else "TOPPER HACK!"
+    target_total_sec = _parse_duration_badge_seconds(duration_badge)
+    short_chap_lbl = _short_chapter_thumbnail_label(clean_chapter)
+    default_hook = f"{short_chap_lbl} | IN {dur_upper}!" if is_syllabus else f"{short_chap_lbl} | TOPPER HACK!"
     fallback_blueprint = {
         "title_variations": [
             topic_title,
@@ -1840,7 +2019,7 @@ def generate_dual_script_and_thumbnails(
             f"How Toppers Master {clean_chapter} Without Cramming | {selected_board} {target_class_label}",
         ],
         "thumb_hook_3words": default_hook,
-        "short_hook_3words": f"{clean_chapter[:16].upper()}!" if len(clean_chapter) <= 16 else "EXAM SHORTCUT!",
+        "short_hook_3words": f"{short_chap_lbl} | IN {dur_upper}!" if is_syllabus else f"{short_chap_lbl} | 5-SEC HACK!",
         "thumb_sub_tagline": "ALL FORMULAS + EXAM HACKS" if is_syllabus else "TOPPERS SECRET SHORTCUT",
         "thumbnail_16x9_prompt": custom_thumb_prompt.strip()
         or (
@@ -1946,10 +2125,14 @@ def generate_dual_script_and_thumbnails(
     shutil.copyfile(raw_thumb_16x9, thumb_path)
     shutil.copyfile(raw_short_9x16, short_cover_path)
 
-    hook_16x9 = strip_3d_text(blueprint.get("thumb_hook_3words") or "") or fallback_blueprint["thumb_hook_3words"]
-    if is_syllabus and dur_upper.split()[0] not in hook_16x9.upper():
-        hook_16x9 = default_hook
-    hook_9x16 = strip_3d_text(blueprint.get("short_hook_3words") or "") or hook_16x9
+    # Always sync the thumbnail headline with the exact Chapter Name + Selected Duration for High CTR!
+    if is_syllabus:
+        hook_16x9 = f"{short_chap_lbl} | IN {dur_upper}!"
+        hook_9x16 = f"{short_chap_lbl} | IN {dur_upper}!"
+    else:
+        raw_h = strip_3d_text(blueprint.get("thumb_hook_3words") or "") or "TOPPER HACK!"
+        hook_16x9 = f"{short_chap_lbl} | {raw_h}" if "|" not in raw_h else raw_h
+        hook_9x16 = hook_16x9
     sub_tag = strip_3d_text(blueprint.get("thumb_sub_tagline") or "") or fallback_blueprint["thumb_sub_tagline"]
 
     apply_consistent_topperlab_thumbnail_branding(
@@ -1977,6 +2160,7 @@ def generate_dual_script_and_thumbnails(
         "selected_chapter": clean_chapter,
         "video_category": video_category,
         "duration_badge": duration_badge,
+        "target_duration_sec": target_total_sec,
         "class_badge_text": class_badge_text,
         "voice_mode": voice_mode,
         "visual_theme_key": visual_theme_key,
@@ -2023,10 +2207,34 @@ def _probe_wav_duration(wav_path: Path) -> float:
         return 12.0
 
 
+def get_jwalashiv_voice_sample_path() -> Path | None:
+    id_dir = ROOT_DIR / "assets" / "identity"
+    id_dir.mkdir(parents=True, exist_ok=True)
+    for ext in (".wav", ".mp3", ".m4a", ".ogg"):
+        p = id_dir / f"jwalashiv_voice_sample{ext}"
+        if p.exists() and p.stat().st_size > 1000:
+            return p
+    return None
+
+
+def save_jwalashiv_voice_sample(raw_bytes: bytes, filename: str = "sample.wav") -> Path:
+    id_dir = ROOT_DIR / "assets" / "identity"
+    id_dir.mkdir(parents=True, exist_ok=True)
+    ext = Path(filename).suffix.lower() or ".wav"
+    if ext not in (".wav", ".mp3", ".m4a", ".ogg"):
+        ext = ".wav"
+    for old_ext in (".wav", ".mp3", ".m4a", ".ogg"):
+        (id_dir / f"jwalashiv_voice_sample{old_ext}").unlink(missing_ok=True)
+    out_p = id_dir / f"jwalashiv_voice_sample{ext}"
+    out_p.write_bytes(raw_bytes)
+    return out_p
+
+
 def _normalize_hinglish_for_tts(text: str, is_hinglish: bool = True) -> str:
     """
-    Ensures Roman-script Hinglish words and Indian board-exam acronyms (NCERT, CBSE, ICSE, PYQ)
-    are pronounced with 100% authentic Indian mentor clarity by `hi-IN-MadhurNeural` / `hi-IN-SwaraNeural`.
+    Converts Roman-script Hindi connector words into native Devanagari while keeping
+    all English STEM terms & formulas in English, so `@jwalashiv`'s baritone voice
+    (`hi-IN-MadhurNeural` at +5%, -2Hz) speaks with 100% natural human Indian prosody!
     """
     s = re.sub(r"[*_#`]+", "", (text or "")).strip()
     acronym_map = {
@@ -2040,24 +2248,143 @@ def _normalize_hinglish_for_tts(text: str, is_hinglish: bool = True) -> str:
         s = re.sub(pat, repl, s, flags=re.IGNORECASE)
     if not is_hinglish:
         return s
-    phonetic_map = {
-        r"\bbanate\b": "banaate",
-        r"\bbanati\b": "banaati",
-        r"\bbanti\b": "ban-ti",
-        r"\bbanta\b": "ban-ta",
-        r"\buthati\b": "uthaati",
-        r"\bchadhe\b": "chaddhe",
-        r"\bbacha\b": "bachaa",
-        r"\bnikal\b": "nikaal",
-        r"\bjata\b": "jaata",
-        r"\bjate\b": "jaate",
-        r"\baata\b": "aataa",
-        r"\bdabao\b": "dabaao",
-        r"\blagao\b": "lagaao",
-        r"\bgawana\b": "gawaana",
-        r"\bkatwana\b": "katwaana",
+
+    hindi_devanagari_map = {
+        r"\bruko\b": "रुको",
+        r"\bzara\b": "ज़रा",
+        r"\bkya\b": "क्या",
+        r"\baap\b": "आप",
+        r"\bbina\b": "बिना",
+        r"\bchaddhe\b": "चढ़े",
+        r"\bchadhe\b": "चढ़े",
+        r"\bkisi\b": "किसी",
+        r"\boonche\b": "ऊंचे",
+        r"\bpaanch\b": "पांच",
+        r"\bmein\b": "में",
+        r"\bnikaal\b": "निकाल",
+        r"\bnikal\b": "निकाल",
+        r"\bnikaalte\b": "निकालते",
+        r"\bsakte\b": "सकते",
+        r"\bsakta\b": "सकता",
+        r"\bsakti\b": "सकती",
+        r"\bho\b": "हो",
+        r"\bhai\b": "है",
+        r"\bhain\b": "हैं",
+        r"\bhota\b": "होता",
+        r"\bhoti\b": "होती",
+        r"\bhote\b": "होते",
+        r"\bhoga\b": "होगा",
+        r"\bhogi\b": "होगी",
+        r"\bdekho\b": "देखो",
+        r"\bdekhiye\b": "देखिए",
+        r"\bdekhte\b": "देखते",
+        r"\bkarte\b": "करते",
+        r"\bkarta\b": "करता",
+        r"\bkarti\b": "करती",
+        r"\bkarein\b": "करें",
+        r"\bkaro\b": "करो",
+        r"\bkar\b": "कर",
+        r"\bkarke\b": "करके",
+        r"\bseedhi\b": "सीधी",
+        r"\bseedha\b": "सीधा",
+        r"\buthaati\b": "उठाती",
+        r"\buthati\b": "उठाती",
+        r"\bbanaati\b": "बनाती",
+        r"\bbanati\b": "बनाती",
+        r"\bbanaate\b": "बनाते",
+        r"\bbanate\b": "बनाते",
+        r"\bbanta\b": "बनता",
+        r"\bbanti\b": "बनती",
+        r"\baur\b": "और",
+        r"\bse\b": "से",
+        r"\bhamesha\b": "हमेशा",
+        r"\bbarabar\b": "बराबर",
+        r"\bab\b": "अब",
+        r"\bhamara\b": "हमारा",
+        r"\bhamare\b": "हमारे",
+        r"\bwoh\b": "वो",
+        r"\bjinse\b": "जिनसे",
+        r"\baate\b": "आते",
+        r"\baata\b": "आता",
+        r"\baataa\b": "आता",
+        r"\baaye\b": "आए",
+        r"\bpar\b": "पर",
+        r"\bpe\b": "पे",
+        r"\byaani\b": "यानी",
+        r"\bbilkul\b": "बिल्कुल",
+        r"\bki\b": "की",
+        r"\bka\b": "का",
+        r"\bके\b": "के",
+        r"\bke\b": "के",
+        r"\bko\b": "को",
+        r"\btaraf\b": "तरफ",
+        r"\bchalte\b": "चलते",
+        r"\bjaata\b": "जाता",
+        r"\bjata\b": "जाता",
+        r"\bjaati\b": "जाती",
+        r"\bjaate\b": "जाते",
+        r"\bjate\b": "जाते",
+        r"\blambe\b": "लंबे",
+        r"\bmat\b": "मत",
+        r"\blikho\b": "लिखो",
+        r"\blikhna\b": "लिखना",
+        r"\bjab\b": "जब",
+        r"\bbane\b": "बने",
+        r"\bbachaa\b": "बचा",
+        r"\bbacha\b": "बचा",
+        r"\bhua\b": "हुआ",
+        r"\bhui\b": "हुई",
+        r"\bhue\b": "हुए",
+        r"\baadha\b": "आधा",
+        r"\bapna\b": "अपना",
+        r"\bapne\b": "अपने",
+        r"\baakhri\b": "आखिरी",
+        r"\bgawaana\b": "गवाना",
+        r"\bgawana\b": "गवाना",
+        r"\bya\b": "या",
+        r"\bdi\b": "दी",
+        r"\btoh\b": "तो",
+        r"\bisliye\b": "इसलिए",
+        r"\bzaroor\b": "ज़रूर",
+        r"\babhi\b": "अभी",
+        r"\bdabaao\b": "दबाओ",
+        r"\bdabao\b": "दबाओ",
+        r"\blo\b": "लो",
+        r"\bkitna\b": "कितना",
+        r"\btakraati\b": "टकराती",
+        r"\bsaath\b": "साथ",
+        r"\byaad\b": "याद",
+        r"\brakhna\b": "रखना",
+        r"\brakho\b": "रखो",
+        r"\bpaani\b": "पानी",
+        r"\bkam\b": "कम",
+        r"\bkehta\b": "कहता",
+        r"\bkehte\b": "कहते",
+        r"\bjise\b": "जिसे",
+        r"\bkabhi\b": "कभी",
+        r"\bhona\b": "होना",
+        r"\bjabki\b": "जबकि",
+        r"\bulta\b": "उल्टा",
+        r"\bliye\b": "लिए",
+        r"\bagar\b": "अगर",
+        r"\bwaqt\b": "वक़्त",
+        r"\bnahi\b": "नहीं",
+        r"\bbalki\b": "बल्कि",
+        r"\blagaao\b": "लगाओ",
+        r"\blagao\b": "लगाओ",
+        r"\bchhoot\b": "छूट",
+        r"\bgalti\b": "गलती",
+        r"\bsirf\b": "सिर्फ",
+        r"\bkaise\b": "कैसे",
+        r"\bchalo\b": "चलो",
+        r"\basli\b": "असली",
+        r"\bkyun\b": "क्यों",
+        r"\bkyunki\b": "क्योंकि",
+        r"\bsamjhe\b": "समझे",
+        r"\bsamjho\b": "समझो",
+        r"\bpoora\b": "पूरा",
     }
-    for pat, repl in phonetic_map.items():
+    for pat, repl in hindi_devanagari_map.items():
         s = re.sub(pat, repl, s, flags=re.IGNORECASE)
     return s
 
@@ -2084,8 +2411,8 @@ def synthesize_scene_voiceover(narration: str, out_wav: Path, voice_preset: Dict
             import edge_tts
 
             edge_v = voice_preset.get("edge_voice") or ("hi-IN-MadhurNeural" if is_hinglish else "en-IN-PrabhatNeural")
-            rate_v = voice_preset.get("rate", "+10%" if is_hinglish else "+9%")
-            pitch_v = voice_preset.get("pitch", "+0Hz")
+            rate_v = voice_preset.get("rate", "+5%")
+            pitch_v = voice_preset.get("pitch", "-2Hz")
 
             async def _run_tts() -> None:
                 comm = edge_tts.Communicate(
@@ -2105,7 +2432,7 @@ def synthesize_scene_voiceover(narration: str, out_wav: Path, voice_preset: Dict
                         "-i",
                         str(mp3_tmp),
                         "-af",
-                        "highpass=f=75,equalizer=f=3100:t=q:w=1.2:g=2.0,loudnorm=I=-14:TP=-1.5:LRA=11",
+                        "highpass=f=70,equalizer=f=185:t=q:w=1.1:g=2.4,equalizer=f=3100:t=q:w=1.2:g=1.6,loudnorm=I=-14:TP=-1.5:LRA=11",
                         "-ar",
                         "44100",
                         "-ac",
@@ -2323,6 +2650,28 @@ def _add_laser_sweep(
         buf_r[i0 + k] += v * (0.6 + 0.3 * u)
 
 
+def _find_quiet_split_frame(stereo_samples: array, sr: int, approx_frame: int, n_frames: int) -> int:
+    """Finds a low-energy pause near approx_frame (+/- 0.55s) so voice chunks never cut mid-word."""
+    win = max(1, int(0.03 * sr))
+    search_rad = int(0.55 * sr)
+    lo = max(win, min(n_frames - win * 2, approx_frame - search_rad))
+    hi = max(lo + 1, min(n_frames - win, approx_frame + search_rad))
+    best_f = max(0, min(n_frames, approx_frame))
+    best_e = float("inf")
+    step = max(1, win // 2)
+    for f in range(lo, hi, step):
+        e = 0.0
+        idx0 = f * 2
+        for k in range(0, win * 2, 4):
+            if idx0 + k < len(stereo_samples):
+                s = float(stereo_samples[idx0 + k])
+                e += s * s
+        if e < best_e:
+            best_e = e
+            best_f = f
+    return best_f
+
+
 def build_scene_master_audio(
     voice_wav: Path,
     out_mix_wav: Path,
@@ -2333,20 +2682,17 @@ def build_scene_master_audio(
     hack_out_sec: float,
     scene_id: int = 1,
     bgm_enabled: bool = True,
+    target_duration_sec: float | None = None,
 ) -> Path:
     """
-    Mixes the -14 LUFS Hinglish/English narration with Teen-Approved Studio Effect Sounds (SFX) ONLY:
+    Mixes the -14 LUFS @jwalashiv Hinglish/English narration with Teen-Approved Studio Effect Sounds (SFX) ONLY:
       - ZERO childish nursery/marimba background melody loops or high-pitched fairy chimes!
-      - Deep cinematic low-end air whoosh on scene transitions (68Hz -> 185Hz)
-      - Tactile mechanical drafting & compass ticks as green markers 1, 2, 3, Base line, and Angle arcs draw
-      - Tight low-mid UI lock thuds synced 1-to-1 with Formula Portions 1, 2, and 3 highlighting
-      - Deep low-mid laser beam hum on diagonal sight-ray sweep
-      - Mechanical chrono-watch escapement ticks + deep sub-bass drop impact in Scene 3 (5-Sec Boss Challenge)
-      - Crisp double mechanical mouse-click + deep confirmation lock in Scene 4 (Subscribe CTA)
+      - If target_duration_sec > voice duration (e.g. 6 Min / 8 Min / 10 Min / 15 Min Long-Form video),
+        intelligently paces the narration across the 4 visual acts (Hook -> Portion 1 -> Portion 2 -> Portion 3 & Hack)
+        with tactile drafting/lock SFX between beats so the video matches the exact selected duration!
+      - Scene 1 First 3 Seconds (0.0s - 3.0s): Crisp 3-second attention hook countdown ticks + 3.0s transition whoosh!
     """
-    if not bgm_enabled or not voice_wav.exists():
-        if voice_wav.exists() and voice_wav.resolve() != out_mix_wav.resolve():
-            shutil.copyfile(voice_wav, out_mix_wav)
+    if not voice_wav.exists():
         return out_mix_wav
 
     try:
@@ -2364,71 +2710,132 @@ def build_scene_master_audio(
                 stereo_v[2 * i + 1] = v_samples[i]
             v_samples = stereo_v
     except Exception:
-        if voice_wav.exists():
+        if voice_wav.exists() and voice_wav.resolve() != out_mix_wav.resolve():
             shutil.copyfile(voice_wav, out_mix_wav)
         return out_mix_wav
 
-    n_total = len(v_samples) // 2
-    sr = 44100
+    n_voice = len(v_samples) // 2
+    sr = sr if sr > 0 else 44100
+    target_sec = max(float(duration_sec), float(target_duration_sec or 0.0), n_voice / float(sr))
+    n_total = max(n_voice, int(round(target_sec * sr)))
+
+    # If target_sec is longer than raw voice clip (e.g., 8-Min Long-Form = 120s/scene),
+    # distribute the narration across the 4 visual phases at natural pause points!
+    if n_total > n_voice + int(3.5 * sr) and n_voice > int(4.0 * sr):
+        c1 = _find_quiet_split_frame(v_samples, sr, int(n_voice * 0.26), n_voice)
+        c2 = _find_quiet_split_frame(v_samples, sr, int(n_voice * 0.52), n_voice)
+        c3 = _find_quiet_split_frame(v_samples, sr, int(n_voice * 0.76), n_voice)
+        if not (0 < c1 < c2 < c3 < n_voice):
+            c1, c2, c3 = int(n_voice * 0.25), int(n_voice * 0.50), int(n_voice * 0.75)
+
+        chunks = [
+            v_samples[0 : c1 * 2],
+            v_samples[c1 * 2 : c2 * 2],
+            v_samples[c2 * 2 : c3 * 2],
+            v_samples[c3 * 2 : n_voice * 2],
+        ]
+        # Place Chunk 0 after the 3.0s hook in Scene 1 (or 0.2s in Scenes 2-4), then pace Chunks 1, 2, 3
+        starts_sec = [
+            3.05 if scene_id == 1 else 0.15,
+            target_sec * 0.28,
+            target_sec * 0.54,
+            target_sec * 0.77,
+        ]
+        paced_v = array("h", [0] * (n_total * 2))
+        cursor_f = 0
+        for idx_c, ch_arr in enumerate(chunks):
+            ch_frames = len(ch_arr) // 2
+            desired_f = int(round(starts_sec[idx_c] * sr))
+            start_f = max(cursor_f, min(desired_f, max(0, n_total - ch_frames)))
+            end_f = min(n_total, start_f + ch_frames)
+            copy_len = (end_f - start_f) * 2
+            if copy_len > 0:
+                paced_v[start_f * 2 : start_f * 2 + copy_len] = ch_arr[:copy_len]
+            cursor_f = end_f + int(0.25 * sr)
+        v_samples = paced_v
+    elif n_total > n_voice:
+        padded_v = array("h", [0] * (n_total * 2))
+        padded_v[0 : n_voice * 2] = v_samples[0 : n_voice * 2]
+        v_samples = padded_v
+
+    if not bgm_enabled:
+        out_mix_wav.parent.mkdir(parents=True, exist_ok=True)
+        with wave.open(str(out_mix_wav), "wb") as wf:
+            wf.setnchannels(2)
+            wf.setsampwidth(2)
+            wf.setframerate(sr)
+            wf.writeframes(v_samples.tobytes())
+        return out_mix_wav
+
     sfx_l = [0.0] * n_total
     sfx_r = [0.0] * n_total
 
     # 1. Scene Entry: Deep Cinematic Low-End Air Whoosh (68Hz -> 185Hz)
     _add_swept_whoosh(sfx_l, sfx_r, sr, 0.02, dur_sec=0.28, f_start=68.0, f_end=185.0, amp=0.34)
 
-    # 2. Phase 1 (u = 0.06..0.34): Green markers 1, 2, 3 + Cyan Base line drawing + Portion 1 Tactile Lock
-    t_p1 = max(0.24, duration_sec * 0.07)
+    # Scene 1 First 3 Seconds (0.0s .. 3.0s): High-Retention 3-Second Hook Ticks + 3.0s Explainer Launch Whoosh!
+    if scene_id == 1 and target_sec >= 6.0:
+        for hk_sec in (0.12, 1.05, 2.05):
+            _add_tactile_ui_lock(sfx_l, sfx_r, sr, hk_sec, low_freq=118.0, click_freq=840.0, amp=0.35, pan=0.50)
+        _add_swept_whoosh(sfx_l, sfx_r, sr, 2.92, dur_sec=0.34, f_start=185.0, f_end=64.0, amp=0.38)
+        _add_tactile_ui_lock(sfx_l, sfx_r, sr, 3.02, low_freq=142.0, click_freq=910.0, amp=0.42, pan=0.50)
+
+    # 2. Phase 1: Green markers 1, 2, 3 + Cyan Base line drawing + Portion 1 Tactile Lock
+    t_p1 = max(3.25 if scene_id == 1 else 0.24, target_sec * 0.08)
     _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_p1, low_freq=115.0, click_freq=690.0, amp=0.38, pan=0.32)
     _add_mechanical_ticks(
         sfx_l,
         sfx_r,
         sr,
-        start_sec=duration_sec * 0.09,
-        dur_sec=min(1.6, duration_sec * 0.18),
+        start_sec=t_p1 + 0.18,
+        dur_sec=min(1.6, target_sec * 0.15),
         tick_rate_hz=11.0,
         base_freq=640.0,
         amp=0.22,
     )
 
-    if scene_id == 1:
-        # Tactile double-lock when the '?' puzzle badge pops in Act 1 Hook
-        _add_tactile_ui_lock(sfx_l, sfx_r, sr, duration_sec * 0.21, low_freq=132.0, click_freq=820.0, amp=0.34, pan=0.50)
-
-    # 3. Phase 2 (u = 0.36..0.66): Yellow Height line + 90-deg lock + Portion 2 Tactile Lock + Deep Laser Sweep
-    t_p2 = duration_sec * 0.36
+    # 3. Phase 2: Yellow Height/Normal line + 90-deg lock + Portion 2 Tactile Lock + Deep Laser Sweep
+    t_p2 = target_sec * 0.36
     _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_p2, low_freq=124.0, click_freq=740.0, amp=0.39, pan=0.50)
-    _add_laser_sweep(sfx_l, sfx_r, sr, start_sec=duration_sec * 0.41, dur_sec=0.45, f_start=190.0, f_end=76.0, amp=0.27)
+    _add_laser_sweep(sfx_l, sfx_r, sr, start_sec=target_sec * 0.41, dur_sec=0.45, f_start=190.0, f_end=76.0, amp=0.27)
 
-    # 4. Phase 3 (u = 0.66..0.96): Compass angle arc scratch + Portion 3 Tactile Lock + Quick Hack Lock
-    t_p3 = duration_sec * 0.66
+    # 4. Phase 3: Compass angle arc scratch + Portion 3 Tactile Lock + Quick Hack Lock
+    t_p3 = target_sec * 0.66
     _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_p3, low_freq=136.0, click_freq=810.0, amp=0.40, pan=0.68)
     _add_mechanical_ticks(
         sfx_l,
         sfx_r,
         sr,
-        start_sec=duration_sec * 0.68,
-        dur_sec=min(1.1, duration_sec * 0.13),
+        start_sec=target_sec * 0.68,
+        dur_sec=min(1.1, target_sec * 0.12),
         tick_rate_hz=14.0,
         base_freq=720.0,
         amp=0.21,
     )
 
+    # For extended Long-Form scenes (> 35s), add subtle tactile milestone locks every ~15s so visual diagram pulses feel alive
+    if target_sec > 35.0:
+        t_mark = 14.0
+        while t_mark < target_sec - 4.0:
+            _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_mark, low_freq=112.0, click_freq=720.0, amp=0.26, pan=0.50)
+            _add_mechanical_ticks(sfx_l, sfx_r, sr, start_sec=t_mark + 0.12, dur_sec=0.65, tick_rate_hz=10.0, base_freq=660.0, amp=0.16)
+            t_mark += 15.0
+
     if scene_id == 3:
         # Climax 5-Second Boss Countdown: Crisp Chrono-Watch Mechanical Ticks + Deep Bass Impact Drop!
-        t_cd_start = duration_sec * 0.56
-        cd_span = max(1.8, duration_sec * 0.30)
+        t_cd_start = target_sec * 0.56
+        cd_span = min(6.0, max(1.8, target_sec * 0.28))
         for c_idx in range(6):
             tc = t_cd_start + c_idx * (cd_span / 5.5)
             if c_idx < 5:
                 _add_tactile_ui_lock(sfx_l, sfx_r, sr, tc, low_freq=98.0, click_freq=860.0, amp=0.32, pan=0.50)
             else:
-                # Final "DONE!" deep cinematic bass lock + air whoosh
                 _add_tactile_ui_lock(sfx_l, sfx_r, sr, tc, low_freq=145.0, click_freq=920.0, amp=0.46, pan=0.50)
                 _add_swept_whoosh(sfx_l, sfx_r, sr, tc + 0.03, dur_sec=0.32, f_start=160.0, f_end=58.0, amp=0.35)
 
     if scene_id == 4:
-        # Scene 4 Subscribe Button Mechanical Mouse-Click + Deep Confirmation Thud (zero high-pitched bells!)
-        t_click = duration_sec * 0.77
+        # Scene 4 Subscribe Button Mechanical Mouse-Click + Deep Confirmation Thud
+        t_click = target_sec * 0.78
         _add_mechanical_ticks(sfx_l, sfx_r, sr, start_sec=t_click, dur_sec=0.04, tick_rate_hz=40.0, base_freq=920.0, amp=0.38)
         _add_tactile_ui_lock(sfx_l, sfx_r, sr, t_click + 0.06, low_freq=135.0, click_freq=790.0, amp=0.44, pan=0.52)
         _add_swept_whoosh(sfx_l, sfx_r, sr, t_click + 0.10, dur_sec=0.26, f_start=95.0, f_end=210.0, amp=0.30)
@@ -2530,22 +2937,21 @@ def _render_animated_geometry_and_formula_scene_mp4(
     is_vertical: bool = False,
 ) -> Path:
     """
-    Renders a live frame-by-frame (20 fps -> 25 fps) interactive geometry & formula studio canvas
-    inspired by reference Short https://www.youtube.com/shorts/8MXN6QjPJqc and composited with
-    Google Flow / Veo 3.1 live B-roll (`saved_motion_mp4`):
-      - Vertical green guide lines with rounded green badges `1`, `2`, `3`
-      - Unfolding neon circle & Cyan Horizontal Base (`Adjacent = B`)
-      - Playful `?` curiosity badge transforming into Yellow Vertical Height (`Opposite = H`) + `90°` square
-      - Red Laser Line-of-Sight + Metallic Compass scratching Angle Arc `θ` with `*` intersection markers
-      - Real-time 3-Portion Formula Highlighter Bar where Portion 1 (Cyan), Portion 2 (Yellow), and
-        Portion 3 (Emerald/Coral) light up in sync with the geometry being drawn!
-      - Scene 3: 5-Second Board Exam Boss Countdown Ring + Concentric Ratio Waves (`30°-45°-60°`)
-      - Scene 4: #1 Exam Trap (`+1.5m` Eye-Height) + Animated YouTube `SUBSCRIBE -> SUBSCRIBED + BELL` End-Screen CTA!
+    Renders a FULL-SCREEN Left-Side-Only LIVE MODEL B-ROLL + Interactive Geometry & Formula Studio Canvas
+    (Right-hand dark grid box removed per user feedback so the 3D classroom model fills the entire viewport!):
+      - Scene 1 First 3 Seconds (0.0s - 3.0s): High-retention 3-Second Attention Hook overlay with 3..2..1 countdown,
+        followed at 3.0s by the full-screen interactive explainer!
+      - Top 3-Portion Formula Highlighter Bar where Portion 1 (Cyan), Portion 2 (Yellow), and Portion 3 (Emerald)
+        light up in sync with the animated rays & compass arcs drawn directly over the full-screen 3D model!
+      - Bottom-Left Floating TOPPER EXAM HACK card over the full-screen B-roll.
+      - Scene 3: 5-Second Board Exam Boss Countdown Ring + Concentric Ratio Waves.
+      - Scene 4: Animated YouTube `SUBSCRIBE -> SUBSCRIBED + BELL` End-Screen CTA!
     """
     ffmpeg_bin = get_ffmpeg_exe()
     W, H = (1080, 1920) if is_vertical else (1920, 1080)
-    fps = 20
-    n_frames = max(40, int(math.ceil(dur_sec * fps)))
+    # Adaptive input pipe frame rate so 8-minute (480s) 1080p videos render in ~12 seconds while FFmpeg outputs smooth 24fps
+    fps = 6 if dur_sec > 35.0 else 16
+    n_frames = max(30, int(math.ceil(dur_sec * fps)))
 
     sid = int(scene.get("scene_id", 1))
     act_badge = _sanitize_drawable_text(scene.get("act_badge") or ACT_BADGE_LABELS.get(sid, f"ACT {sid}: CONCEPT")).upper()
@@ -2555,60 +2961,54 @@ def _render_animated_geometry_and_formula_scene_mp4(
     formula_badge = _sanitize_drawable_text(strip_3d_text(scene.get("formula_badge", "")))
     formula_parts = _parse_formula_into_three_portions(formula_badge, headline, scene.get("formula_parts"))
     target_angle = int(scene.get("target_angle_deg") or (60 if sid in (2, 3) else 45))
+    clean_hl_hook = headline.rstrip("?!.").strip()
+    hook_banner_3sec = _sanitize_drawable_text(
+        strip_3d_text(scene.get("hook_banner_3sec") or f"WAIT! CAN YOU SOLVE '{clean_hl_hook}' IN 5 SECONDS?")
+    ).upper()
 
     has_broll = bool(saved_motion_mp4 and saved_motion_mp4.exists() and saved_motion_mp4.stat().st_size > 1000)
 
-    # Layout coordinates for 16:9 (1920x1080) vs 9:16 (1080x1920)
+    # Full-Screen LIVE MODEL B-ROLL Viewport (Right-hand dark grid removed — Left B-Roll expanded to full width!)
     if not is_vertical:
-        broll_box = (42, 232, 742, 772)      # 700x540 Left B-Roll Viewport
-        stage_box = (768, 232, 1878, 912)    # 1110x680 Right Live Geometry & Compass Stage
+        broll_box = (42, 220, 1878, 956)      # 1836x736 Full-Width 16:9 Live Model Viewport
     else:
-        broll_box = (54, 412, 1026, 842)     # 972x430 Top B-Roll Viewport
-        stage_box = (54, 862, 1026, 1446)    # 972x584 Center Live Geometry & Compass Stage
+        broll_box = (48, 406, 1032, 1446)     # 984x1040 Full-Screen 9:16 Live Model Viewport
 
-    bw_v = broll_box[2] - broll_box[0]
-    bh_v = broll_box[3] - broll_box[1]
+    bx0, by0, bx1, by1 = broll_box
+    bw_v = bx1 - bx0
+    bh_v = by1 - by0
 
-    # Pre-load static B-roll fallback image fitted to broll_box
+    # Pre-load static B-roll fallback image fitted to full-screen broll_box
     if src_img_path.exists():
         broll_static_img = ImageOps.fit(Image.open(src_img_path).convert("RGBA"), (bw_v, bh_v), method=Image.Resampling.LANCZOS)
     else:
         broll_static_img = Image.new("RGBA", (bw_v, bh_v), (20, 32, 58, 255))
 
-    # Build static base studio canvas with subtle coordinate grid so per-frame drawing is ultra fast
+    # Build static base studio canvas
     base_canvas = Image.new("RGBA", (W, H), (10, 16, 30, 255))
     bdraw = ImageDraw.Draw(base_canvas)
 
-    # Studio grid lines inside stage_box
-    sx0, sy0, sx1, sy1 = stage_box
-    bdraw.rounded_rectangle([sx0, sy0, sx1, sy1], radius=24, fill=(13, 22, 40, 255), outline=(38, 58, 92, 255), width=3)
-    for gx in range(sx0 + 55, sx1, 55):
-        bdraw.line([(gx, sy0 + 4), (gx, sy1 - 4)], fill=(22, 36, 62, 255), width=1)
-    for gy in range(sy0 + 55, sy1, 55):
-        bdraw.line([(sx0 + 4, gy), (sx1 - 4, gy)], fill=(22, 36, 62, 255), width=1)
-
-    # B-Roll outer frame
-    bx0, by0, bx1, by1 = broll_box
-    bdraw.rounded_rectangle([bx0 - 4, by0 - 4, bx1 + 4, by1 + 4], radius=22, fill=(15, 23, 42, 255), outline=(56, 189, 248, 235), width=4)
+    # Full-Screen B-Roll outer neon frame
+    bdraw.rounded_rectangle([bx0 - 4, by0 - 4, bx1 + 4, by1 + 4], radius=22, fill=(15, 23, 42, 255), outline=(56, 189, 248, 240), width=4)
 
     # Top Header Bar: Class Pill + 4-Act Badge + Headline
     cls_clean = _sanitize_drawable_text(class_badge_text).upper()
     f_hdr = _load_studio_font(25 if not is_vertical else 26, weight="bold")
-    f_act = _load_studio_font(24 if not is_vertical else 24, weight="bold")
+    f_act = _load_studio_font(23 if not is_vertical else 24, weight="bold")
     if not is_vertical:
         bb_c = bdraw.textbbox((0, 0), cls_clean, font=f_hdr)
         cw_p = (bb_c[2] - bb_c[0]) + 32
         bdraw.rounded_rectangle([42, 22, 42 + cw_p, 72], radius=14, fill=(220, 38, 38, 255), outline=(255, 255, 255, 245), width=3)
         bdraw.text((42 + 16, 34 - bb_c[1]), cls_clean, font=f_hdr, fill=(255, 255, 255, 255))
 
-        act_str = f"{act_badge}  •  {headline}"
+        act_str = f"{act_badge}  •  {headline}"[:58]
         bb_a = bdraw.textbbox((0, 0), act_str, font=f_hdr)
         aw_p = (bb_a[2] - bb_a[0]) + 36
         ax0 = 42 + cw_p + 12
         bdraw.rounded_rectangle([ax0, 22, ax0 + aw_p, 72], radius=14, fill=(15, 23, 42, 255), outline=(255, 214, 0, 240), width=3)
         bdraw.text((ax0 + 18, 34 - bb_a[1]), act_str, font=f_hdr, fill=(255, 214, 0, 255))
 
-        src_tag = "GOOGLE FLOW / VEO 3.1 + LIVE GEOMETRY" if has_broll else "LIVE GEOMETRY + COMPASS ENGINE"
+        src_tag = "@JWALASHIV VOICE • FULL-SCREEN LIVE MODEL"
         bb_s = bdraw.textbbox((0, 0), src_tag, font=f_act)
         sw_p = (bb_s[2] - bb_s[0]) + 30
         bdraw.rounded_rectangle([W - 42 - sw_p, 24, W - 42, 70], radius=13, fill=(6, 78, 59, 255), outline=(16, 185, 129, 255), width=2)
@@ -2631,8 +3031,8 @@ def _render_animated_geometry_and_formula_scene_mp4(
     f_take = _load_studio_font(27 if not is_vertical else 28, weight="bold")
     if not is_vertical:
         t_lines = _wrap_text_pixels(bdraw, takeaway, f_take, max_px=W - 180, max_lines=2)
-        th_box = 62 if len(t_lines) == 1 else 94
-        ty0 = H - th_box - 20
+        th_box = 62 if len(t_lines) == 1 else 92
+        ty0 = H - th_box - 14
         bdraw.rounded_rectangle([42, ty0, W - 42, ty0 + th_box], radius=16, fill=(15, 23, 42, 245), outline=(56, 189, 248, 210), width=3)
         bdraw.rounded_rectangle([42, ty0, 56, ty0 + th_box], radius=8, fill=(255, 214, 0, 255))
         yc = ty0 + 14
@@ -2644,7 +3044,7 @@ def _render_animated_geometry_and_formula_scene_mp4(
         t_lines = _wrap_text_pixels(bdraw, takeaway, f_take, max_px=W - 140, max_lines=2)
         th_box = 68 if len(t_lines) == 1 else 106
         ty0 = 1568
-        bdraw.rounded_rectangle([54, ty0, W - 54, ty0 + th_box], radius=18, fill=(15, 23, 42, 245), outline=(255, 214, 0, 225), width=3)
+        bdraw.rounded_rectangle([48, ty0, W - 48, ty0 + th_box], radius=18, fill=(15, 23, 42, 245), outline=(255, 214, 0, 225), width=3)
         yc = ty0 + 14
         for ln in t_lines:
             lb = bdraw.textbbox((0, 0), ln, font=f_take)
@@ -2658,28 +3058,26 @@ def _render_animated_geometry_and_formula_scene_mp4(
     f_num_badge = _load_studio_font(24, weight="bold")
     f_stage_lbl = _load_studio_font(25 if not is_vertical else 23, weight="bold")
     f_big_ang = _load_studio_font(34 if not is_vertical else 31, weight="bold")
-    f_qmark = _load_studio_font(62 if not is_vertical else 54, weight="heavy")
+    f_qmark = _load_studio_font(56 if not is_vertical else 48, weight="heavy")
     f_hack_hdr = _load_studio_font(22, weight="bold")
-    f_hack_txt = _load_studio_font(25 if not is_vertical else 24, weight="bold")
+    f_hack_txt = _load_studio_font(24 if not is_vertical else 23, weight="bold")
     f_cta_big = _load_studio_font(34 if not is_vertical else 31, weight="bold")
     f_cta_sub = _load_studio_font(24 if not is_vertical else 22, weight="bold")
+    f_hook_big = _load_studio_font(46 if not is_vertical else 36, weight="heavy")
+    f_hook_sub = _load_studio_font(28 if not is_vertical else 24, weight="bold")
 
     part_colors = [
-        ((0, 229, 255, 255), (8, 47, 73, 245), (186, 230, 253, 255)),     # Portion 1: Neon Cyan (Base)
-        ((255, 214, 0, 255), (66, 32, 6, 245), (254, 240, 138, 255)),     # Portion 2: Electric Yellow (Height)
-        ((16, 185, 129, 255), (6, 78, 59, 245), (167, 243, 208, 255)),    # Portion 3: Emerald Green (Angle/Result)
+        ((0, 229, 255, 255), (8, 47, 73, 245), (186, 230, 253, 255)),     # Portion 1: Neon Cyan
+        ((255, 214, 0, 255), (66, 32, 6, 245), (254, 240, 138, 255)),     # Portion 2: Electric Yellow
+        ((16, 185, 129, 255), (6, 78, 59, 245), (167, 243, 208, 255)),    # Portion 3: Emerald Green
     ]
 
-    # Build FFmpeg command (if saved_motion_mp4 exists, composite moving B-roll under our transparent B-roll viewport!)
     target_mp4.parent.mkdir(parents=True, exist_ok=True)
     if has_broll:
-        # Input 0: rawvideo RGBA stream from Python pipe
-        # Input 1: looped Veo 3.1 / Google Flow MP4 clip scaled to broll_box
-        # Input 2: master audio WAV
         fc = (
-            f"[0:v]fps=25,format=rgba[fg];"
-            f"[1:v]scale={bw_v}:{bh_v}:force_original_aspect_ratio=increase,crop={bw_v}:{bh_v},fps=25,format=rgba[broll];"
-            f"color=c=black:s={W}x{H}:r=25,format=rgba[blank];"
+            f"[0:v]fps=24,format=rgba[fg];"
+            f"[1:v]scale={bw_v}:{bh_v}:force_original_aspect_ratio=increase,crop={bw_v}:{bh_v},fps=24,format=rgba[broll];"
+            f"color=c=black:s={W}x{H}:r=24,format=rgba[blank];"
             f"[blank][broll]overlay={bx0}:{by0}:shortest=1[broll_pad];"
             f"[broll_pad][fg]overlay=0:0:shortest=1,format=yuv420p[vout]"
         )
@@ -2746,7 +3144,7 @@ def _render_animated_geometry_and_formula_scene_mp4(
             "-t",
             f"{dur_sec:.2f}",
             "-vf",
-            "fps=25,format=yuv420p",
+            "fps=24,format=yuv420p",
             "-map",
             "0:v:0",
             "-map",
@@ -2774,30 +3172,47 @@ def _render_animated_geometry_and_formula_scene_mp4(
 
     try:
         assert proc.stdin is not None
+        last_state_key = None
+        last_frame_bytes: bytes | None = None
+
         for f_idx in range(n_frames):
             u = f_idx / float(max(1, n_frames - 1))
             t_sec = u * dur_sec
+
+            # Scene 1 First 3.0 Seconds = Dedicated High-Retention Attention Hook!
+            in_hook_3s = (sid == 1) and (t_sec < 3.0) and (dur_sec >= 5.5)
+            if sid == 1 and dur_sec >= 5.5:
+                u_exp = 0.0 if in_hook_3s else _clamp01((t_sec - 3.0) / max(1.0, dur_sec - 3.0))
+            else:
+                u_exp = u
+
+            # Quantize state on long scenes (>35s) to avoid redundant PIL redraws when visual state is steady
+            if dur_sec > 35.0 and not in_hook_3s:
+                q_u = round(u_exp, 3)
+                q_z = round(u, 2)
+                state_key = (in_hook_3s, q_u, q_z)
+                if state_key == last_state_key and last_frame_bytes is not None:
+                    proc.stdin.write(last_frame_bytes)
+                    continue
+                last_state_key = state_key
 
             frame = base_canvas.copy()
             draw = ImageDraw.Draw(frame)
 
             # Determine which of the 3 Formula Portions is actively highlighted right now
-            if u < 0.36:
+            if u_exp < 0.36:
                 active_part = 0
-                part_pulse = _ease_out_cubic((u - 0.04) / 0.18)
-            elif u < 0.66:
+            elif u_exp < 0.66:
                 active_part = 1
-                part_pulse = _ease_out_cubic((u - 0.36) / 0.18)
             else:
                 active_part = 2
-                part_pulse = _ease_out_cubic((u - 0.66) / 0.18)
 
             # ----------------------------------------------------------------
-            # A. TOP 3-PORTION FORMULA HIGHLIGHTER BAR (8MXN6QjPJqc Style)
+            # A. TOP 3-PORTION FORMULA HIGHLIGHTER BAR
             # ----------------------------------------------------------------
             portion_centers: List[tuple[int, int]] = []
             if not is_vertical:
-                bar_y0, bar_y1 = 86, 212
+                bar_y0, bar_y1 = 84, 206
                 gap = 18
                 total_w = W - 84 - 2 * gap
                 pw = total_w // 3
@@ -2806,8 +3221,8 @@ def _render_animated_geometry_and_formula_scene_mp4(
                     px1 = px0 + pw
                     p_info = formula_parts[p_i]
                     b_col, bg_active, txt_col = part_colors[p_i]
-                    is_act = p_i == active_part
-                    is_done = p_i < active_part
+                    is_act = (p_i == active_part) and (not in_hook_3s)
+                    is_done = (p_i < active_part) and (not in_hook_3s)
 
                     box_y0 = bar_y0 - (4 if is_act else 0)
                     box_y1 = bar_y1 + (4 if is_act else 0)
@@ -2826,18 +3241,17 @@ def _render_animated_geometry_and_formula_scene_mp4(
                     draw.text((px0 + 28, box_y0 + 15), tag_txt, font=f_p_lbl, fill=(10, 16, 30, 255) if is_act else b_col)
 
                     exp_lines = _wrap_text_pixels(draw, p_info["expr"], f_p_exp, max_px=pw - 36, max_lines=1)
-                    draw.text((px0 + 20, box_y0 + 54), exp_lines[0], font=f_p_exp, fill=(255, 255, 255, 255) if is_act else txt_col)
+                    draw.text((px0 + 20, box_y0 + 52), exp_lines[0], font=f_p_exp, fill=(255, 255, 255, 255) if is_act else txt_col)
                     portion_centers.append(((px0 + px1) // 2, box_y1))
             else:
-                # 9:16 Vertical: 3 compact horizontal formula portion cards at y=166..396
                 for p_i in range(3):
                     py0 = 168 + p_i * 74
                     py1 = py0 + 66
-                    px0, px1 = 54, W - 54
+                    px0, px1 = 48, W - 48
                     p_info = formula_parts[p_i]
                     b_col, bg_active, txt_col = part_colors[p_i]
-                    is_act = p_i == active_part
-                    is_done = p_i < active_part
+                    is_act = (p_i == active_part) and (not in_hook_3s)
+                    is_done = (p_i < active_part) and (not in_hook_3s)
                     fill_c = bg_active if is_act else ((17, 28, 48, 245) if is_done else (15, 23, 42, 225))
                     out_c = b_col if is_act else ((b_col[0], b_col[1], b_col[2], 140) if is_done else (51, 65, 85, 190))
                     draw.rounded_rectangle([px0, py0, px1, py1], radius=14, fill=fill_c, outline=out_c, width=4 if is_act else 2)
@@ -2847,13 +3261,11 @@ def _render_animated_geometry_and_formula_scene_mp4(
                     portion_centers.append(((px0 + px1) // 2, py1))
 
             # ----------------------------------------------------------------
-            # B. B-ROLL VIEWPORT (LIVE VEO 3.1 / FLOW VIDEO OR KEN-BURNS PLATE) + LASER HUD
+            # B. FULL-SCREEN LIVE MODEL B-ROLL VIEWPORT (LEFT PART EXPANDED TO FULL SCREEN!)
             # ----------------------------------------------------------------
             if has_broll:
-                # Punch transparent window so FFmpeg's [broll] layer shows through cleanly!
                 draw.rectangle([bx0, by0, bx1, by1], fill=(0, 0, 0, 0))
             else:
-                # Smooth Ken-Burns zoom on static 3D classroom plate
                 zoom = 1.0 + 0.08 * u
                 zw = int(bw_v * zoom)
                 zh = int(bh_v * zoom)
@@ -2862,271 +3274,278 @@ def _render_animated_geometry_and_formula_scene_mp4(
                 cy_crop = (zh - bh_v) // 2
                 frame.paste(z_img.crop((cx_crop, cy_crop, cx_crop + bw_v, cy_crop + bh_v)), (bx0, by0))
 
-            # Draw live geometric sight-lines & green badges 1, 2, 3 directly over the B-Roll viewport!
-            b_base_y = by1 - int(bh_v * 0.18)
-            b_left_x = bx0 + int(bw_v * 0.14)
-            b_right_x = bx1 - int(bw_v * 0.16)
-            b_top_y = by0 + int(bh_v * 0.20)
+            # B-Roll top-left corner badge
+            draw.rounded_rectangle([bx0 + 18, by0 + 16, bx0 + 306, by0 + 54], radius=10, fill=(15, 23, 42, 225), outline=(0, 229, 255, 230), width=2)
+            draw.text((bx0 + 30, by0 + 23), "LIVE MODEL B-ROLL", font=f_p_lbl, fill=(0, 229, 255, 255))
 
-            p_broll_line = _ease_out_cubic((u - 0.05) / 0.25)
-            if p_broll_line > 0.02:
-                cur_bx = int(b_left_x + (b_right_x - b_left_x) * p_broll_line)
-                draw.line([(b_left_x, b_base_y), (cur_bx, b_base_y)], fill=(0, 229, 255, 235), width=5)
+            # ----------------------------------------------------------------
+            # C. FIRST 3 SECONDS (0.0s - 3.0s) ATTENTION HOOK OVERLAY (SCENE 1)
+            # ----------------------------------------------------------------
+            if in_hook_3s:
+                rem_hk = max(0.1, 3.0 - t_sec)
+                cd_num = int(math.ceil(rem_hk))
+                hk_cx = (bx0 + bx1) // 2
+                hk_cy = (by0 + by1) // 2
+                card_w = min(bw_v - 80, 1280 if not is_vertical else 900)
+                card_h = 340 if not is_vertical else 420
+                hx0 = hk_cx - card_w // 2
+                hy0 = hk_cy - card_h // 2
+                hx1 = hx0 + card_w
+                hy1 = hy0 + card_h
 
-            p_broll_h = _ease_out_cubic((u - 0.34) / 0.24)
-            if p_broll_h > 0.02:
-                cur_by = int(b_base_y - (b_base_y - b_top_y) * p_broll_h)
-                draw.line([(b_right_x, b_base_y), (b_right_x, cur_by)], fill=(255, 214, 0, 240), width=5)
+                # Dark-glass high-contrast hook card over the zooming 3D model
+                draw.rounded_rectangle([hx0 + 8, hy0 + 10, hx1 + 8, hy1 + 10], radius=28, fill=(0, 0, 0, 185))
+                draw.rounded_rectangle([hx0, hy0, hx1, hy1], radius=28, fill=(12, 19, 36, 242), outline=(255, 214, 0, 255), width=5)
 
-            p_broll_ray = _ease_out_cubic((u - 0.42) / 0.24)
-            if p_broll_ray > 0.02:
-                rx_end = int(b_right_x - (b_right_x - b_left_x) * p_broll_ray)
-                ry_end = int(b_top_y + (b_base_y - b_top_y) * p_broll_ray)
-                draw.line([(b_right_x, b_top_y), (rx_end, ry_end)], fill=(255, 59, 92, 245), width=5)
+                # Top Red Attention Pill
+                top_pill = "3-SECOND BOARD EXAM HOOK • WATCH CLOSELY!"
+                bb_tp = draw.textbbox((0, 0), top_pill, font=f_cta_sub)
+                tp_w = (bb_tp[2] - bb_tp[0]) + 44
+                draw.rounded_rectangle([hk_cx - tp_w // 2, hy0 + 22, hk_cx + tp_w // 2, hy0 + 68], radius=14, fill=(220, 38, 38, 255), outline=(255, 255, 255, 255), width=2)
+                draw.text((hk_cx - (bb_tp[2] - bb_tp[0]) // 2, hy0 + 32 - bb_tp[1]), top_pill, font=f_cta_sub, fill=(255, 255, 255, 255))
 
-            # B-Roll top corner badge
-            draw.rounded_rectangle([bx0 + 14, by0 + 14, bx0 + 276, by0 + 50], radius=10, fill=(15, 23, 42, 215), outline=(0, 229, 255, 220), width=2)
-            draw.text((bx0 + 24, by0 + 20), "LIVE MODEL B-ROLL", font=f_p_lbl, fill=(0, 229, 255, 255))
+                # Giant Yellow Hook Question
+                hk_lines = _wrap_text_pixels(draw, hook_banner_3sec, f_hook_big, max_px=card_w - 80, max_lines=2)
+                hy_txt = hy0 + 92
+                for h_ln in hk_lines:
+                    bb_hl = draw.textbbox((0, 0), h_ln, font=f_hook_big)
+                    draw.text((hk_cx - (bb_hl[2] - bb_hl[0]) // 2, hy_txt - bb_hl[1]), h_ln, font=f_hook_big, fill=(255, 214, 0, 255))
+                    hy_txt += (bb_hl[3] - bb_hl[1]) + 12
 
-            # For 16:9, place the Quick Exam Hack card right below the Left B-Roll Viewport (y=788..912)
+                # Sub-hook takeaway line
+                sub_lines = _wrap_text_pixels(draw, takeaway, f_hook_sub, max_px=card_w - 100, max_lines=1)
+                if sub_lines:
+                    bb_sl = draw.textbbox((0, 0), sub_lines[0], font=f_hook_sub)
+                    draw.text((hk_cx - (bb_sl[2] - bb_sl[0]) // 2, hy1 - 110 - bb_sl[1]), sub_lines[0], font=f_hook_sub, fill=(186, 230, 253, 255))
+
+                # Bottom 3..2..1 Progress Bar inside Hook Card
+                bar_w = card_w - 160
+                bx_bar0 = hk_cx - bar_w // 2
+                by_bar0 = hy1 - 56
+                by_bar1 = hy1 - 24
+                prog_hk = _clamp01(t_sec / 3.0)
+                draw.rounded_rectangle([bx_bar0, by_bar0, bx_bar0 + bar_w, by_bar1], radius=12, fill=(30, 41, 59, 255), outline=(71, 85, 105, 255), width=2)
+                fill_w = max(24, int(bar_w * (1.0 - prog_hk)))
+                draw.rounded_rectangle([bx_bar0, by_bar0, bx_bar0 + fill_w, by_bar1], radius=12, fill=(16, 185, 129, 255))
+                cd_lbl = f"EXPLAINER STARTS IN {rem_hk:0.1f}s  ({cd_num}...)"
+                bb_cl = draw.textbbox((0, 0), cd_lbl, font=f_p_lbl)
+                draw.text((hk_cx - (bb_cl[2] - bb_cl[0]) // 2, by_bar0 + 5 - bb_cl[1]), cd_lbl, font=f_p_lbl, fill=(255, 255, 255, 255))
+
+            else:
+                # ----------------------------------------------------------------
+                # D. FULL-SCREEN INTERACTIVE EXPLAINER OVER LIVE MODEL B-ROLL (AFTER 3.0s)
+                # ----------------------------------------------------------------
+                ax_x = bx0 + int(bw_v * 0.16)   # Left vertex A (Observer / Object)
+                bx_x = bx0 + int(bw_v * 0.78)   # Right vertex B (Mirror/Lens/Tower Base)
+                by_y = by0 + int(bh_v * 0.76)   # Principal Axis / Ground level Y
+                cy_y = by0 + int(bh_v * 0.22)   # Top point C (Incident Point / Tower Top)
+
+                # 1. Vertical Neon-Green Guide Lines + Numbered Green Badges `1`, `2`, `3`
+                guide_xs = [ax_x, (ax_x + bx_x) // 2, bx_x]
+                for g_i, gx_pos in enumerate(guide_xs):
+                    g_prog = _ease_out_cubic((u_exp - (0.02 + g_i * 0.05)) / 0.14)
+                    if g_prog > 0.01:
+                        gy_end = int(by0 + 24 + (bh_v - 48) * g_prog)
+                        draw.line([(gx_pos, by0 + 24), (gx_pos, gy_end)], fill=(16, 185, 129, 95), width=2)
+                        nb_r = 20
+                        nb_y = by0 + 44
+                        draw.rounded_rectangle(
+                            [gx_pos - nb_r, nb_y - nb_r, gx_pos + nb_r, nb_y + nb_r],
+                            radius=10,
+                            fill=(16, 185, 129, 255),
+                            outline=(255, 255, 255, 240),
+                            width=2,
+                        )
+                        num_s = str(g_i + 1)
+                        bb_n = draw.textbbox((0, 0), num_s, font=f_num_badge)
+                        draw.text((gx_pos - (bb_n[2] - bb_n[0]) // 2, nb_y - (bb_n[3] - bb_n[1]) // 2 - bb_n[1]), num_s, font=f_num_badge, fill=(10, 16, 30, 255))
+
+                # 2. Unfolding Neon Reference Circle around Vertex A
+                circ_prog = _ease_out_cubic((u_exp - 0.04) / 0.22)
+                if circ_prog > 0.01:
+                    c_rad = 64 if not is_vertical else 52
+                    draw.arc(
+                        [ax_x - c_rad, by_y - c_rad, ax_x + c_rad, by_y + c_rad],
+                        start=-180,
+                        end=int(-180 + 360 * circ_prog),
+                        fill=(0, 229, 255, 175),
+                        width=3,
+                    )
+
+                # 3. PHASE 1: Cyan Horizontal Principal Axis / Base Line synced with Formula Portion 1
+                base_prog = _ease_out_cubic((u_exp - 0.06) / 0.25)
+                if base_prog > 0.01:
+                    cur_x = int(ax_x + (bx_x - ax_x) * base_prog)
+                    w_base = 9 if active_part == 0 else 6
+                    if active_part == 0:
+                        draw.line([(ax_x, by_y), (cur_x, by_y)], fill=(0, 229, 255, 105), width=18)
+                    draw.line([(ax_x, by_y), (cur_x, by_y)], fill=(0, 229, 255, 255), width=w_base)
+                    draw.ellipse([ax_x - 9, by_y - 9, ax_x + 9, by_y + 9], fill=(0, 229, 255, 255), outline=(255, 255, 255, 255), width=2)
+                    draw.ellipse([cur_x - 9, by_y - 9, cur_x + 9, by_y + 9], fill=(0, 229, 255, 255), outline=(255, 255, 255, 255), width=2)
+
+                    b_lbl = formula_parts[0]["expr"][:24]
+                    mid_bx = (ax_x + cur_x) // 2
+                    draw.rounded_rectangle([mid_bx - 150, by_y - 54, mid_bx + 150, by_y - 14], radius=10, fill=(8, 47, 73, 240), outline=(0, 229, 255, 255), width=2)
+                    bb_bl = draw.textbbox((0, 0), b_lbl, font=f_stage_lbl)
+                    draw.text((mid_bx - (bb_bl[2] - bb_bl[0]) // 2, by_y - 47 - bb_bl[1]), b_lbl, font=f_stage_lbl, fill=(186, 230, 253, 255))
+
+                    if active_part == 0 and not is_vertical:
+                        _draw_dashed_line(draw, portion_centers[0], (mid_bx, by_y - 54), fill=(0, 229, 255, 200), width=3)
+
+                # 4. Playful `?` Curiosity Badge before Portion 2 locks
+                if 0.12 <= u_exp <= 0.40:
+                    q_x = bx_x - 68
+                    q_y = (by_y + cy_y) // 2
+                    draw.rounded_rectangle([q_x - 38, q_y - 42, q_x + 38, q_y + 42], radius=16, fill=(255, 214, 0, 255), outline=(255, 255, 255, 255), width=3)
+                    bb_q = draw.textbbox((0, 0), "?", font=f_qmark)
+                    draw.text((q_x - (bb_q[2] - bb_q[0]) // 2, q_y - (bb_q[3] - bb_q[1]) // 2 - bb_q[1]), "?", font=f_qmark, fill=(15, 23, 42, 255))
+
+                # 5. PHASE 2: Yellow Vertical Normal / Height Line + 90° Square synced with Formula Portion 2
+                h_prog = _ease_out_cubic((u_exp - 0.34) / 0.25)
+                if h_prog > 0.01:
+                    cur_y = int(by_y - (by_y - cy_y) * h_prog)
+                    w_h = 9 if active_part == 1 else 6
+                    if active_part == 1:
+                        draw.line([(bx_x, by_y), (bx_x, cur_y)], fill=(255, 214, 0, 105), width=18)
+                    draw.line([(bx_x, by_y), (bx_x, cur_y)], fill=(255, 214, 0, 255), width=w_h)
+                    draw.ellipse([bx_x - 9, cur_y - 9, bx_x + 9, cur_y + 9], fill=(255, 214, 0, 255), outline=(255, 255, 255, 255), width=2)
+
+                    sq = 28
+                    draw.line([(bx_x - sq, by_y), (bx_x - sq, by_y - sq), (bx_x, by_y - sq)], fill=(255, 214, 0, 255), width=3)
+                    draw.text((bx_x - sq - 48, by_y - sq - 12), "90°", font=f_p_lbl, fill=(255, 214, 0, 255))
+
+                    mid_hy = (by_y + cur_y) // 2
+                    h_lbl = formula_parts[1]["expr"][:24]
+                    draw.rounded_rectangle([bx_x - 285, mid_hy - 22, bx_x - 16, mid_hy + 22], radius=10, fill=(66, 32, 6, 242), outline=(255, 214, 0, 255), width=2)
+                    draw.text((bx_x - 270, mid_hy - 14), h_lbl, font=f_stage_lbl, fill=(254, 240, 138, 255))
+
+                    if active_part == 1 and not is_vertical:
+                        _draw_dashed_line(draw, portion_centers[1], (bx_x - 150, mid_hy - 22), fill=(255, 214, 0, 200), width=3)
+
+                # 6. Red Laser Ray / Sight-Line + Top Reference Ray
+                ray_prog = _ease_out_cubic((u_exp - 0.42) / 0.22)
+                if ray_prog > 0.01:
+                    z_end_x = int(bx_x - (bx_x - ax_x) * ray_prog)
+                    _draw_dashed_line(draw, (bx_x, cy_y), (z_end_x, cy_y), fill=(16, 185, 129, 215), width=3)
+
+                    hx_cur = int(bx_x - (bx_x - ax_x) * ray_prog)
+                    hy_cur = int(cy_y + (by_y - cy_y) * ray_prog)
+                    draw.line([(bx_x, cy_y), (hx_cur, hy_cur)], fill=(255, 59, 92, 105), width=16)
+                    draw.line([(bx_x, cy_y), (hx_cur, hy_cur)], fill=(255, 59, 92, 255), width=6)
+
+                # 7. PHASE 3: Metallic Compass Scratching Angle Arc θ synced with Formula Portion 3
+                arc_prog = _ease_out_cubic((u_exp - 0.58) / 0.18)
+                if arc_prog > 0.01:
+                    cur_deg = int(round(target_angle * arc_prog))
+                    arc_r = 108 if not is_vertical else 88
+                    slope_deg = math.degrees(math.atan2(by_y - cy_y, bx_x - ax_x))
+                    sweep_deg = slope_deg * arc_prog
+
+                    draw.arc(
+                        [ax_x - arc_r, by_y - arc_r, ax_x + arc_r, by_y + arc_r],
+                        start=-sweep_deg,
+                        end=0,
+                        fill=(16, 185, 129, 255),
+                        width=7,
+                    )
+                    draw.arc(
+                        [bx_x - 84, cy_y - 84, bx_x + 84, cy_y + 84],
+                        start=180 - sweep_deg,
+                        end=180,
+                        fill=(255, 214, 0, 235),
+                        width=5,
+                    )
+
+                    tip_rad = math.radians(-sweep_deg)
+                    tip_x = int(ax_x + arc_r * math.cos(tip_rad))
+                    tip_y = int(by_y + arc_r * math.sin(tip_rad))
+                    hinge_x = ax_x + int(arc_r * 0.48)
+                    hinge_y = by_y - int(arc_r * 0.95)
+                    draw.line([(hinge_x, hinge_y), (ax_x, by_y)], fill=(203, 213, 225, 255), width=5)
+                    draw.line([(hinge_x, hinge_y), (tip_x, tip_y)], fill=(248, 250, 252, 255), width=5)
+                    draw.ellipse([hinge_x - 8, hinge_y - 8, hinge_x + 8, hinge_y + 8], fill=(255, 214, 0, 255), outline=(15, 23, 42, 255), width=2)
+
+                    draw.text((tip_x - 10, tip_y - 18), "*", font=f_big_ang, fill=(255, 59, 92, 255))
+                    draw.text((ax_x + arc_r - 10, by_y - 18), "*", font=f_big_ang, fill=(255, 59, 92, 255))
+
+                    ang_txt = f"θ = {cur_deg}°"
+                    ab_x = ax_x + arc_r + 22
+                    ab_y = by_y - 78
+                    draw.rounded_rectangle([ab_x, ab_y, ab_x + 178, ab_y + 56], radius=14, fill=(6, 78, 59, 248), outline=(16, 185, 129, 255), width=3)
+                    draw.text((ab_x + 22, ab_y + 8), ang_txt, font=f_big_ang, fill=(255, 255, 255, 255))
+
+                    if active_part == 2 and not is_vertical:
+                        _draw_dashed_line(draw, portion_centers[2], (ab_x + 89, ab_y), fill=(16, 185, 129, 205), width=3)
+
+                # 8. SCENE 3 EXTRA: 5-Second Circular Boss Countdown Ring in Top-Right of Full-Screen Viewport
+                if sid == 3 and u_exp >= 0.50:
+                    wave_u = (u_exp - 0.50) / 0.50
+                    for w_i in range(3):
+                        wr = int(28 + ((wave_u * 120 + w_i * 38) % 120))
+                        wa = int(210 * (1.0 - (wr / 150.0)))
+                        draw.ellipse([bx_x - wr, cy_y - wr, bx_x + wr, cy_y + wr], outline=(16, 185, 129, max(20, wa)), width=3)
+
+                    cd_prog = _clamp01((u_exp - 0.54) / 0.34)
+                    rem_sec = max(0.0, 5.0 * (1.0 - cd_prog))
+                    ring_cx, ring_cy, ring_r = bx1 - 120, by0 + 110, 62
+                    draw.ellipse([ring_cx - ring_r, ring_cy - ring_r, ring_cx + ring_r, ring_cy + ring_r], fill=(15, 23, 42, 245), outline=(51, 65, 85, 255), width=6)
+                    ring_col = (16, 185, 129, 255) if rem_sec <= 0.1 else (255, 214, 0, 255)
+                    draw.arc(
+                        [ring_cx - ring_r, ring_cy - ring_r, ring_cx + ring_r, ring_cy + ring_r],
+                        start=-90,
+                        end=int(-90 + 360 * (1.0 - cd_prog)),
+                        fill=ring_col,
+                        width=8,
+                    )
+                    cd_str = "DONE!" if rem_sec <= 0.1 else f"{rem_sec:0.1f}s"
+                    bb_cd = draw.textbbox((0, 0), cd_str, font=f_stage_lbl)
+                    draw.text((ring_cx - (bb_cd[2] - bb_cd[0]) // 2, ring_cy - (bb_cd[3] - bb_cd[1]) // 2 - bb_cd[1]), cd_str, font=f_stage_lbl, fill=(255, 255, 255, 255))
+
+            # ----------------------------------------------------------------
+            # E. FLOATING TOPPER EXAM HACK HUD CARD (BOTTOM-LEFT OF FULL-SCREEN VIEWPORT)
+            # ----------------------------------------------------------------
             if not is_vertical:
-                hk_y0, hk_y1 = 786, 912
-                hk_glow = u >= 0.52
+                hk_x0, hk_y0, hk_x1, hk_y1 = bx0 + 22, by1 - 138, bx0 + 890, by1 - 16
+                hk_glow = (not in_hook_3s) and (u_exp >= 0.48)
                 draw.rounded_rectangle(
-                    [bx0, hk_y0, bx1, hk_y1],
+                    [hk_x0, hk_y0, hk_x1, hk_y1],
                     radius=18,
-                    fill=(38, 16, 28, 245) if hk_glow else (15, 23, 42, 235),
-                    outline=(255, 59, 92, 255) if hk_glow else (71, 85, 105, 200),
+                    fill=(38, 16, 28, 242) if hk_glow else (15, 23, 42, 230),
+                    outline=(255, 59, 92, 255) if hk_glow else (56, 189, 248, 200),
                     width=4 if hk_glow else 2,
                 )
-                draw.rounded_rectangle([bx0 + 16, hk_y0 + 12, bx0 + 265, hk_y0 + 42], radius=8, fill=(220, 38, 38, 255))
-                draw.text((bx0 + 26, hk_y0 + 16), "TOPPER EXAM HACK", font=f_hack_hdr, fill=(255, 255, 255, 255))
-                hk_lines = _wrap_text_pixels(draw, quick_tip, f_hack_txt, max_px=bw_v - 36, max_lines=2)
-                hy_c = hk_y0 + 50
+                draw.rounded_rectangle([hk_x0 + 16, hk_y0 + 12, hk_x0 + 265, hk_y0 + 42], radius=8, fill=(220, 38, 38, 255))
+                draw.text((hk_x0 + 26, hk_y0 + 16), "TOPPER EXAM HACK", font=f_hack_hdr, fill=(255, 255, 255, 255))
+                hk_lines = _wrap_text_pixels(draw, quick_tip, f_hack_txt, max_px=(hk_x1 - hk_x0) - 36, max_lines=2)
+                hy_c = hk_y0 + 48
                 for hln in hk_lines:
-                    draw.text((bx0 + 18, hy_c), hln, font=f_hack_txt, fill=(254, 240, 138, 255) if hk_glow else (226, 232, 240, 255))
-                    hy_c += 30
+                    draw.text((hk_x0 + 18, hy_c), hln, font=f_hack_txt, fill=(254, 240, 138, 255) if hk_glow else (226, 232, 240, 255))
+                    hy_c += 29
             else:
-                # 9:16 Quick Hack strip at y=1456..1556
                 hk_y0, hk_y1 = 1458, 1556
-                hk_glow = u >= 0.52
+                hk_glow = (not in_hook_3s) and (u_exp >= 0.48)
                 draw.rounded_rectangle(
-                    [54, hk_y0, W - 54, hk_y1],
+                    [48, hk_y0, W - 48, hk_y1],
                     radius=16,
                     fill=(38, 16, 28, 245) if hk_glow else (15, 23, 42, 235),
                     outline=(255, 59, 92, 255) if hk_glow else (71, 85, 105, 200),
                     width=3,
                 )
-                hk_lines = _wrap_text_pixels(draw, f"HACK: {quick_tip}", f_hack_txt, max_px=W - 140, max_lines=2)
+                hk_lines = _wrap_text_pixels(draw, f"HACK: {quick_tip}", f_hack_txt, max_px=W - 130, max_lines=2)
                 hy_c = hk_y0 + 16
                 for hln in hk_lines:
-                    draw.text((74, hy_c), hln, font=f_hack_txt, fill=(254, 240, 138, 255))
+                    draw.text((68, hy_c), hln, font=f_hack_txt, fill=(254, 240, 138, 255))
                     hy_c += 30
 
             # ----------------------------------------------------------------
-            # C. RIGHT / MAIN INTERACTIVE GEOMETRY & COMPASS STAGE (8MXN6QjPJqc Style)
+            # F. SCENE 4 FINALE (u_exp = 0.68..1.00): ANIMATED YOUTUBE SUBSCRIBE + BELL CTA CARD!
             # ----------------------------------------------------------------
-            sw_s = sx1 - sx0
-            sh_s = sy1 - sy0
-            ax_x = sx0 + int(sw_s * 0.16)   # Observer / Point A (left vertex)
-            bx_x = sx0 + int(sw_s * 0.78)   # Tower Base / Point B (right-angle vertex)
-            by_y = sy0 + int(sh_s * 0.78)   # Ground level Y
-            cy_y = sy0 + int(sh_s * 0.20)   # Tower Top / Point C (top vertex)
-
-            # 1. Vertical Neon-Green Guide Lines + Numbered Green Badges `1`, `2`, `3` (8MXN6QjPJqc 0:07)
-            guide_xs = [ax_x, (ax_x + bx_x) // 2, bx_x]
-            for g_i, gx_pos in enumerate(guide_xs):
-                g_prog = _ease_out_cubic((u - (0.03 + g_i * 0.05)) / 0.14)
-                if g_prog > 0.01:
-                    gy_end = int(sy0 + 22 + (sy1 - sy0 - 44) * g_prog)
-                    draw.line([(gx_pos, sy0 + 22), (gx_pos, gy_end)], fill=(16, 185, 129, 95), width=2)
-                    # Rounded green number badge `1`, `2`, `3`
-                    nb_r = 20
-                    nb_y = sy0 + 44
-                    draw.rounded_rectangle(
-                        [gx_pos - nb_r, nb_y - nb_r, gx_pos + nb_r, nb_y + nb_r],
-                        radius=10,
-                        fill=(16, 185, 129, 255),
-                        outline=(255, 255, 255, 240),
-                        width=2,
-                    )
-                    num_s = str(g_i + 1)
-                    bb_n = draw.textbbox((0, 0), num_s, font=f_num_badge)
-                    draw.text((gx_pos - (bb_n[2] - bb_n[0]) // 2, nb_y - (bb_n[3] - bb_n[1]) // 2 - bb_n[1]), num_s, font=f_num_badge, fill=(10, 16, 30, 255))
-
-            # 2. Unfolding Neon Reference Circle around Observer Vertex A (8MXN6QjPJqc 0:11)
-            circ_prog = _ease_out_cubic((u - 0.04) / 0.22)
-            if circ_prog > 0.01:
-                c_rad = 68 if not is_vertical else 56
-                draw.arc(
-                    [ax_x - c_rad, by_y - c_rad, ax_x + c_rad, by_y + c_rad],
-                    start=-180,
-                    end=int(-180 + 360 * circ_prog),
-                    fill=(0, 229, 255, 165),
-                    width=3,
-                )
-
-            # 3. PHASE 1 GEOMETRY: Cyan Horizontal Base Line (Adjacent = B) synced with Formula Portion 1!
-            base_prog = _ease_out_cubic((u - 0.07) / 0.25)
-            if base_prog > 0.01:
-                cur_x = int(ax_x + (bx_x - ax_x) * base_prog)
-                w_base = 9 if active_part == 0 else 6
-                if active_part == 0:
-                    draw.line([(ax_x, by_y), (cur_x, by_y)], fill=(0, 229, 255, 95), width=18)
-                draw.line([(ax_x, by_y), (cur_x, by_y)], fill=(0, 229, 255, 255), width=w_base)
-                draw.ellipse([ax_x - 9, by_y - 9, ax_x + 9, by_y + 9], fill=(0, 229, 255, 255), outline=(255, 255, 255, 255), width=2)
-                draw.ellipse([cur_x - 9, by_y - 9, cur_x + 9, by_y + 9], fill=(0, 229, 255, 255), outline=(255, 255, 255, 255), width=2)
-
-                base_m = int(round(40 * base_prog))
-                b_lbl = f"BASE (B) = {base_m} m" if sid == 3 else f"BASE (ADJACENT = B)"
-                mid_bx = (ax_x + cur_x) // 2
-                draw.rounded_rectangle([mid_bx - 135, by_y + 18, mid_bx + 135, by_y + 56], radius=10, fill=(8, 47, 73, 245), outline=(0, 229, 255, 255), width=2)
-                draw.text((mid_bx - 118, by_y + 23), b_lbl, font=f_stage_lbl, fill=(186, 230, 253, 255))
-
-                # Connect Active Portion 1 Card to Base Line with glowing dotted connector
-                if active_part == 0 and not is_vertical:
-                    _draw_dashed_line(draw, portion_centers[0], (mid_bx, by_y), fill=(0, 229, 255, 195), width=3)
-
-            # 4. Playful `?` Curiosity Badge in Hook (u = 0.16..0.38) before Height finishes locking!
-            if 0.14 <= u <= 0.42:
-                q_x = bx_x - 68
-                q_y = (by_y + cy_y) // 2
-                draw.rounded_rectangle([q_x - 42, q_y - 46, q_x + 42, q_y + 46], radius=18, fill=(255, 214, 0, 255), outline=(255, 255, 255, 255), width=3)
-                bb_q = draw.textbbox((0, 0), "?", font=f_qmark)
-                draw.text((q_x - (bb_q[2] - bb_q[0]) // 2, q_y - (bb_q[3] - bb_q[1]) // 2 - bb_q[1]), "?", font=f_qmark, fill=(15, 23, 42, 255))
-
-            # 5. PHASE 2 GEOMETRY: Yellow Vertical Height Line (Opposite = H) + 90° Right-Angle Square synced with Portion 2!
-            h_prog = _ease_out_cubic((u - 0.35) / 0.25)
-            if h_prog > 0.01:
-                cur_y = int(by_y - (by_y - cy_y) * h_prog)
-                w_h = 9 if active_part == 1 else 6
-                if active_part == 1:
-                    draw.line([(bx_x, by_y), (bx_x, cur_y)], fill=(255, 214, 0, 95), width=18)
-                draw.line([(bx_x, by_y), (bx_x, cur_y)], fill=(255, 214, 0, 255), width=w_h)
-                draw.ellipse([bx_x - 9, cur_y - 9, bx_x + 9, cur_y + 9], fill=(255, 214, 0, 255), outline=(255, 255, 255, 255), width=2)
-
-                # 90-degree perpendicular square marker at B
-                sq = 28
-                draw.line([(bx_x - sq, by_y), (bx_x - sq, by_y - sq), (bx_x, by_y - sq)], fill=(255, 214, 0, 255), width=3)
-                draw.text((bx_x - sq - 48, by_y - sq - 12), "90°", font=f_p_lbl, fill=(255, 214, 0, 255))
-
-                mid_hy = (by_y + cur_y) // 2
-                h_lbl = "HEIGHT (H = 20√3m)" if sid == 3 else "HEIGHT (OPPOSITE = H)"
-                draw.rounded_rectangle([bx_x - 265, mid_hy - 22, bx_x - 16, mid_hy + 22], radius=10, fill=(66, 32, 6, 245), outline=(255, 214, 0, 255), width=2)
-                draw.text((bx_x - 252, mid_hy - 14), h_lbl, font=f_stage_lbl, fill=(254, 240, 138, 255))
-
-                if active_part == 1 and not is_vertical:
-                    _draw_dashed_line(draw, portion_centers[1], (bx_x - 140, mid_hy), fill=(255, 214, 0, 195), width=3)
-
-            # 6. Red Laser Hypotenuse Sight-Line + Alternate Z-Rule Top Horizontal Ray
-            ray_prog = _ease_out_cubic((u - 0.42) / 0.22)
-            if ray_prog > 0.01:
-                # Top horizontal eye-level depression line for Z-rule
-                z_end_x = int(bx_x - (bx_x - ax_x) * ray_prog)
-                _draw_dashed_line(draw, (bx_x, cy_y), (z_end_x, cy_y), fill=(16, 185, 129, 210), width=3)
-
-                # Red Laser Hypotenuse from C (top) to A (observer)
-                hx_cur = int(bx_x - (bx_x - ax_x) * ray_prog)
-                hy_cur = int(cy_y + (by_y - cy_y) * ray_prog)
-                draw.line([(bx_x, cy_y), (hx_cur, hy_cur)], fill=(255, 59, 92, 95), width=16)
-                draw.line([(bx_x, cy_y), (hx_cur, hy_cur)], fill=(255, 59, 92, 255), width=6)
-
-            # 7. PHASE 3 GEOMETRY: Metallic Compass Scratching Angle Arc θ + Red `*` Markers synced with Portion 3!
-            arc_prog = _ease_out_cubic((u - 0.58) / 0.18)
-            if arc_prog > 0.01:
-                cur_deg = int(round(target_angle * arc_prog))
-                arc_r = 112 if not is_vertical else 92
-                slope_deg = math.degrees(math.atan2(by_y - cy_y, bx_x - ax_x))
-                sweep_deg = slope_deg * arc_prog
-
-                # Glowing emerald/gold angle sector arc at A
-                draw.arc(
-                    [ax_x - arc_r, by_y - arc_r, ax_x + arc_r, by_y + arc_r],
-                    start=-sweep_deg,
-                    end=0,
-                    fill=(16, 185, 129, 255),
-                    width=7,
-                )
-                # Alternate Z-angle depression arc at C (top)
-                draw.arc(
-                    [bx_x - 86, cy_y - 86, bx_x + 86, cy_y + 86],
-                    start=180 - sweep_deg,
-                    end=180,
-                    fill=(255, 214, 0, 235),
-                    width=5,
-                )
-
-                # Metallic Compass Arms + Red `*` Intersection Markers (8MXN6QjPJqc 1:35)
-                tip_rad = math.radians(-sweep_deg)
-                tip_x = int(ax_x + arc_r * math.cos(tip_rad))
-                tip_y = int(by_y + arc_r * math.sin(tip_rad))
-                hinge_x = ax_x + int(arc_r * 0.48)
-                hinge_y = by_y - int(arc_r * 0.95)
-                draw.line([(hinge_x, hinge_y), (ax_x, by_y)], fill=(203, 213, 225, 255), width=5)
-                draw.line([(hinge_x, hinge_y), (tip_x, tip_y)], fill=(248, 250, 252, 255), width=5)
-                draw.ellipse([hinge_x - 8, hinge_y - 8, hinge_x + 8, hinge_y + 8], fill=(255, 214, 0, 255), outline=(15, 23, 42, 255), width=2)
-
-                # Red `*` intersection markers on arc endpoints
-                draw.text((tip_x - 10, tip_y - 18), "*", font=f_big_ang, fill=(255, 59, 92, 255))
-                draw.text((ax_x + arc_r - 10, by_y - 18), "*", font=f_big_ang, fill=(255, 59, 92, 255))
-
-                # Big Angle Counter Badge (`θ = 45°` / `60°`)
-                ang_txt = f"θ = {cur_deg}°"
-                ab_x = ax_x + arc_r + 22
-                ab_y = by_y - 74
-                draw.rounded_rectangle([ab_x, ab_y, ab_x + 178, ab_y + 56], radius=14, fill=(6, 78, 59, 250), outline=(16, 185, 129, 255), width=3)
-                draw.text((ab_x + 22, ab_y + 8), ang_txt, font=f_big_ang, fill=(255, 255, 255, 255))
-
-                if active_part == 2 and not is_vertical:
-                    _draw_dashed_line(draw, portion_centers[2], (ab_x + 89, ab_y), fill=(16, 185, 129, 205), width=3)
-
-            # 8. SCENE 2 & 3 EXTRA: Expanding Concentric Neon Ratio Waves + 5-Sec Climax Boss Timer!
-            if sid == 2 and u >= 0.48:
-                # Show the 3 classic angle rays (30°, 45°, 60°) simultaneously as reference waves
-                for r_idx, (lbl_d, r_col) in enumerate([("30° (1/√3)", (0, 229, 255, 175)), ("45° (1)", (255, 214, 0, 195)), ("60° (√3)", (16, 185, 129, 215))]):
-                    px_peg = ax_x + int((bx_x - ax_x) * (0.18 * r_idx))
-                    draw.line([(px_peg, by_y), (bx_x, cy_y)], fill=r_col, width=3)
-                    draw.ellipse([px_peg - 6, by_y - 6, px_peg + 6, by_y + 6], fill=r_col)
-
-            if sid == 3 and u >= 0.50:
-                # Second inner 60° walk milestone pin at midpoint M + Concentric Neon Waves + 5.0s Boss Timer Ring!
-                mx_x = (ax_x + bx_x) // 2
-                draw.line([(mx_x, by_y), (bx_x, cy_y)], fill=(16, 185, 129, 255), width=6)
-                draw.ellipse([mx_x - 9, by_y - 9, mx_x + 9, by_y + 9], fill=(255, 214, 0, 255), outline=(255, 255, 255, 255), width=2)
-                draw.rounded_rectangle([mx_x - 68, by_y - 52, mx_x + 68, by_y - 16], radius=8, fill=(6, 78, 59, 245), outline=(16, 185, 129, 255), width=2)
-                draw.text((mx_x - 54, by_y - 46), "60° (x=20m)", font=f_p_lbl, fill=(255, 255, 255, 255))
-
-                # Expanding concentric neon wave rings around tower top C (8MXN6QjPJqc 1:06)
-                wave_u = (u - 0.50) / 0.50
-                for w_i in range(3):
-                    wr = int(28 + ((wave_u * 120 + w_i * 38) % 120))
-                    wa = int(210 * (1.0 - (wr / 150.0)))
-                    draw.ellipse([bx_x - wr, cy_y - wr, bx_x + wr, cy_y + wr], outline=(16, 185, 129, max(20, wa)), width=3)
-
-                # 5.0-Second Circular Boss Countdown Ring in top-left of Stage
-                cd_prog = _clamp01((u - 0.54) / 0.34)
-                rem_sec = max(0.0, 5.0 * (1.0 - cd_prog))
-                ring_cx, ring_cy, ring_r = sx0 + 118, sy0 + 132, 62
-                draw.ellipse([ring_cx - ring_r, ring_cy - ring_r, ring_cx + ring_r, ring_cy + ring_r], fill=(15, 23, 42, 245), outline=(51, 65, 85, 255), width=6)
-                ring_col = (16, 185, 129, 255) if rem_sec <= 0.1 else (255, 214, 0, 255)
-                draw.arc(
-                    [ring_cx - ring_r, ring_cy - ring_r, ring_cx + ring_r, ring_cy + ring_r],
-                    start=-90,
-                    end=int(-90 + 360 * (1.0 - cd_prog)),
-                    fill=ring_col,
-                    width=8,
-                )
-                cd_str = "DONE!" if rem_sec <= 0.1 else f"{rem_sec:0.1f}s"
-                bb_cd = draw.textbbox((0, 0), cd_str, font=f_stage_lbl)
-                draw.text((ring_cx - (bb_cd[2] - bb_cd[0]) // 2, ring_cy - (bb_cd[3] - bb_cd[1]) // 2 - bb_cd[1]), cd_str, font=f_stage_lbl, fill=(255, 255, 255, 255))
-
-            # 9. SCENE 4 FINALE (u = 0.68..1.00): ANIMATED YOUTUBE SUBSCRIBE + BELL + FREE PDF CTA CARD!
-            if sid == 4 and u >= 0.68:
-                cta_u = _ease_out_cubic((u - 0.68) / 0.14)
-                clicked = u >= 0.78
-                cx_card = (sx0 + sx1) // 2
-                cy_card = (sy0 + sy1) // 2
-                cw_card = min(sw_s - 60, 820)
+            if sid == 4 and u_exp >= 0.68:
+                cta_u = _ease_out_cubic((u_exp - 0.68) / 0.14)
+                clicked = u_exp >= 0.78
+                cx_card = (bx0 + bx1) // 2
+                cy_card = (by0 + by1) // 2
+                cw_card = min(bw_v - 60, 840)
                 ch_card = 320 if not is_vertical else 340
                 y_slide = int((1.0 - cta_u) * 80)
 
@@ -3138,11 +3557,10 @@ def _render_animated_geometry_and_formula_scene_mp4(
                 draw.rounded_rectangle([x0_c + 8, y0_c + 10, x1_c + 8, y1_c + 10], radius=28, fill=(0, 0, 0, 185))
                 draw.rounded_rectangle([x0_c, y0_c, x1_c, y1_c], radius=28, fill=(15, 23, 42, 252), outline=(255, 214, 0, 255), width=5)
 
-                hdr_cta = "JOIN @TOPPERLAB FOR EVERY CHAPTER IN 6 MINS!"
+                hdr_cta = "JOIN @TOPPERLAB FOR EVERY BOARD EXAM CHAPTER!"
                 bb_hc = draw.textbbox((0, 0), hdr_cta, font=f_cta_sub)
                 draw.text((cx_card - (bb_hc[2] - bb_hc[0]) // 2, y0_c + 26), hdr_cta, font=f_cta_sub, fill=(255, 214, 0, 255))
 
-                # Subscribe Button (Morphs from Red `SUBSCRIBE` -> Emerald `SUBSCRIBED` at u = 0.78!)
                 btn_w, btn_h = 356, 82
                 btn_x0 = cx_card - btn_w // 2 - 64
                 btn_y0 = y0_c + 88
@@ -3153,18 +3571,15 @@ def _render_animated_geometry_and_formula_scene_mp4(
 
                 if not clicked:
                     draw.rounded_rectangle([btn_x0, btn_y0, btn_x1, btn_y1], radius=20, fill=(220, 38, 38, 255), outline=(255, 255, 255, 255), width=3)
-                    # Vector Play Triangle icon
                     draw.polygon([(ic_cx - 10, ic_cy - 14), (ic_cx - 10, ic_cy + 14), (ic_cx + 14, ic_cy)], fill=(255, 255, 255, 255))
                     sub_lbl = "SUBSCRIBE"
                 else:
                     draw.rounded_rectangle([btn_x0, btn_y0, btn_x1, btn_y1], radius=20, fill=(16, 185, 129, 255), outline=(255, 255, 255, 255), width=4)
-                    # Vector Checkmark icon
                     draw.line([(ic_cx - 12, ic_cy + 2), (ic_cx - 3, ic_cy + 11), (ic_cx + 14, ic_cy - 10)], fill=(255, 255, 255, 255), width=5)
                     sub_lbl = "SUBSCRIBED"
                 bb_sb = draw.textbbox((0, 0), sub_lbl, font=f_cta_big)
                 draw.text((btn_x0 + 76 + (btn_w - 92 - (bb_sb[2] - bb_sb[0])) // 2, btn_y0 + (btn_h - (bb_sb[3] - bb_sb[1])) // 2 - bb_sb[1]), sub_lbl, font=f_cta_big, fill=(255, 255, 255, 255))
 
-                # Notification Bell Button + Expanding Sonic Rings when clicked!
                 bell_cx = btn_x1 + 68
                 bell_cy = (btn_y0 + btn_y1) // 2
                 draw.rounded_rectangle([bell_cx - 46, bell_cy - 41, bell_cx + 46, bell_cy + 41], radius=20, fill=(255, 214, 0, 255) if clicked else (30, 41, 59, 255), outline=(255, 255, 255, 255), width=3)
@@ -3173,27 +3588,27 @@ def _render_animated_geometry_and_formula_scene_mp4(
                 draw.text((bell_cx - (bb_bl[2] - bb_bl[0]) // 2, bell_cy - (bb_bl[3] - bb_bl[1]) // 2 - bb_bl[1]), bell_txt, font=f_stage_lbl, fill=(15, 23, 42, 255) if clicked else (255, 214, 0, 255))
 
                 if clicked:
-                    ring_u = (u - 0.78) / 0.22
+                    ring_u = (u_exp - 0.78) / 0.22
                     for r_k in range(2):
                         rr = int(48 + ((ring_u * 65 + r_k * 28) % 65))
                         draw.ellipse([bell_cx - rr, bell_cy - rr, bell_cx + rr, bell_cy + rr], outline=(255, 214, 0, 190), width=3)
 
-                # Animated Cursor Arrow gliding to click the Subscribe button
-                cur_prog = _clamp01((u - 0.69) / 0.09)
+                cur_prog = _clamp01((u_exp - 0.69) / 0.09)
                 ptr_x = int((btn_x1 + 120) - 180 * cur_prog)
                 ptr_y = int((btn_y1 + 90) - 110 * cur_prog)
                 draw.polygon([(ptr_x, ptr_y), (ptr_x + 28, ptr_y + 14), (ptr_x + 16, ptr_y + 20), (ptr_x + 24, ptr_y + 36), (ptr_x + 15, ptr_y + 40), (ptr_x + 8, ptr_y + 24), (ptr_x, ptr_y + 32)], fill=(255, 255, 255, 255), outline=(15, 23, 42, 255))
 
-                # Bottom Pill inside CTA Card: Free 1-Page Formula PDF + Like
                 pdf_txt = "LIKE + FREE 1-PAGE FORMULA SHEET IN DESCRIPTION!"
                 draw.rounded_rectangle([x0_c + 28, y1_c - 78, x1_c - 28, y1_c - 22], radius=14, fill=(8, 47, 73, 255), outline=(0, 229, 255, 255), width=2)
                 bb_pf = draw.textbbox((0, 0), pdf_txt, font=f_stage_lbl)
                 draw.text((cx_card - (bb_pf[2] - bb_pf[0]) // 2, y1_c - 64), pdf_txt, font=f_stage_lbl, fill=(186, 230, 253, 255))
 
-            proc.stdin.write(frame.tobytes())
+            raw_bytes = frame.tobytes()
+            last_frame_bytes = raw_bytes
+            proc.stdin.write(raw_bytes)
 
         proc.stdin.close()
-        proc.wait(timeout=180)
+        proc.wait(timeout=240)
     except Exception:
         try:
             if proc.stdin and not proc.stdin.closed:
@@ -3219,6 +3634,7 @@ def render_faceless_scene_media(
     class_badge_text: str = "CLASS 10 • MATHEMATICS",
     bgm_enabled: bool = True,
     auto_veo_broll: bool = True,
+    target_scene_long_sec: float | None = None,
 ) -> Dict[str, Any]:
     sid = int(scene["scene_id"])
     scenes_dir = project_dir / "scenes"
@@ -3227,7 +3643,8 @@ def render_faceless_scene_media(
     img_16x9 = scenes_dir / f"scene_{sid:02d}_16x9.jpg"
     img_9x16 = scenes_dir / f"scene_{sid:02d}_9x16.jpg"
     wav_voice = scenes_dir / f"scene_{sid:02d}_voice.wav"
-    wav_master = scenes_dir / f"scene_{sid:02d}_master_audio.wav"
+    wav_master_long = scenes_dir / f"scene_{sid:02d}_master_long.wav"
+    wav_master_short = scenes_dir / f"scene_{sid:02d}_master_short.wav"
     mp4_16x9 = scenes_dir / f"scene_{sid:02d}_16x9.mp4"
     mp4_9x16 = scenes_dir / f"scene_{sid:02d}_9x16.mp4"
 
@@ -3253,7 +3670,10 @@ def render_faceless_scene_media(
         src_for_vert = Image.open(img_16x9)
         _fit_and_save_image(src_for_vert, img_9x16, (1080, 1920))
 
-    dur_sec = synthesize_scene_voiceover(scene["narration"], wav_voice, voice_preset)
+    dur_voice_sec = synthesize_scene_voiceover(scene["narration"], wav_voice, voice_preset)
+    # 9:16 Short stays tight (under 58s total across 4 scenes), while 16:9 Long-Form matches the selected target duration (e.g. 6 Mins / 8 Mins / 10 Mins)!
+    dur_short_sec = round(max(10.0, dur_voice_sec), 1)
+    dur_long_sec = round(max(dur_short_sec, float(target_scene_long_sec or dur_short_sec)), 1)
 
     # Ensure formula_parts and act_badge are populated on the scene dict
     scene["act_badge"] = scene.get("act_badge") or ACT_BADGE_LABELS.get(sid, f"ACT {sid}: CONCEPT")
@@ -3263,22 +3683,38 @@ def render_faceless_scene_media(
         scene.get("formula_parts"),
     )
 
-    f_in = round(dur_sec * 0.07, 2)
-    f_out = round(dur_sec * 0.65, 2)
-    h_in = round(dur_sec * 0.66, 2)
-    h_out = round(dur_sec - 0.25, 2)
+    f_in = round(dur_long_sec * 0.07, 2)
+    f_out = round(dur_long_sec * 0.65, 2)
+    h_in = round(dur_long_sec * 0.66, 2)
+    h_out = round(dur_long_sec - 0.25, 2)
 
     build_scene_master_audio(
         voice_wav=wav_voice,
-        out_mix_wav=wav_master,
-        duration_sec=dur_sec,
+        out_mix_wav=wav_master_long,
+        duration_sec=dur_long_sec,
         formula_in_sec=f_in,
         formula_out_sec=f_out,
         hack_in_sec=h_in,
         hack_out_sec=h_out,
         scene_id=sid,
         bgm_enabled=bgm_enabled,
+        target_duration_sec=dur_long_sec,
     )
+    if abs(dur_long_sec - dur_short_sec) <= 1.0:
+        shutil.copyfile(wav_master_long, wav_master_short)
+    else:
+        build_scene_master_audio(
+            voice_wav=wav_voice,
+            out_mix_wav=wav_master_short,
+            duration_sec=dur_short_sec,
+            formula_in_sec=round(dur_short_sec * 0.07, 2),
+            formula_out_sec=round(dur_short_sec * 0.65, 2),
+            hack_in_sec=round(dur_short_sec * 0.66, 2),
+            hack_out_sec=round(dur_short_sec - 0.25, 2),
+            scene_id=sid,
+            bgm_enabled=bgm_enabled,
+            target_duration_sec=dur_short_sec,
+        )
 
     saved_motion = scenes_dir / f"scene_{sid:02d}_custom_motion.mp4"
     if custom_motion_mp4 and Path(custom_motion_mp4).exists():
@@ -3295,16 +3731,16 @@ def render_faceless_scene_media(
 
     has_live_broll = saved_motion.exists() and saved_motion.stat().st_size > 1000
     scene["motion_source"] = (
-        "Google Flow / Veo 3.1 Live B-Roll + Animated Geometry, Compass Arcs & Formula Highlighting + ASMR BGM"
+        "Google Flow / Veo 3.1 Full-Screen Live B-Roll + 3-Sec Hook + Formula Highlighting + Studio SFX"
         if has_live_broll
-        else "Animated Geometry, Compass Arcs & Formula Portion Highlighting + 3D B-Roll + ASMR BGM"
+        else "Full-Screen 3D Live Model B-Roll + 3-Sec Hook + Formula Highlighting + Studio SFX"
     )
 
     _render_animated_geometry_and_formula_scene_mp4(
         scene=scene,
         target_mp4=mp4_16x9,
-        wav_master=wav_master,
-        dur_sec=dur_sec,
+        wav_master=wav_master_long,
+        dur_sec=dur_long_sec,
         src_img_path=img_16x9,
         saved_motion_mp4=saved_motion if has_live_broll else None,
         class_badge_text=class_badge_text,
@@ -3313,8 +3749,8 @@ def render_faceless_scene_media(
     _render_animated_geometry_and_formula_scene_mp4(
         scene=scene,
         target_mp4=mp4_9x16,
-        wav_master=wav_master,
-        dur_sec=dur_sec,
+        wav_master=wav_master_short,
+        dur_sec=dur_short_sec,
         src_img_path=img_9x16,
         saved_motion_mp4=saved_motion if has_live_broll else None,
         class_badge_text=class_badge_text,
@@ -3322,13 +3758,15 @@ def render_faceless_scene_media(
     )
 
     # Remove bulky intermediate uncompressed WAVs once muxed into AAC MP4s
-    for tmp_f in (wav_voice, wav_master):
+    for tmp_f in (wav_voice, wav_master_long, wav_master_short):
         try:
             tmp_f.unlink(missing_ok=True)
         except Exception:
             pass
 
-    scene["duration_sec"] = dur_sec
+    scene["duration_sec"] = dur_long_sec
+    scene["short_duration_sec"] = dur_short_sec
+    scene["voice_duration_sec"] = dur_voice_sec
     scene["img_16x9"] = to_portable_path(img_16x9)
     scene["img_9x16"] = to_portable_path(img_9x16)
     scene["mp4_16x9"] = to_portable_path(mp4_16x9)
@@ -3343,9 +3781,11 @@ def stitch_master_videos(project_dir: Path, scenes: List[Dict[str, Any]], short_
 
     if len(scenes) >= 2:
         short_scenes = [scenes[0]]
-        running = float(scenes[0].get("duration_sec", 15.0)) + float(scenes[-1].get("duration_sec", 15.0))
+        running = float(scenes[0].get("short_duration_sec", scenes[0].get("duration_sec", 15.0))) + float(
+            scenes[-1].get("short_duration_sec", scenes[-1].get("duration_sec", 15.0))
+        )
         for mid in scenes[1:-1]:
-            d = float(mid.get("duration_sec", 15.0))
+            d = float(mid.get("short_duration_sec", mid.get("duration_sec", 15.0)))
             if running + d <= 59.5 and len(short_scenes) < short_max_scenes - 1:
                 short_scenes.append(mid)
                 running += d
@@ -3378,7 +3818,9 @@ def stitch_master_videos(project_dir: Path, scenes: List[Dict[str, Any]], short_
         "long_16x9_mp4": to_portable_path(out_long),
         "short_9x16_mp4": to_portable_path(out_short),
         "long_duration_sec": round(sum(float(s.get("duration_sec", 12.0)) for s in scenes), 1),
-        "short_duration_sec": round(sum(float(s.get("duration_sec", 12.0)) for s in short_scenes), 1),
+        "short_duration_sec": round(
+            sum(float(s.get("short_duration_sec", s.get("duration_sec", 12.0))) for s in short_scenes), 1
+        ),
     }
 
 
@@ -3403,6 +3845,11 @@ def render_full_topperlab_project(
     )
 
     scenes = blueprint["scenes"]
+    target_total_sec = _parse_duration_badge_seconds(
+        blueprint.get("duration_badge") or blueprint.get("topic_title") or "6 Mins"
+    )
+    per_scene_long_sec = round(target_total_sec / float(max(1, len(scenes))), 1)
+
     for sc in scenes:
         render_faceless_scene_media(
             sc,
@@ -3413,6 +3860,7 @@ def render_full_topperlab_project(
             class_badge_text=class_badge_text,
             bgm_enabled=bgm_enabled,
             auto_veo_broll=auto_veo_broll,
+            target_scene_long_sec=per_scene_long_sec,
         )
 
     renders = stitch_master_videos(project_dir, scenes, short_max_scenes=short_max_scenes)
@@ -3476,6 +3924,11 @@ def update_single_faceless_scene(
         motion_file.parent.mkdir(parents=True, exist_ok=True)
         motion_file.write_bytes(uploaded_motion_bytes)
 
+    target_total_sec = _parse_duration_badge_seconds(
+        draft_state.get("duration_badge") or draft_state.get("topic_title") or "6 Mins"
+    )
+    per_scene_long_sec = round(target_total_sec / float(max(1, len(draft_state.get("scenes", [1])))), 1)
+
     render_faceless_scene_media(
         scene=target,
         project_dir=project_dir,
@@ -3486,6 +3939,7 @@ def update_single_faceless_scene(
         class_badge_text=class_badge_text,
         bgm_enabled=bgm_enabled,
         auto_veo_broll=auto_veo_broll,
+        target_scene_long_sec=per_scene_long_sec,
     )
     draft_state["renders"] = stitch_master_videos(project_dir, draft_state["scenes"])
     (project_dir / "topperlab_draft_state.json").write_text(

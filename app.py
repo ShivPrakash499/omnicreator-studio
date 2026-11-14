@@ -48,6 +48,7 @@ from studio_engine import (
     get_curriculum_chapters,
     get_curriculum_subjects,
     get_gemini_api_key,
+    get_jwalashiv_voice_sample_path,
     get_youtube_oauth_status,
     has_vertex_adc,
     infer_class_badge_label,
@@ -61,6 +62,7 @@ from studio_engine import (
     render_full_topperlab_project,
     resolve_workspace_path,
     save_active_channel,
+    save_jwalashiv_voice_sample,
     save_meta_credentials,
     save_youtube_client_secret,
     set_active_script_model,
@@ -222,7 +224,9 @@ def _load_portable_json(path: Path):
 curriculum_catalog = load_curriculum_catalog()
 
 # Pre-load flagship sample project if already rendered on disk
-_sample_dir = ROOT_DIR / "workspaces" / "topperlab_3d" / "heights-and-distances-in-6-mins-complete"
+_sample_dir = ROOT_DIR / "workspaces" / "topperlab_3d" / "light-reflection-and-refraction-in-8-mins-complete"
+if not (_sample_dir / "topperlab_draft_state.json").exists():
+    _sample_dir = ROOT_DIR / "workspaces" / "topperlab_3d" / "heights-and-distances-in-6-mins-complete"
 if not (_sample_dir / "topperlab_draft_state.json").exists():
     _sample_dir = ROOT_DIR / "workspaces" / "topperlab_3d" / "why-spinning-gyroscopes-defy-gravity-rotational-motion-t"
 _preloaded_bp = _load_portable_json(_sample_dir / "topperlab_blueprint.json")
@@ -231,21 +235,21 @@ _preloaded_draft = _load_portable_json(_sample_dir / "topperlab_draft_state.json
 for k, default_val in [
     ("ui_theme_mode", "🌙 Dark Lab Mode"),
     ("script_model_id", get_active_script_model()),
-    ("voice_mode", channel_cfg.get("default_voice_mode", "Energetic Indian Mentor — Expressive AI (en-IN)")),
+    ("voice_mode", channel_cfg.get("default_voice_mode", "@jwalashiv Avatar Voice — Shiv Prakash Human Baritone (Hinglish)")),
     ("visual_theme_key", channel_cfg.get("default_visual_theme", "BRIGHT_CLASSROOM_3D_MODEL")),
     ("bgm_enabled", True),
     ("playlist_track_mode", "📘 Foundation Syllabus Chapter (Complete Chapter Playlist)"),
-    ("selected_board", "CBSE"),
-    ("target_class_label", "Class 10"),
-    ("target_subject_label", "Mathematics"),
-    ("selected_chapter", "Heights and Distances"),
-    ("duration_badge", "6 Mins"),
+    ("selected_board", (_preloaded_draft or {}).get("selected_board", "CBSE")),
+    ("target_class_label", (_preloaded_draft or {}).get("target_class_label", "Class 10")),
+    ("target_subject_label", (_preloaded_draft or {}).get("target_subject_label", "Physics")),
+    ("selected_chapter", (_preloaded_draft or {}).get("selected_chapter", "Light — Reflection and Refraction")),
+    ("duration_badge", (_preloaded_draft or {}).get("duration_badge", "8 Mins")),
     ("video_category", "syllabus_chapter"),
     ("booster_mode_key", "toppers_hack"),
     ("selected_pillar_id", "3d_concept_visualizer"),
-    ("selected_exam_track", "CBSE Class 10 Mathematics"),
+    ("selected_exam_track", (_preloaded_draft or {}).get("exam_track", "CBSE Class 10 Physics")),
     ("generated_topics", pillars_cfg["pillars"][1]["starter_topics"]),
-    ("selected_topic_title", "Heights and Distances in 6 Mins Complete"),
+    ("selected_topic_title", (_preloaded_draft or {}).get("topic_title", "Light — Reflection and Refraction in 8 Mins Complete")),
     ("current_blueprint", _preloaded_bp),
     ("current_draft", _preloaded_draft),
     ("resource_links", list(channel_cfg.get("default_resource_links", []))),
@@ -329,7 +333,7 @@ with st.sidebar:
             st.rerun()
 
     st.divider()
-    st.markdown("#### 🎙️ Voice & 3D Style Lock")
+    st.markdown("#### 🎙️ @jwalashiv Voice & 3D Style Lock")
     voice_options = list(channel_cfg["voice_presets"].keys())
     st.session_state["voice_mode"] = st.selectbox(
         "Narration Voice Mode:",
@@ -338,6 +342,20 @@ with st.sidebar:
         if st.session_state["voice_mode"] in voice_options
         else 0,
     )
+    with st.expander("🎙️ @jwalashiv Avatar Voice Profile (.wav/.mp3)"):
+        sample_p = get_jwalashiv_voice_sample_path()
+        if sample_p:
+            st.success(f"🟢 Active `@jwalashiv` Reference Sample: `{sample_p.name}`")
+            st.audio(str(sample_p))
+        else:
+            st.caption(
+                "Using `@jwalashiv` Shiv Prakash Human Baritone EQ (`+5%` pace, `-2Hz` chest resonance, hybrid Devanagari-English natural Hinglish phonetics). Upload a `.wav`/`.mp3` sample below to store your custom reference clip!"
+            )
+        up_voice = st.file_uploader("Upload `@jwalashiv` Voice Sample (.wav / .mp3):", type=["wav", "mp3"], key="jwalashiv_voice_up")
+        if up_voice is not None and st.button("💾 Save @jwalashiv Voice Sample", use_container_width=True):
+            saved_vp = save_jwalashiv_voice_sample(up_voice.read(), up_voice.name)
+            st.success(f"Saved `@jwalashiv` voice reference (`{saved_vp.name}`)!")
+            st.rerun()
 
     theme_keys = list(channel_cfg["visual_themes"].keys())
     st.session_state["visual_theme_key"] = st.selectbox(
@@ -864,12 +882,12 @@ with tab2:
         )
 
     if st.button(
-        f"✨ Build '{st.session_state['selected_topic_title']}' Script, Formulas & Yellow+Red Thumbnail",
+        f"✨ Build & Render '{st.session_state['selected_topic_title']}' (Script + High-CTR Thumbnail + Full {st.session_state['duration_badge']} Video)",
         type="primary",
         use_container_width=True,
     ):
         with st.spinner(
-            f"Designing '{st.session_state['selected_topic_title']}' with Gemini 4, Fly-In Formulas & {sel_class} Yellow+Red Thumbnails..."
+            f"Building '{st.session_state['selected_topic_title']}' High-CTR Thumbnail, @jwalashiv Hinglish Voiceover, 3-Sec Hook & Full-Screen {st.session_state['duration_badge']} Video..."
         ):
             bp = generate_dual_script_and_thumbnails(
                 topic_title=st.session_state["selected_topic_title"],
@@ -888,15 +906,57 @@ with tab2:
                 duration_badge=st.session_state["duration_badge"],
             )
             st.session_state["current_blueprint"] = bp
-            st.session_state["seo_bundle"] = None
-        st.success(f"✅ Blueprint, Fly-In Formulas & Consistent `{bp['class_badge_text']}` Thumbnails Ready!")
+            draft = render_full_topperlab_project(
+                bp,
+                short_max_scenes=4,
+                bgm_enabled=bool(st.session_state.get("bgm_enabled", True)),
+                force_live_images=False,
+                auto_veo_broll=True,
+            )
+            st.session_state["current_draft"] = draft
+            st.session_state["seo_bundle"] = generate_student_seo_bundle(
+                video_title=draft["topic_title"],
+                exam_track=draft["exam_track"],
+                scenes=draft["scenes"],
+                resource_links=st.session_state["resource_links"],
+                board=draft.get("selected_board", st.session_state["selected_board"]),
+                class_name=draft.get("target_class_label", st.session_state["target_class_label"]),
+                subject=draft.get("target_subject_label", st.session_state["target_subject_label"]),
+                chapter_name=draft.get("selected_chapter", st.session_state["selected_chapter"]),
+                video_category=draft.get("video_category", st.session_state["video_category"]),
+            )
+        st.success(
+            f"✅ Built & Rendered `{draft['topic_title']}` (`16:9` Duration: `{draft['renders']['long_duration_sec']}s` • `9:16` Short: `{draft['renders']['short_duration_sec']}s`)! Open **Step 3** to preview."
+        )
 
     bp = st.session_state.get("current_blueprint")
+    if (
+        not bp
+        or strip_3d_text(bp.get("topic_title", "")).lower() != strip_3d_text(st.session_state["selected_topic_title"]).lower()
+        or (st.session_state.get("video_category") == "syllabus_chapter" and bp.get("duration_badge") != st.session_state["duration_badge"])
+    ):
+        bp = generate_dual_script_and_thumbnails(
+            topic_title=st.session_state["selected_topic_title"],
+            pillar_id=st.session_state["selected_pillar_id"],
+            exam_track=st.session_state["selected_exam_track"],
+            voice_mode=st.session_state["voice_mode"],
+            visual_theme_key=st.session_state["visual_theme_key"],
+            scene_count=4,
+            custom_thumb_prompt=custom_thumb_override,
+            force_regenerate_thumbs=False,
+            target_class_label=st.session_state["target_class_label"],
+            target_subject_label=st.session_state["target_subject_label"],
+            selected_board=st.session_state["selected_board"],
+            selected_chapter=st.session_state["selected_chapter"],
+            video_category=st.session_state["video_category"],
+            duration_badge=st.session_state["duration_badge"],
+        )
+        st.session_state["current_blueprint"] = bp
     if bp:
         st.divider()
         t_col1, t_col2 = st.columns([2.1, 1])
         with t_col1:
-            st.subheader("🖥️ `16:9` YouTube Thumbnail")
+            st.subheader("🖥️ `16:9` High-CTR YouTube Thumbnail (Chapter + Duration Synced)")
             tp = resolve_workspace_path(bp["thumbnail_16x9_path"])
             if tp.exists():
                 st.image(str(tp), use_container_width=True)
@@ -938,11 +998,13 @@ with tab2:
         )
 
         if st.button(
-            "🎬 Approve & Render Full `16:9` Video + `9:16` Short (Hinglish Voiceover + Live Veo B-Roll + Tactile SFX)",
+            f"🎬 Re-Render Full `16:9` ({st.session_state['duration_badge']}) Video + `9:16` Short (@jwalashiv Voice + Full-Screen Model + 3s Hook)",
             type="primary",
             use_container_width=True,
         ):
-            with st.spinner("Generating Google Flow / Veo 3.1 B-Roll, synthesizing Hinglish voiceover + tactile studio SFX, and drawing live lines, compass arcs & highlighted formula portions..."):
+            with st.spinner("Rendering Full-Screen 3D Model B-Roll, @jwalashiv Hinglish voiceover, 3-second attention hook & tactile studio SFX..."):
+                bp["duration_badge"] = st.session_state["duration_badge"]
+                bp["voice_mode"] = st.session_state["voice_mode"]
                 draft = render_full_topperlab_project(
                     bp,
                     short_max_scenes=4,
@@ -968,14 +1030,73 @@ with tab2:
 # STEP 3: 3D VIDEO STUDIO PLAYER, SCENE EDITOR & GOOGLE FLOW / VEO CLIPS
 # ============================================================================
 with tab3:
-    st.markdown('<span class="step-badge">STEP 3 • PREVIEW MASTER VIDEOS, LIVE GEOMETRY/FORMULA CANVAS & GOOGLE FLOW / VEO 3.1 CLIPS</span>', unsafe_allow_html=True)
+    st.markdown('<span class="step-badge">STEP 3 • FULL-SCREEN LIVE MODEL B-ROLL, 3-SEC HOOK & @JWALASHIV VOICE STUDIO</span>', unsafe_allow_html=True)
 
     st.markdown(
-        '<div class="lab-card"><b>🎥 Google Flow / Veo 3.1 Live B-Roll + Real-Time Animated Lines, Compass Arcs & Formula Portion Highlighting + 4-Act Retention Format</b><br/>'
-        'Inspired by top viral math & science channels (<i>8MXN6QjPJqc</i> • <i>3Blue1Brown</i> • <i>Don\'t Memorise</i> • <i>Dear Sir</i>): '
-        'Every scene pairs moving <b>Google Flow / Veo 3.1 B-Roll</b> with live animated <b>Green Guide Markers (1, 2, 3), Circles, Right-Triangle Lines, Metallic Compass Arcs (θ), 3-Portion Formula Highlighting, 5-Second Boss Countdown, and an Animated YouTube Subscribe + Bell CTA</b>!</div>',
+        '<div class="lab-card"><b>🎥 Full-Screen Live Model B-Roll (Right Grid Removed) + First 3-Sec Attention Hook + @jwalashiv Human Baritone Narration</b><br/>'
+        '• <b>First 3 Seconds (0:00–0:03):</b> Dedicated full-screen board exam hook question &amp; 3..2..1 countdown before the explainer starts.<br/>'
+        '• <b>Full-Screen Left-Side Live Model B-Roll:</b> Expanded across the entire canvas with real-time animated rays, compass arcs &amp; Top 3-Portion Formula Highlighting.<br/>'
+        '• <b>Exact Duration Sync:</b> Matches your selected Step 2 duration badge (<code>6 Mins</code> / <code>8 Mins</code> / <code>10 Mins</code> / <code>15 Mins</code>) on <code>16:9</code> while keeping <code>9:16</code> Shorts under 58s!</div>',
         unsafe_allow_html=True,
     )
+
+    # Auto-sync check: if the user selected a different chapter or duration in Step 2 than what is in `current_draft`,
+    # automatically build & render the selected chapter so Step 3 NEVER shows a stale previous video!
+    cur_draft_check = st.session_state.get("current_draft")
+    expected_title = st.session_state.get("selected_topic_title", "")
+    expected_dur_badge = st.session_state.get("duration_badge", "6 Mins")
+    draft_out_of_sync = (
+        not cur_draft_check
+        or strip_3d_text(cur_draft_check.get("topic_title", "")).lower() != strip_3d_text(expected_title).lower()
+        or (
+            st.session_state.get("video_category") == "syllabus_chapter"
+            and cur_draft_check.get("duration_badge")
+            and cur_draft_check.get("duration_badge") != expected_dur_badge
+        )
+    )
+    if draft_out_of_sync and expected_title:
+        st.info(
+            f"🔄 Syncing Step 3 player to your Step 2 selection: **`{expected_title}`** (`{expected_dur_badge}`)..."
+        )
+        with st.spinner(
+            f"Auto-rendering '{expected_title}' ({expected_dur_badge}) with @jwalashiv Hinglish voice, 3-sec hook & full-screen Live Model B-Roll..."
+        ):
+            sync_bp = generate_dual_script_and_thumbnails(
+                topic_title=expected_title,
+                pillar_id=st.session_state["selected_pillar_id"],
+                exam_track=st.session_state["selected_exam_track"],
+                voice_mode=st.session_state["voice_mode"],
+                visual_theme_key=st.session_state["visual_theme_key"],
+                scene_count=4,
+                force_regenerate_thumbs=False,
+                target_class_label=st.session_state["target_class_label"],
+                target_subject_label=st.session_state["target_subject_label"],
+                selected_board=st.session_state["selected_board"],
+                selected_chapter=st.session_state["selected_chapter"],
+                video_category=st.session_state["video_category"],
+                duration_badge=expected_dur_badge,
+            )
+            st.session_state["current_blueprint"] = sync_bp
+            sync_draft = render_full_topperlab_project(
+                sync_bp,
+                short_max_scenes=4,
+                bgm_enabled=bool(st.session_state.get("bgm_enabled", True)),
+                force_live_images=False,
+                auto_veo_broll=False,
+            )
+            st.session_state["current_draft"] = sync_draft
+            st.session_state["seo_bundle"] = generate_student_seo_bundle(
+                video_title=sync_draft["topic_title"],
+                exam_track=sync_draft["exam_track"],
+                scenes=sync_draft["scenes"],
+                resource_links=st.session_state["resource_links"],
+                board=sync_draft.get("selected_board", st.session_state["selected_board"]),
+                class_name=sync_draft.get("target_class_label", st.session_state["target_class_label"]),
+                subject=sync_draft.get("target_subject_label", st.session_state["target_subject_label"]),
+                chapter_name=sync_draft.get("selected_chapter", st.session_state["selected_chapter"]),
+                video_category=sync_draft.get("video_category", st.session_state["video_category"]),
+            )
+
     rc_top1, rc_top2, rc_top3 = st.columns([2.5, 1.15, 1.15])
     with rc_top2:
         auto_veo_step3_chk = st.checkbox(
@@ -991,39 +1112,29 @@ with tab3:
         )
     with rc_top1:
         step3_render_clicked = st.button(
-            "🎬 Generate / Re-Render Master `16:9` Video + `9:16` Short (Veo B-Roll + Live Geometry & Formula Highlight)",
+            f"🎬 Generate / Re-Render '{st.session_state['selected_topic_title']}' (`16:9` {st.session_state['duration_badge']} + `9:16` Short)",
             type="primary",
             use_container_width=True,
             key="step3_top_render_btn",
         )
     if step3_render_clicked:
-        with st.spinner("Generating Google Flow / Veo 3.1 B-Roll, synthesizing expressive AI voiceover + ASMR geometry SFX, and animating live lines, compass arcs & formula portions..."):
-            active_bp = st.session_state.get("current_blueprint")
-            if not active_bp or active_bp.get("topic_title") != st.session_state["selected_topic_title"]:
-                active_bp = generate_dual_script_and_thumbnails(
-                    topic_title=st.session_state["selected_topic_title"],
-                    pillar_id=st.session_state["selected_pillar_id"],
-                    exam_track=st.session_state["selected_exam_track"],
-                    voice_mode=st.session_state["voice_mode"],
-                    visual_theme_key=st.session_state["visual_theme_key"],
-                    scene_count=4,
-                    force_regenerate_thumbs=force_fresh_3d_chk,
-                    target_class_label=st.session_state["target_class_label"],
-                    target_subject_label=st.session_state["target_subject_label"],
-                    selected_board=st.session_state["selected_board"],
-                    selected_chapter=st.session_state["selected_chapter"],
-                    video_category=st.session_state["video_category"],
-                    duration_badge=st.session_state["duration_badge"],
-                )
-                st.session_state["current_blueprint"] = active_bp
-            active_bp["voice_mode"] = st.session_state["voice_mode"]
-            active_bp["visual_theme_key"] = st.session_state["visual_theme_key"]
-            active_bp["class_badge_text"] = infer_class_badge_label(
-                exam_track=active_bp.get("exam_track", ""),
-                topic_title=active_bp.get("topic_title", ""),
-                class_override=st.session_state["target_class_label"],
-                subject_override=st.session_state["target_subject_label"],
+        with st.spinner("Generating Full-Screen Live Model B-Roll, @jwalashiv Hinglish voiceover + tactile SFX, 3-sec hook & formula portions..."):
+            active_bp = generate_dual_script_and_thumbnails(
+                topic_title=st.session_state["selected_topic_title"],
+                pillar_id=st.session_state["selected_pillar_id"],
+                exam_track=st.session_state["selected_exam_track"],
+                voice_mode=st.session_state["voice_mode"],
+                visual_theme_key=st.session_state["visual_theme_key"],
+                scene_count=4,
+                force_regenerate_thumbs=force_fresh_3d_chk,
+                target_class_label=st.session_state["target_class_label"],
+                target_subject_label=st.session_state["target_subject_label"],
+                selected_board=st.session_state["selected_board"],
+                selected_chapter=st.session_state["selected_chapter"],
+                video_category=st.session_state["video_category"],
+                duration_badge=st.session_state["duration_badge"],
             )
+            st.session_state["current_blueprint"] = active_bp
             rendered_draft = render_full_topperlab_project(
                 active_bp,
                 short_max_scenes=4,
