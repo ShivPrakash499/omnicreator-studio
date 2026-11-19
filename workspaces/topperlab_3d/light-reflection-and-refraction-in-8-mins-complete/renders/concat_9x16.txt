@@ -1,2 +1,0 @@
-file 'C:/OmniCreator_Studio/workspaces/topperlab_3d/light-reflection-and-refraction-in-8-mins-complete/scenes/scene_01_9x16.mp4'
-file 'C:/OmniCreator_Studio/workspaces/topperlab_3d/light-reflection-and-refraction-in-8-mins-complete/scenes/scene_04_9x16.mp4'
