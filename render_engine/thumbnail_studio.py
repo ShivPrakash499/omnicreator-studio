@@ -33,8 +33,10 @@ from backend.config import (
     call_interaction_with_fallback,
     get_genai_client,
     get_niche_profile,
+    get_vertex_adc_credentials,
     resolve_current_model,
 )
+from google.genai import types as genai_types
 
 logger = logging.getLogger("omni_studio.thumbnail_studio")
 
@@ -348,31 +350,75 @@ def generate_high_ctr_thumbnail(
                 resolve_current_model(IMAGE_PRO_MODEL, "gemini-3-pro-image"),
                 resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1"),
             ]
-            interaction = call_interaction_with_fallback(
-                client,
-                models=img_models,
-                max_retries=2,
-                input=input_parts,
-                response_format={
-                    "type": "image",
-                    "aspect_ratio": "16:9",
-                    "image_size": "2K",
-                },
-            )
-            out_img = getattr(interaction, "output_image", None)
-            if out_img and getattr(out_img, "data", None):
-                raw = base64.b64decode(out_img.data) if isinstance(out_img.data, str) else bytes(out_img.data)
-                ai_pil = Image.open(io.BytesIO(raw)).convert("RGBA")
-                final_pil = _apply_high_ctr_typography_overlay(
-                    ai_pil,
-                    headline=headline,
-                    badge_label=badge_label,
-                    topic=topic,
-                    niche=niche,
-                    creator_side=creator_side,
+
+            v_creds, v_proj = get_vertex_adc_credentials()
+            if v_creds is not None and v_proj:
+                # Vertex AI ADC native multimodal image generation (`gemini-3-pro-image` / `gemini-nano-banana-2.1`)
+                contents_parts: List[Any] = []
+                for p in likeness_paths:
+                    contents_parts.append(genai_types.Part.from_bytes(data=p.read_bytes(), mime_type="image/png"))
+                if style_sample and style_sample.exists():
+                    contents_parts.append(genai_types.Part.from_bytes(data=style_sample.read_bytes(), mime_type="image/png"))
+                contents_parts.append(prompt)
+
+                for m_img in img_models:
+                    try:
+                        resp = client.models.generate_content(
+                            model=m_img,
+                            contents=contents_parts,
+                            config=genai_types.GenerateContentConfig(
+                                response_modalities=["IMAGE"],
+                                image_config=genai_types.ImageConfig(aspect_ratio="16:9"),
+                            ),
+                        )
+                        raw_bytes: Optional[bytes] = None
+                        for cand in getattr(resp, "candidates", []) or []:
+                            for part in getattr(getattr(cand, "content", None), "parts", []) or []:
+                                if getattr(part, "inline_data", None) and part.inline_data.data:
+                                    raw_bytes = bytes(part.inline_data.data)
+                                    break
+                            if raw_bytes:
+                                break
+                        if raw_bytes:
+                            ai_pil = Image.open(io.BytesIO(raw_bytes)).convert("RGBA")
+                            final_pil = _apply_high_ctr_typography_overlay(
+                                ai_pil,
+                                headline=headline,
+                                badge_label=badge_label,
+                                topic=topic,
+                                niche=niche,
+                                creator_side=creator_side,
+                            )
+                            final_pil.convert("RGB").save(output_png_path, format="PNG", optimize=True)
+                            return output_png_path, f"vertex_likeness_pro({m_img})"
+                    except Exception as v_err:
+                        logger.info("Vertex image model %s skipped: %s", m_img, v_err)
+            else:
+                interaction = call_interaction_with_fallback(
+                    client,
+                    models=img_models,
+                    max_retries=2,
+                    input=input_parts,
+                    response_format={
+                        "type": "image",
+                        "aspect_ratio": "16:9",
+                        "image_size": "2K",
+                    },
                 )
-                final_pil.convert("RGB").save(output_png_path, format="PNG", optimize=True)
-                return output_png_path, f"gemini_likeness_pro({img_models[0]})"
+                out_img = getattr(interaction, "output_image", None)
+                if out_img and getattr(out_img, "data", None):
+                    raw = base64.b64decode(out_img.data) if isinstance(out_img.data, str) else bytes(out_img.data)
+                    ai_pil = Image.open(io.BytesIO(raw)).convert("RGBA")
+                    final_pil = _apply_high_ctr_typography_overlay(
+                        ai_pil,
+                        headline=headline,
+                        badge_label=badge_label,
+                        topic=topic,
+                        niche=niche,
+                        creator_side=creator_side,
+                    )
+                    final_pil.convert("RGB").save(output_png_path, format="PNG", optimize=True)
+                    return output_png_path, f"gemini_likeness_pro({img_models[0]})"
         except Exception as exc:
             logger.info("Gemini likeness thumbnail fell back to composited @jwalashiva studio renderer: %s", exc)
 

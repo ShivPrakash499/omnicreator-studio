@@ -258,7 +258,7 @@ with st.sidebar:
 
     st.markdown("---")
     st.caption(f"Creator Likeness: `{cfg.creator_handle}` ({len(cfg.likeness_reference_paths)}/3 portraits loaded)")
-    st.caption(f"Gemini API: `{'Connected' if cfg.has_valid_gemini_key else 'Fallback Mode'}`")
+    st.caption(f"AI Auth: `{cfg.active_auth_summary}`")
     st.caption(f"BGM Ducking: `{cfg.bgm_duck_db} dB` • `{cfg.resolution}`")
 
 

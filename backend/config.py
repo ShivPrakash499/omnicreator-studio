@@ -10,13 +10,17 @@ Uses official `google-genai` SDK (`from google import genai`) and Interactions A
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
+
+from google.auth.transport.requests import Request as GoogleAuthRequest
+from google.oauth2.credentials import Credentials as GoogleUserCredentials
 
 def _load_local_dotenv() -> None:
     """Loads `.env` via python-dotenv if installed, or via a zero-dependency parser fallback."""
@@ -261,7 +265,20 @@ class OmniStudioConfig:
 
     @property
     def has_valid_gemini_key(self) -> bool:
+        """Returns True when either Vertex AI ADC credentials (Priority 1) or GEMINI_API_KEY is available."""
+        creds, proj = get_vertex_adc_credentials()
+        if creds is not None and proj:
+            return True
         return bool(self.gemini_api_key) and self.gemini_api_key != "your_gemini_api_key_here"
+
+    @property
+    def active_auth_summary(self) -> str:
+        creds, proj = get_vertex_adc_credentials()
+        if creds is not None and proj:
+            return f"Vertex AI ADC ({proj} • global)"
+        if self.gemini_api_key and self.gemini_api_key != "your_gemini_api_key_here":
+            return "AI Studio API Key"
+        return "Local Fallback Mode"
 
     @property
     def likeness_reference_paths(self) -> List[Path]:
@@ -279,7 +296,102 @@ class OmniStudioConfig:
         return p if p.exists() else None
 
 
-def get_genai_client(api_key: Optional[str] = None) -> genai.Client:
+_VERTEX_ADC_CACHE: Dict[str, Any] = {"checked": False, "creds": None, "project": ""}
+
+
+def get_vertex_adc_credentials(force_refresh: bool = False) -> Tuple[Optional[GoogleUserCredentials], str]:
+    """
+    Priority-1 Google AI Ultra / Cloud Credits Auth via Vertex AI ADC (identical to `coindcx_box_bot`).
+    Resolution order:
+    1. Streamlit Server Secrets (`VERTEX_ADC_JSON` or `[vertex_adc]`)
+    2. `VERTEX_ADC_JSON` environment variable
+    3. `GOOGLE_APPLICATION_CREDENTIALS` or `config/credentials/vertex_adc.json`
+    4. Local gcloud ADC (`%APPDATA%/gcloud/application_default_credentials.json` or `~/.config/gcloud/...`)
+    """
+    if not force_refresh and _VERTEX_ADC_CACHE["checked"] and _VERTEX_ADC_CACHE["creds"] is not None:
+        creds = _VERTEX_ADC_CACHE["creds"]
+        try:
+            if creds.expired and creds.refresh_token:
+                creds.refresh(GoogleAuthRequest())
+        except Exception:
+            pass
+        return creds, str(_VERTEX_ADC_CACHE["project"])
+
+    raw_dict: Optional[Dict[str, Any]] = None
+
+    # 1. Streamlit Cloud Secrets
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets"):
+            if "VERTEX_ADC_JSON" in st.secrets:
+                val = st.secrets["VERTEX_ADC_JSON"]
+                raw_dict = json.loads(val) if isinstance(val, str) else dict(val)
+            elif "vertex_adc" in st.secrets:
+                raw_dict = dict(st.secrets["vertex_adc"])
+    except Exception:
+        pass
+
+    # 2. Environment variable JSON
+    if raw_dict is None and os.getenv("VERTEX_ADC_JSON", "").strip():
+        try:
+            raw_dict = json.loads(os.getenv("VERTEX_ADC_JSON", "").strip())
+        except Exception:
+            pass
+
+    # 3. Local credential files
+    if raw_dict is None:
+        cand_paths: List[Path] = []
+        env_cred = os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "").strip()
+        if env_cred:
+            cand_paths.append(Path(env_cred))
+        cand_paths.append(Path("config/credentials/vertex_adc.json"))
+        appdata = os.environ.get("APPDATA", "")
+        if appdata:
+            cand_paths.append(Path(appdata) / "gcloud" / "application_default_credentials.json")
+        cand_paths.append(Path.home() / ".config" / "gcloud" / "application_default_credentials.json")
+
+        for p in cand_paths:
+            if p.exists():
+                try:
+                    data = json.loads(p.read_text(encoding="utf-8"))
+                    if data.get("type") == "authorized_user" and data.get("refresh_token"):
+                        raw_dict = data
+                        break
+                except Exception:
+                    continue
+
+    if raw_dict and raw_dict.get("type") == "authorized_user" and raw_dict.get("refresh_token"):
+        try:
+            project_id = (
+                raw_dict.get("quota_project_id")
+                or os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
+                or "gen-lang-client-0777980903"
+            )
+            creds = GoogleUserCredentials.from_authorized_user_info(
+                raw_dict,
+                scopes=["https://www.googleapis.com/auth/cloud-platform"],
+            )
+            if not creds.valid or creds.expired:
+                creds.refresh(GoogleAuthRequest())
+            _VERTEX_ADC_CACHE.update({"checked": True, "creds": creds, "project": project_id})
+            return creds, project_id
+        except Exception as exc:
+            logger.warning("Vertex AI ADC credential load/refresh skipped: %s", exc)
+
+    _VERTEX_ADC_CACHE.update({"checked": True, "creds": None, "project": ""})
+    return None, ""
+
+
+def get_genai_client(api_key: Optional[str] = None, location: str = "global") -> genai.Client:
+    """
+    Returns a `google.genai.Client`:
+    - Priority 1: Vertex AI ADC (`vertexai=True`, `location='global'`) using Google AI Ultra / Cloud credits.
+    - Priority 2: Developer API key (`GEMINI_API_KEY`).
+    """
+    v_creds, v_proj = get_vertex_adc_credentials()
+    if v_creds is not None and v_proj:
+        return genai.Client(vertexai=True, credentials=v_creds, project=v_proj, location=location)
+
     key = (api_key or os.getenv("GEMINI_API_KEY", "")).strip()
     if key:
         return genai.Client(api_key=key)
@@ -295,7 +407,7 @@ def call_interaction_with_fallback(
     **kwargs: Any,
 ) -> Any:
     """
-    Calls `client.interactions.create(...)` with exponential backoff and clean model fallback.
+    Calls `client.interactions.create(...)` with exponential backoff and smart fast-fail model fallback.
     """
     last_err: Optional[Exception] = None
     for model_name in models:
@@ -306,10 +418,10 @@ def call_interaction_with_fallback(
                 last_err = exc
                 err_low = str(exc).lower()
                 if any(tok in err_low for tok in ("402", "prepayment credits", "billing")):
-                    logger.warning("Model '%s' billing/credit exhausted (HTTP 402); falling back immediately.", model_name)
+                    logger.warning("Model '%s' billing/credit exhausted (HTTP 402); trying next fallback.", model_name)
                     break
-                if any(tok in err_low for tok in ("404", "not found", "invalid model", "unsupported")):
-                    logger.warning("Model '%s' unavailable; trying fallback next.", model_name)
+                if any(tok in err_low for tok in ("403", "permission_denied", "404", "not found", "invalid model", "unsupported")):
+                    logger.warning("Model '%s' unavailable/restricted on current tier; trying next model.", model_name)
                     break
                 if attempt < max_retries:
                     delay = min(16.0, base_delay * (2 ** (attempt - 1)))

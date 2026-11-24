@@ -35,8 +35,10 @@ from backend.config import (
     get_genai_client,
     get_language_voice_profile,
     get_niche_profile,
+    get_vertex_adc_credentials,
     resolve_current_model,
 )
+from google.genai import types as genai_types
 
 logger = logging.getLogger("omni_studio.audio_mixer")
 
@@ -120,49 +122,89 @@ def synthesize_scene_voiceover(
         except Exception as exc:
             logger.debug("Cloud TTS Chirp 3 HD skipped (%s); trying Gemini 3.8 TTS.", exc)
 
-    # 2. Gemini 3.8 Flash TTS via official `client.interactions.create(...)`
+    # 2. Gemini 3.8 Flash TTS (Vertex AI native `generate_content` OR Developer API `interactions.create`)
     if cfg.has_valid_gemini_key and not prefer_fast_local_tts:
         try:
             tts_model = resolve_current_model(TTS_EXPRESSIVE_MODEL, "gemini-3.8-flash-tts")
             client = get_genai_client(cfg.gemini_api_key)
-            interaction = call_interaction_with_fallback(
-                client,
-                models=[tts_model, "gemini-3.8-flash-lite-tts"],
-                max_retries=2,
-                input=[
-                    {
-                        "type": "user_input",
-                        "content": [
-                            {
-                                "type": "text",
-                                "text": plain_text,
-                                "annotations": [
-                                    {
-                                        "type": "speech_metadata",
-                                        "style": vprof["style_prompt"],
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                ],
-                response_format={"type": "audio"},
-                generation_config={"speech_config": [{"voice": vprof["gemini_voice"]}]},
-            )
-            out_aud = getattr(interaction, "output_audio", None)
-            if out_aud and getattr(out_aud, "data", None):
-                raw_bytes = (
-                    base64.b64decode(out_aud.data)
-                    if isinstance(out_aud.data, str)
-                    else bytes(out_aud.data)
+            v_creds, v_proj = get_vertex_adc_credentials()
+            if v_creds is not None and v_proj:
+                resp = client.models.generate_content(
+                    model=tts_model,
+                    contents=f"Speak with this style ({vprof['style_prompt']}): {plain_text}",
+                    config=genai_types.GenerateContentConfig(
+                        response_modalities=["AUDIO"],
+                        speech_config=genai_types.SpeechConfig(
+                            voice_config=genai_types.VoiceConfig(
+                                prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name=vprof["gemini_voice"])
+                            )
+                        ),
+                    ),
                 )
-                tmp_raw = output_wav_path.with_suffix(".gemini.raw")
-                tmp_raw.write_bytes(raw_bytes)
-                _convert_any_audio_to_wav24k(tmp_raw, output_wav_path)
-                tmp_raw.unlink(missing_ok=True)
-                dur = get_wav_duration_sec(output_wav_path)
-                if dur > 0.5:
-                    return output_wav_path, dur, f"gemini_tts({tts_model})"
+                raw_pcm: Optional[bytes] = None
+                mime_a = "audio/wav"
+                for cand in getattr(resp, "candidates", []) or []:
+                    for part in getattr(getattr(cand, "content", None), "parts", []) or []:
+                        if getattr(part, "inline_data", None) and part.inline_data.data:
+                            raw_pcm = bytes(part.inline_data.data)
+                            mime_a = getattr(part.inline_data, "mime_type", "audio/wav") or "audio/wav"
+                            break
+                    if raw_pcm:
+                        break
+                if raw_pcm:
+                    if "pcm" in mime_a.lower() or "l16" in mime_a.lower() or not raw_pcm.startswith(b"RIFF"):
+                        with wave.open(str(output_wav_path), "wb") as wf:
+                            wf.setnchannels(1)
+                            wf.setsampwidth(2)
+                            wf.setframerate(24000)
+                            wf.writeframes(raw_pcm)
+                    else:
+                        tmp_raw = output_wav_path.with_suffix(".vertex.raw")
+                        tmp_raw.write_bytes(raw_pcm)
+                        _convert_any_audio_to_wav24k(tmp_raw, output_wav_path)
+                        tmp_raw.unlink(missing_ok=True)
+                    dur = get_wav_duration_sec(output_wav_path)
+                    if dur > 0.5:
+                        return output_wav_path, dur, f"vertex_tts({tts_model})"
+            else:
+                interaction = call_interaction_with_fallback(
+                    client,
+                    models=[tts_model, "gemini-3.8-flash-lite-tts"],
+                    max_retries=2,
+                    input=[
+                        {
+                            "type": "user_input",
+                            "content": [
+                                {
+                                    "type": "text",
+                                    "text": plain_text,
+                                    "annotations": [
+                                        {
+                                            "type": "speech_metadata",
+                                            "style": vprof["style_prompt"],
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                    response_format={"type": "audio"},
+                    generation_config={"speech_config": [{"voice": vprof["gemini_voice"]}]},
+                )
+                out_aud = getattr(interaction, "output_audio", None)
+                if out_aud and getattr(out_aud, "data", None):
+                    raw_bytes = (
+                        base64.b64decode(out_aud.data)
+                        if isinstance(out_aud.data, str)
+                        else bytes(out_aud.data)
+                    )
+                    tmp_raw = output_wav_path.with_suffix(".gemini.raw")
+                    tmp_raw.write_bytes(raw_bytes)
+                    _convert_any_audio_to_wav24k(tmp_raw, output_wav_path)
+                    tmp_raw.unlink(missing_ok=True)
+                    dur = get_wav_duration_sec(output_wav_path)
+                    if dur > 0.5:
+                        return output_wav_path, dur, f"gemini_tts({tts_model})"
         except Exception as exc:
             logger.info("Gemini 3.8 TTS fell back to Edge-TTS: %s", exc)
 
