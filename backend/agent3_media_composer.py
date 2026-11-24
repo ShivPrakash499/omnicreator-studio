@@ -400,20 +400,85 @@ def _ffmpeg_ass_filter_escape(ass_path: Path) -> str:
     return posix.replace(":", "\\:").replace("'", "\\'")
 
 
+def _create_circular_host_pip_png(
+    portrait_path: Path,
+    output_png: Path,
+    *,
+    diameter: int = 230,
+    accent_rgb: Tuple[int, int, int] = (0, 229, 255),
+) -> Optional[Path]:
+    """Creates a clean glowing circular host presenter badge PNG for optional video PIP overlay."""
+    if not portrait_path.exists():
+        return None
+    pad = 16
+    size = diameter + pad * 2
+    canvas = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    draw = ImageDraw.Draw(canvas, "RGBA")
+
+    # Outer glowing ring
+    draw.ellipse([4, 4, size - 4, size - 4], fill=(*accent_rgb, 65), outline=(*accent_rgb, 245), width=6)
+
+    # Circular cropped portrait
+    src = Image.open(portrait_path).convert("RGBA")
+    side = min(src.width, src.height)
+    left = (src.width - side) // 2
+    top = max(0, int((src.height - side) * 0.15))
+    cropped = src.crop((left, top, left + side, top + side)).resize((diameter, diameter), Image.Resampling.LANCZOS)
+
+    mask = Image.new("L", (diameter, diameter), 0)
+    ImageDraw.Draw(mask).ellipse([0, 0, diameter, diameter], fill=255)
+    canvas.paste(cropped, (pad, pad), mask)
+
+    output_png.parent.mkdir(parents=True, exist_ok=True)
+    canvas.save(output_png, format="PNG")
+    return output_png
+
+
+def _overlay_host_pip_on_clip(
+    input_mp4: Path,
+    pip_png: Path,
+    output_mp4: Path,
+) -> Path:
+    """Overlays the optional circular host PIP cleanly into the bottom-left safe zone."""
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    subprocess.run(
+        [
+            ffmpeg_exe, "-y",
+            "-i", str(input_mp4),
+            "-i", str(pip_png),
+            "-filter_complex", "[0:v][1:v]overlay=44:H-h-180[outv]",
+            "-map", "[outv]",
+            "-an",
+            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+            str(output_mp4),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    return output_mp4
+
+
 def _burn_ass_subtitles(
     input_mp4: Path,
     ass_path: Path,
     output_mp4: Path,
 ) -> Path:
-    """Burns styled word-level active-highlight `.ass` subtitles cleanly into the assembled MP4."""
+    """Burns styled word-level active-highlight `.ass` subtitles cleanly (with bundled Devanagari fontsdir)."""
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     escaped_ass = _ffmpeg_ass_filter_escape(ass_path)
+    fonts_dir = Path("assets/fonts")
+    if fonts_dir.exists():
+        escaped_fonts = _ffmpeg_ass_filter_escape(fonts_dir)
+        vf_str = f"ass='{escaped_ass}':fontsdir='{escaped_fonts}'"
+    else:
+        vf_str = f"ass='{escaped_ass}'"
     try:
         subprocess.run(
             [
                 ffmpeg_exe, "-y",
                 "-i", str(input_mp4),
-                "-vf", f"ass='{escaped_ass}'",
+                "-vf", vf_str,
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
                 "-c:a", "copy",
                 str(output_mp4),
@@ -436,6 +501,9 @@ def run_agent3_media_pipeline(
     agent2: Agent2Output,
     *,
     render_quality: str = "ai_keyframes_kenburns",
+    include_avatar_in_thumbnail: bool = False,
+    avatar_thumbnail_mode: str = "real_photo",
+    include_avatar_in_video: bool = False,
     creator_side: str = "left",
     prefer_fast_local_tts: bool = False,
     use_ai_thumbnail: bool = True,
@@ -564,6 +632,8 @@ def run_agent3_media_pipeline(
         headline=agent1.thumbnail_hook_headline,
         badge_label=agent1.thumbnail_badge_label,
         graphic_concept=agent1.thumbnail_graphic_concept,
+        include_creator_avatar=include_avatar_in_thumbnail,
+        avatar_mode=avatar_thumbnail_mode,
         creator_side=creator_side,
         config=cfg,
         use_ai_image_api=use_ai_thumbnail,
@@ -595,6 +665,21 @@ def run_agent3_media_pipeline(
     )
     visual_results: Dict[int, Tuple[Path, str]] = {}
 
+    # Optional circular host PIP avatar overlay (only when user opted-in via `include_avatar_in_video=True`)
+    host_pip_png: Optional[Path] = None
+    if include_avatar_in_video:
+        studio_portrait = cfg.likeness_dir / "image_13.png"
+        if not studio_portrait.exists() and cfg.likeness_reference_paths:
+            studio_portrait = cfg.likeness_reference_paths[0]
+        if studio_portrait.exists():
+            prof = get_niche_profile(agent1.niche)
+            host_pip_png = _create_circular_host_pip_png(
+                studio_portrait,
+                renders_dir / "host_pip_badge.png",
+                diameter=220,
+                accent_rgb=_hex_to_rgb(prof["accent_hex"]),
+            )
+
     def _render_vis(sc: SceneClipSpec) -> Tuple[int, Path, str]:
         dur = voice_results[sc.scene_index][1]
         out_mp4 = clips_16_dir / f"scene_{sc.scene_index:03d}_vis.mp4"
@@ -608,6 +693,12 @@ def run_agent3_media_pipeline(
             render_quality=render_quality,
             config=cfg,
         )
+        # Apply optional presenter PIP badge cleanly on Opening Hook (Scene 1) & Final Outro scene
+        if host_pip_png and sc.scene_index in (1, total_scenes):
+            pip_mp4 = clips_16_dir / f"scene_{sc.scene_index:03d}_vis_pip.mp4"
+            _overlay_host_pip_on_clip(p, host_pip_png, pip_mp4)
+            p = pip_mp4
+            src = f"{src}+host_pip"
         return sc.scene_index, p, src
 
     with ThreadPoolExecutor(max_workers=min(3, cfg.max_workers)) as pool:

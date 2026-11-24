@@ -693,14 +693,14 @@ elif step == 3:
         if fresh_proj and fresh_proj.get("agent3_data"):
             st.session_state["agent3_output"] = fresh_proj["agent3_data"]
 
-        with st.expander("⚙️ Render Quality, Audio Ducking (-24dB) & @jwalashiva Likeness Settings", expanded=True):
-            rc1, rc2, rc3 = st.columns(3)
+        with st.expander("⚙️ Render Quality, Avatar Opt-In & Audio Ducking (-24dB) Settings", expanded=True):
+            rc1, rc2 = st.columns([1.4, 1.0])
             with rc1:
                 quality_label = st.selectbox(
                     "🎞️ Visual Render Mode:",
                     options=[
                         "AI Keyframes + Kinetic Motion (Recommended Fast & Crisp)",
-                        "Full Gemini Omni 1.2 Flash AI Video (Premium Tier)",
+                        "Full Vertex Veo 3.1 / Omni AI Video (Premium Tier)",
                         "Fast Studio Preview (Zero API Wait — Procedural + Plates)",
                     ],
                     index=0,
@@ -708,43 +708,74 @@ elif step == 3:
                 )
                 quality_map = {
                     "AI Keyframes + Kinetic Motion (Recommended Fast & Crisp)": "ai_keyframes_kenburns",
-                    "Full Gemini Omni 1.2 Flash AI Video (Premium Tier)": "full_omni_video",
+                    "Full Vertex Veo 3.1 / Omni AI Video (Premium Tier)": "full_omni_video",
                     "Fast Studio Preview (Zero API Wait — Procedural + Plates)": "fast_studio_preview",
                 }
                 render_quality = quality_map[quality_label]
             with rc2:
-                creator_side = st.selectbox(
-                    "🧍 @jwalashiva Thumbnail Placement:",
-                    options=["left", "right"],
-                    index=0,
-                    key="thumb_creator_side",
-                )
-            with rc3:
                 fast_tts = st.checkbox(
-                    "Use Fast Local Edge-TTS (skip Cloud TTS latency)",
+                    "⚡ Fast Local Edge-TTS (skip Cloud TTS latency)",
                     value=False,
                     key="render_fast_tts",
                 )
 
-            # Show on-disk @jwalashiva likeness references (`image_12.png`, `image_13.png`, `image_14.png`)
-            with st.expander(f"🪪 Creator Likeness Anchor Files ({cfg.creator_handle} — image_12..14.png)", expanded=False):
-                likeness_paths = cfg.likeness_reference_paths
-                if likeness_paths:
-                    lcols = st.columns(len(likeness_paths))
-                    for lcol, lp in zip(lcols, likeness_paths):
-                        with lcol:
-                            st.image(str(lp), caption=lp.name, use_container_width=True)
-                else:
-                    st.warning(f"No likeness images found in `{cfg.likeness_dir}`.")
-
-                up_ref = st.file_uploader(
-                    "Replace/Update Likeness Photo (optional):",
-                    type=["png", "jpg", "jpeg"],
-                    key="replace_likeness_img",
+            st.markdown("**🧍 Creator Avatar / Likeness Opt-In Controls:**")
+            av_c1, av_c2 = st.columns(2)
+            with av_c1:
+                include_avatar_thumb = st.checkbox(
+                    "Include my avatar/photo on Thumbnail",
+                    value=False,
+                    help="OFF = Full-bleed epic faceless topic cinema thumbnail (recommended for clean focus). ON = Includes your likeness on the thumbnail.",
+                    key="opt_include_avatar_thumb",
                 )
-                if up_ref is not None:
-                    (cfg.likeness_dir / "image_13.png").write_bytes(up_ref.getvalue())
-                    st.success("Updated `assets/likeness/image_13.png` ✅")
+            with av_c2:
+                include_avatar_video = st.checkbox(
+                    "Include my avatar/photo in Video (Hook & Outro Host PIP)",
+                    value=False,
+                    help="OFF = 100% pure topic visuals & motion graphics. ON = Adds a clean glowing circular host presenter badge on Opening Hook & Outro CTA.",
+                    key="opt_include_avatar_video",
+                )
+
+            creator_side = "left"
+            avatar_thumb_mode = "real_photo"
+            if include_avatar_thumb:
+                opt_c1, opt_c2 = st.columns(2)
+                with opt_c1:
+                    av_style_lbl = st.selectbox(
+                        "Avatar Thumbnail Style:",
+                        options=[
+                            "Exact Real Studio Photo Cutout (100% Real Face — Zero AI Distortion)",
+                            "AI Studio Portrait (Gemini 3 Pro — Nehru Jacket + Pointing)",
+                        ],
+                        index=0,
+                        key="opt_avatar_thumb_style",
+                    )
+                    avatar_thumb_mode = "real_photo" if av_style_lbl.startswith("Exact Real") else "ai_pro"
+                with opt_c2:
+                    creator_side = st.selectbox(
+                        "Avatar Side on Thumbnail:",
+                        options=["left", "right"],
+                        index=0,
+                        key="thumb_creator_side",
+                    )
+
+            # Optional likeness manager drawer
+            if include_avatar_thumb or include_avatar_video:
+                with st.expander(f"🪪 Manage Studio Likeness Photos ({cfg.creator_handle})", expanded=False):
+                    studio_refs = [p for p in (cfg.likeness_dir / "image_13.png", cfg.likeness_dir / "image_14.png") if p.exists()]
+                    if studio_refs:
+                        lcols = st.columns(len(studio_refs))
+                        for lcol, lp in zip(lcols, studio_refs):
+                            with lcol:
+                                st.image(str(lp), caption=lp.name, use_container_width=True)
+                    up_ref = st.file_uploader(
+                        "Upload Your Clean Studio Photo (replaces `image_13.png`):",
+                        type=["png", "jpg", "jpeg"],
+                        key="replace_likeness_img",
+                    )
+                    if up_ref is not None:
+                        (cfg.likeness_dir / "image_13.png").write_bytes(up_ref.getvalue())
+                        st.success("Updated `assets/likeness/image_13.png` ✅")
 
         is_rendering = worker.is_running(render_task_key)
         btn_r1, btn_r2 = st.columns([2.0, 1.0])
@@ -775,6 +806,9 @@ elif step == 3:
                     "agent1": a1,
                     "agent2": a2,
                     "render_quality": render_quality,
+                    "include_avatar_in_thumbnail": include_avatar_thumb,
+                    "avatar_thumbnail_mode": avatar_thumb_mode,
+                    "include_avatar_in_video": include_avatar_video,
                     "creator_side": creator_side,
                     "prefer_fast_local_tts": fast_tts,
                     "use_ai_thumbnail": (render_quality != "fast_studio_preview"),
@@ -794,7 +828,7 @@ elif step == 3:
                 if a3_existing and a3_existing.get("thumbnail_16x9_path")
                 else cfg.projects_dir / f"{pid}_{sanitize_slug(a1.topic)}" / "renders" / "thumbnail_16x9.png"
             )
-            with st.spinner("Generating High-CTR Thumbnail preserving @jwalashiva likeness..."):
+            with st.spinner("Generating High-CTR Thumbnail..."):
                 t_path, t_eng = generate_high_ctr_thumbnail(
                     thumb_dest,
                     topic=a1.topic,
@@ -802,6 +836,8 @@ elif step == 3:
                     headline=a1.thumbnail_hook_headline,
                     badge_label=a1.thumbnail_badge_label,
                     graphic_concept=a1.thumbnail_graphic_concept,
+                    include_creator_avatar=include_avatar_thumb,
+                    avatar_mode=avatar_thumb_mode,
                     creator_side=creator_side,
                     config=cfg,
                     use_ai_image_api=True,

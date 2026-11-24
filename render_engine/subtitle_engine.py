@@ -165,7 +165,11 @@ def write_active_highlight_ass_file(
     margin_v = 74 if aspect_ratio == "16:9" else 260
     chunk_size = words_per_chunk if aspect_ratio == "16:9" else 4
 
-    # High-frequency neon yellow active highlight in ASS BGR (`&H0000EAFF&` = vivid gold-yellow)
+    # Use Devanagari-capable font automatically if any word uses Hindi Devanagari script
+    has_deva = any("\u0900" <= ch <= "\u097f" for tw in timed_words for ch in tw.word)
+    font_name = "Noto Sans Devanagari" if has_deva else "Segoe UI"
+
+    # High-frequency neon yellow active highlight in ASS BGR (`&H0018E8FF&` = vivid gold-yellow)
     active_color = "&H0018E8FF&"
     normal_color = "&H00FFFFFF&"
 
@@ -178,7 +182,7 @@ ScaledBorderAndShadow: yes
 
 [V4+ Styles]
 Format: Name, Fontname, Fontsize, PrimaryColour, SecondaryColour, OutlineColour, BackColour, Bold, Italic, Underline, StrikeOut, ScaleX, ScaleY, Spacing, Angle, BorderStyle, Outline, Shadow, Alignment, MarginL, MarginR, MarginV, Encoding
-Style: Default,Segoe UI,{font_size},&H00FFFFFF,&H0018E8FF,&H00090D16,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,2,60,60,{margin_v},1
+Style: Default,{font_name},{font_size},&H00FFFFFF,&H0018E8FF,&H00090D16,&H80000000,-1,0,0,0,100,100,0,0,1,4,2,2,60,60,{margin_v},1
 
 [Events]
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text

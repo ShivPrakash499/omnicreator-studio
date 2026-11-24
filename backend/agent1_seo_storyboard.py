@@ -432,8 +432,8 @@ def run_agent1_seo_and_storyboard(
             f"   - Include a `Climax_Aha` beat exposing the #1 misconception/mistake.\n"
             f"   - End with an `Outro_CTA` beat driving comments & subscriptions.\n"
             f"5. Write `hook_script_0_45s`, `climax_misconception_aha`, and `outro_cta_script` authentically in {language_tone}.\n"
-            f"6. Craft `thumbnail_hook_headline` (2-4 punchy words), `thumbnail_badge_label` (1-3 words), and "
-            f"`thumbnail_graphic_concept` (specific glowing diagrams/objects symbolizing '{topic}' on the thumbnail).\n"
+            f"6. Craft `thumbnail_hook_headline` (2-4 punchy words — use clean Roman English/Hinglish if language is English or Hinglish, or clean crisp Hindi Devanagari ONLY if language is Hindi), `thumbnail_badge_label` (1-2 crisp words in the same script), and "
+            f"`thumbnail_graphic_concept` (specific glowing 3D objects/scenes symbolizing '{topic}' on the thumbnail).\n"
             f"Return STRICT JSON matching the Agent1Output schema."
         )
 
