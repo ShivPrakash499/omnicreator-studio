@@ -63,6 +63,38 @@ def hydrate_local_token_into_sqlite(
     if existing and existing.get("token_dict"):
         return existing
 
+    # 1. Hydrate from Streamlit Cloud Secrets (`YOUTUBE_OAUTH_TOKEN_JSON`) or env var
+    raw_secret: Optional[Dict[str, Any]] = None
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets") and "YOUTUBE_OAUTH_TOKEN_JSON" in st.secrets:
+            val = st.secrets["YOUTUBE_OAUTH_TOKEN_JSON"]
+            raw_secret = json.loads(val) if isinstance(val, str) else dict(val)
+    except Exception:
+        pass
+    if raw_secret is None and os.getenv("YOUTUBE_OAUTH_TOKEN_JSON", "").strip():
+        try:
+            raw_secret = json.loads(os.getenv("YOUTUBE_OAUTH_TOKEN_JSON", "").strip())
+        except Exception:
+            pass
+
+    if raw_secret and (raw_secret.get("refresh_token") or raw_secret.get("access_token") or raw_secret.get("token")):
+        try:
+            creds = _credentials_from_token_dict(raw_secret)
+            ch_info = fetch_authenticated_channel_info(creds) if creds else {}
+            database.save_oauth_token(
+                "youtube",
+                raw_secret,
+                account_email=ch_info.get("email", ""),
+                channel_id=ch_info.get("channel_id") or raw_secret.get("connected_channel_id", ""),
+                channel_title=ch_info.get("channel_title") or raw_secret.get("connected_channel_title", "Connected YouTube Channel"),
+                scopes=raw_secret.get("scopes", YOUTUBE_SCOPES),
+            )
+            return database.get_oauth_token("youtube")
+        except Exception as exc:
+            logger.warning("Could not hydrate YOUTUBE_OAUTH_TOKEN_JSON secret: %s", exc)
+
+    # 2. Hydrate from local token file (`config/credentials/youtube_oauth_token.json`)
     token_file = cfg.youtube_token_file
     if token_file.exists():
         try:

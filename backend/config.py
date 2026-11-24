@@ -365,6 +365,7 @@ def get_vertex_adc_credentials(force_refresh: bool = False) -> Tuple[Optional[Go
             project_id = (
                 raw_dict.get("quota_project_id")
                 or os.getenv("GOOGLE_CLOUD_PROJECT", "").strip()
+                or os.getenv("VERTEX_PROJECT_ID", "").strip()
                 or "gen-lang-client-0777980903"
             )
             creds = GoogleUserCredentials.from_authorized_user_info(
