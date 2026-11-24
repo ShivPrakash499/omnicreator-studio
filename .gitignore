@@ -6,5 +6,9 @@ venv/
 config/google_accounts/*/client_secret.json
 config/google_accounts/*/token.json
 config/credentials/
-workspaces/*.db
-workspaces/omni_cache/
+workspaces/
+output/
+storage/*.db
+storage/*.db-journal
+storage/*.db-wal
+storage/projects/
