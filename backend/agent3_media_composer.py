@@ -50,6 +50,7 @@ from backend.config import (
 from google.genai import types as genai_types
 from backend.schemas import Agent1Output, Agent2Output, Agent3Output, RenderedSceneArtifact, SceneClipSpec
 from render_engine.audio_mixer import (
+    concat_wav_segments,
     generate_niche_bgm_stem,
     mix_scene_master_audio,
     synthesize_scene_voiceover,
@@ -459,28 +460,38 @@ def _overlay_host_pip_on_clip(
     return output_mp4
 
 
-def _burn_ass_subtitles(
-    input_mp4: Path,
+def _mux_continuous_audio_and_burn_ass(
+    video_only_mp4: Path,
+    continuous_master_wav: Path,
     ass_path: Path,
     output_mp4: Path,
 ) -> Path:
-    """Burns styled word-level active-highlight `.ass` subtitles cleanly (with bundled Devanagari fontsdir)."""
+    """
+    Single-pass broadcast mux: combines concatenated silent video + ONE continuous PCM master WAV,
+    burns word-level active-highlight `.ass` subtitles (with bundled Devanagari fontsdir),
+    encodes browser-universal 44.1kHz STEREO AAC-LC (`-ar 44100 -ac 2 -c:a aac -b:a 192k`)
+    with `-movflags +faststart` so Chrome, Edge, Safari, Mobile & YouTube ALWAYS play crystal-clear sound!
+    """
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     escaped_ass = _ffmpeg_ass_filter_escape(ass_path)
     fonts_dir = Path("assets/fonts")
-    if fonts_dir.exists():
-        escaped_fonts = _ffmpeg_ass_filter_escape(fonts_dir)
-        vf_str = f"ass='{escaped_ass}':fontsdir='{escaped_fonts}'"
-    else:
-        vf_str = f"ass='{escaped_ass}'"
+    vf_str = (
+        f"ass='{escaped_ass}':fontsdir='{_ffmpeg_ass_filter_escape(fonts_dir)}'"
+        if fonts_dir.exists()
+        else f"ass='{escaped_ass}'"
+    )
     try:
         subprocess.run(
             [
                 ffmpeg_exe, "-y",
-                "-i", str(input_mp4),
+                "-i", str(video_only_mp4),
+                "-i", str(continuous_master_wav),
+                "-map", "0:v:0", "-map", "1:a:0",
                 "-vf", vf_str,
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20",
-                "-c:a", "copy",
+                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
+                "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
+                "-movflags", "+faststart",
+                "-shortest",
                 str(output_mp4),
             ],
             check=True,
@@ -490,8 +501,25 @@ def _burn_ass_subtitles(
         if output_mp4.exists() and output_mp4.stat().st_size > 4096:
             return output_mp4
     except Exception as exc:
-        logger.warning("FFmpeg ASS subtitle burn fallback (copying base video): %s", exc)
-    output_mp4.write_bytes(input_mp4.read_bytes())
+        logger.warning("FFmpeg ASS burn pass failed (%s); muxing clean stereo audio without ASS filter.", exc)
+
+    # Guaranteed fallback WITH full 44.1kHz stereo audio (never drops audio!)
+    subprocess.run(
+        [
+            ffmpeg_exe, "-y",
+            "-i", str(video_only_mp4),
+            "-i", str(continuous_master_wav),
+            "-map", "0:v:0", "-map", "1:a:0",
+            "-c:v", "copy",
+            "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
+            "-movflags", "+faststart",
+            "-shortest",
+            str(output_mp4),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
     return output_mp4
 
 
@@ -577,7 +605,7 @@ def run_agent3_media_pipeline(
         )
         return sc.scene_index, p, max(3.0, dur + 0.25), eng
 
-    with ThreadPoolExecutor(max_workers=min(4, cfg.max_workers)) as pool:
+    with ThreadPoolExecutor(max_workers=2) as pool:
         futs = [pool.submit(_synth_one, sc) for sc in scenes]
         done_cnt = 0
         for fut in as_completed(futs):
@@ -793,7 +821,7 @@ def run_agent3_media_pipeline(
     )
 
     # ------------------------------------------------------------------
-    # STAGE 5: Stitch 16:9 (1080p) + Burn Word-Level Active-Highlight `.ass` Subtitles
+    # STAGE 5: Stitch 16:9 (1080p) + Continuous 44.1kHz Stereo Audio + Burn `.ass` Subtitles
     # ------------------------------------------------------------------
     database.upsert_job(
         job_id=f"{project_id}_assemble_16x9",
@@ -803,37 +831,24 @@ def run_agent3_media_pipeline(
         label=stage_defs[4][1],
         status="running",
         progress_pct=30,
-        message="Muxing scenes & burning active-highlight .ass subtitles (1080p)...",
+        message="Stitching video + continuous 44.1kHz stereo audio + active-highlight .ass subtitles (1080p)...",
     )
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    muxed_16_list: List[Path] = []
+    vid_16_list: List[Path] = []
+    aud_16_list: List[Path] = []
     for sc in scenes:
-        vis_p = visual_results[sc.scene_index][0]
-        aud_p = master_audio_paths[sc.scene_index]
-        dur = voice_results[sc.scene_index][1]
-        seg_mp4 = clips_16_dir / f"seg_{sc.scene_index:03d}_mux.mp4"
-        subprocess.run(
-            [
-                ffmpeg_exe, "-y",
-                "-i", str(vis_p),
-                "-i", str(aud_p),
-                "-map", "0:v:0", "-map", "1:a:0",
-                "-t", f"{dur:.2f}",
-                "-c:v", "copy",
-                "-c:a", "aac", "-b:a", "192k",
-                str(seg_mp4),
-            ],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
-        muxed_16_list.append(seg_mp4)
+        vid_16_list.append(visual_results[sc.scene_index][0])
+        aud_16_list.append(master_audio_paths[sc.scene_index])
+
+    # Seamless single continuous PCM master track (zero AAC concat discontinuities!)
+    full_master_16_wav = renders_dir / "master_audio_16x9.wav"
+    concat_wav_segments(aud_16_list, full_master_16_wav)
 
     concat_16_txt = renders_dir / "concat_16x9.txt"
-    concat_16_txt.write_text("\n".join(f"file '{p.resolve().as_posix()}'" for p in muxed_16_list), encoding="utf-8")
-    raw_16x9_mp4 = renders_dir / "raw_16x9_1080p.mp4"
+    concat_16_txt.write_text("\n".join(f"file '{p.resolve().as_posix()}'" for p in vid_16_list), encoding="utf-8")
+    raw_vid_16x9 = renders_dir / "raw_video_only_16x9.mp4"
     subprocess.run(
-        [ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_16_txt), "-c", "copy", str(raw_16x9_mp4)],
+        [ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_16_txt), "-c:v", "copy", "-an", str(raw_vid_16x9)],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -843,7 +858,7 @@ def run_agent3_media_pipeline(
     write_active_highlight_ass_file(all_words_16x9, ass_16_path, aspect_ratio="16:9")
 
     final_16x9_mp4 = renders_dir / "OMNI_FINAL_16x9_1080p.mp4"
-    _burn_ass_subtitles(raw_16x9_mp4, ass_16_path, final_16x9_mp4)
+    _mux_continuous_audio_and_burn_ass(raw_vid_16x9, full_master_16_wav, ass_16_path, final_16x9_mp4)
     database.upsert_job(
         job_id=f"{project_id}_assemble_16x9",
         project_id=project_id,
@@ -852,12 +867,12 @@ def run_agent3_media_pipeline(
         label=stage_defs[4][1],
         status="completed",
         progress_pct=100,
-        message=f"Completed ✅ (1080p 16:9 • {total_actual_duration:.1f}s)",
+        message=f"Completed ✅ (1080p 16:9 • 44.1kHz Stereo AAC • {total_actual_duration:.1f}s)",
         output_path=str(final_16x9_mp4),
     )
 
     # ------------------------------------------------------------------
-    # STAGE 6: 9:16 Vertical Shorts Cutdown (High-Retention Hook + Climax <= 58s)
+    # STAGE 6: 9:16 Vertical Shorts Cutdown (Continuous Stereo Audio + Active Captions <= 58s)
     # ------------------------------------------------------------------
     database.upsert_job(
         job_id=f"{project_id}_assemble_9x16",
@@ -867,9 +882,8 @@ def run_agent3_media_pipeline(
         label=stage_defs[5][1],
         status="running",
         progress_pct=35,
-        message="Building 9:16 vertical Shorts cutdown with burned-in active captions...",
+        message="Building 9:16 vertical Shorts cutdown with stereo audio & active captions...",
     )
-    # Pick hook + climax + outro scenes capping cleanly around 45-58 seconds for YouTube Shorts
     short_scenes: List[SceneClipSpec] = []
     short_dur_acc = 0.0
     prioritized = (
@@ -889,33 +903,31 @@ def run_agent3_media_pipeline(
             seen_sids.add(sc.scene_index)
             short_dur_acc += sdur
 
-    muxed_9_list: List[Path] = []
+    vid_9_list: List[Path] = []
+    aud_9_list: List[Path] = []
     short_words: List[TimedWord] = []
     short_cursor = 0.0
     for sc in short_scenes:
         dur = voice_results[sc.scene_index][1]
         vis_16 = visual_results[sc.scene_index][0]
-        aud_p = master_audio_paths[sc.scene_index]
-        seg_9 = clips_9_dir / f"short_seg_{sc.scene_index:03d}.mp4"
-        # Convert 16:9 clip to sleek centered 9:16 vertical framing (1080x1920)
+        seg_9 = clips_9_dir / f"short_vid_{sc.scene_index:03d}.mp4"
         subprocess.run(
             [
                 ffmpeg_exe, "-y",
                 "-i", str(vis_16),
-                "-i", str(aud_p),
                 "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p",
-                "-map", "0:v:0", "-map", "1:a:0",
                 "-t", f"{dur:.2f}",
                 "-r", str(cfg.fps),
+                "-an",
                 "-c:v", "libx264", "-preset", "ultrafast", "-crf", "21",
-                "-c:a", "aac", "-b:a", "192k",
                 str(seg_9),
             ],
             check=True,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
         )
-        muxed_9_list.append(seg_9)
+        vid_9_list.append(seg_9)
+        aud_9_list.append(master_audio_paths[sc.scene_index])
         short_words.extend(
             extract_scene_word_timestamps(
                 voice_results[sc.scene_index][0],
@@ -928,11 +940,14 @@ def run_agent3_media_pipeline(
         )
         short_cursor += dur
 
+    full_master_9_wav = renders_dir / "master_audio_9x16.wav"
+    concat_wav_segments(aud_9_list, full_master_9_wav)
+
     concat_9_txt = renders_dir / "concat_9x16.txt"
-    concat_9_txt.write_text("\n".join(f"file '{p.resolve().as_posix()}'" for p in muxed_9_list), encoding="utf-8")
-    raw_9x16_mp4 = renders_dir / "raw_9x16_shorts.mp4"
+    concat_9_txt.write_text("\n".join(f"file '{p.resolve().as_posix()}'" for p in vid_9_list), encoding="utf-8")
+    raw_vid_9x16 = renders_dir / "raw_video_only_9x16.mp4"
     subprocess.run(
-        [ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_9_txt), "-c", "copy", str(raw_9x16_mp4)],
+        [ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_9_txt), "-c:v", "copy", "-an", str(raw_vid_9x16)],
         check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
@@ -942,7 +957,7 @@ def run_agent3_media_pipeline(
     write_active_highlight_ass_file(short_words, ass_9_path, aspect_ratio="9:16")
 
     final_9x16_mp4 = renders_dir / "OMNI_SHORTS_9x16.mp4"
-    _burn_ass_subtitles(raw_9x16_mp4, ass_9_path, final_9x16_mp4)
+    _mux_continuous_audio_and_burn_ass(raw_vid_9x16, full_master_9_wav, ass_9_path, final_9x16_mp4)
     database.upsert_job(
         job_id=f"{project_id}_assemble_9x16",
         project_id=project_id,
@@ -951,7 +966,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[5][1],
         status="completed",
         progress_pct=100,
-        message=f"Completed ✅ (9:16 Shorts • {short_cursor:.1f}s)",
+        message=f"Completed ✅ (9:16 Shorts • 44.1kHz Stereo AAC • {short_cursor:.1f}s)",
         output_path=str(final_9x16_mp4),
     )
 

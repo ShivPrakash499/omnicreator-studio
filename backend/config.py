@@ -47,6 +47,18 @@ def _load_local_dotenv() -> None:
         pass
 
 
+def sync_streamlit_secrets_to_env() -> None:
+    """Copies top-level Streamlit Secrets into `os.environ` on the main thread so background worker threads always see them."""
+    try:
+        import streamlit as st
+        if hasattr(st, "secrets"):
+            for k, v in st.secrets.items():
+                if isinstance(v, str) and v.strip() and k not in os.environ:
+                    os.environ[k] = v.strip()
+    except Exception:
+        pass
+
+
 _load_local_dotenv()
 
 from google import genai

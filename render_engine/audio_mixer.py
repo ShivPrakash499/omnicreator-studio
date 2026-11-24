@@ -122,51 +122,62 @@ def synthesize_scene_voiceover(
         except Exception as exc:
             logger.debug("Cloud TTS Chirp 3 HD skipped (%s); trying Gemini 3.8 TTS.", exc)
 
-    # 2. Gemini 3.8 Flash TTS (Vertex AI native `generate_content` OR Developer API `interactions.create`)
+    # 2. Gemini 3.8 Flash TTS (Vertex AI native `generate_content` with retry/backoff OR Developer API)
     if cfg.has_valid_gemini_key and not prefer_fast_local_tts:
-        try:
-            tts_model = resolve_current_model(TTS_EXPRESSIVE_MODEL, "gemini-3.8-flash-tts")
-            client = get_genai_client(cfg.gemini_api_key)
-            v_creds, v_proj = get_vertex_adc_credentials()
-            if v_creds is not None and v_proj:
-                resp = client.models.generate_content(
-                    model=tts_model,
-                    contents=f"Speak with this style ({vprof['style_prompt']}): {plain_text}",
-                    config=genai_types.GenerateContentConfig(
-                        response_modalities=["AUDIO"],
-                        speech_config=genai_types.SpeechConfig(
-                            voice_config=genai_types.VoiceConfig(
-                                prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name=vprof["gemini_voice"])
-                            )
+        tts_model = resolve_current_model(TTS_EXPRESSIVE_MODEL, "gemini-3.8-flash-tts")
+        v_creds, v_proj = get_vertex_adc_credentials()
+        if v_creds is not None and v_proj:
+            import time as _t
+            for attempt in range(1, 5):
+                try:
+                    client = get_genai_client(cfg.gemini_api_key)
+                    resp = client.models.generate_content(
+                        model=tts_model,
+                        contents=f"Speak naturally in this style ({vprof['style_prompt']}): {plain_text}",
+                        config=genai_types.GenerateContentConfig(
+                            response_modalities=["AUDIO"],
+                            speech_config=genai_types.SpeechConfig(
+                                voice_config=genai_types.VoiceConfig(
+                                    prebuilt_voice_config=genai_types.PrebuiltVoiceConfig(voice_name=vprof["gemini_voice"])
+                                )
+                            ),
                         ),
-                    ),
-                )
-                raw_pcm: Optional[bytes] = None
-                mime_a = "audio/wav"
-                for cand in getattr(resp, "candidates", []) or []:
-                    for part in getattr(getattr(cand, "content", None), "parts", []) or []:
-                        if getattr(part, "inline_data", None) and part.inline_data.data:
-                            raw_pcm = bytes(part.inline_data.data)
-                            mime_a = getattr(part.inline_data, "mime_type", "audio/wav") or "audio/wav"
+                    )
+                    raw_pcm: Optional[bytes] = None
+                    mime_a = "audio/wav"
+                    for cand in getattr(resp, "candidates", []) or []:
+                        for part in getattr(getattr(cand, "content", None), "parts", []) or []:
+                            if getattr(part, "inline_data", None) and part.inline_data.data:
+                                raw_pcm = bytes(part.inline_data.data)
+                                mime_a = getattr(part.inline_data, "mime_type", "audio/wav") or "audio/wav"
+                                break
+                        if raw_pcm:
                             break
-                    if raw_pcm:
-                        break
-                if raw_pcm:
-                    if "pcm" in mime_a.lower() or "l16" in mime_a.lower() or not raw_pcm.startswith(b"RIFF"):
-                        with wave.open(str(output_wav_path), "wb") as wf:
-                            wf.setnchannels(1)
-                            wf.setsampwidth(2)
-                            wf.setframerate(24000)
-                            wf.writeframes(raw_pcm)
-                    else:
-                        tmp_raw = output_wav_path.with_suffix(".vertex.raw")
-                        tmp_raw.write_bytes(raw_pcm)
-                        _convert_any_audio_to_wav24k(tmp_raw, output_wav_path)
-                        tmp_raw.unlink(missing_ok=True)
-                    dur = get_wav_duration_sec(output_wav_path)
-                    if dur > 0.5:
-                        return output_wav_path, dur, f"vertex_tts({tts_model})"
-            else:
+                    if raw_pcm and len(raw_pcm) > 512:
+                        if raw_pcm.startswith(b"RIFF"):
+                            tmp_wav = output_wav_path.with_suffix(".vertex.wav")
+                            tmp_wav.write_bytes(raw_pcm)
+                            _convert_any_audio_to_wav24k(tmp_wav, output_wav_path)
+                            tmp_wav.unlink(missing_ok=True)
+                        else:
+                            with wave.open(str(output_wav_path), "wb") as wf:
+                                wf.setnchannels(1)
+                                wf.setsampwidth(2)
+                                wf.setframerate(24000)
+                                wf.writeframes(raw_pcm)
+                        dur = get_wav_duration_sec(output_wav_path)
+                        if dur > 0.5:
+                            return output_wav_path, dur, f"vertex_tts({tts_model})"
+                except Exception as exc:
+                    err_low = str(exc).lower()
+                    if any(tok in err_low for tok in ("429", "resource_exhausted", "quota", "503", "timeout")) and attempt < 4:
+                        _t.sleep(min(12.0, 1.8 * (2 ** (attempt - 1))))
+                        continue
+                    logger.info("Vertex Gemini 3.8 TTS fell back to Edge-TTS (attempt %d): %s", attempt, exc)
+                    break
+        else:
+            try:
+                client = get_genai_client(cfg.gemini_api_key)
                 interaction = call_interaction_with_fallback(
                     client,
                     models=[tts_model, "gemini-3.8-flash-lite-tts"],
@@ -198,15 +209,15 @@ def synthesize_scene_voiceover(
                         if isinstance(out_aud.data, str)
                         else bytes(out_aud.data)
                     )
-                    tmp_raw = output_wav_path.with_suffix(".gemini.raw")
+                    tmp_raw = output_wav_path.with_suffix(".gemini.wav")
                     tmp_raw.write_bytes(raw_bytes)
                     _convert_any_audio_to_wav24k(tmp_raw, output_wav_path)
                     tmp_raw.unlink(missing_ok=True)
                     dur = get_wav_duration_sec(output_wav_path)
                     if dur > 0.5:
                         return output_wav_path, dur, f"gemini_tts({tts_model})"
-        except Exception as exc:
-            logger.info("Gemini 3.8 TTS fell back to Edge-TTS: %s", exc)
+            except Exception as exc:
+                logger.info("Gemini 3.8 TTS fell back to Edge-TTS: %s", exc)
 
     # 3. High-clarity local Edge-TTS (`hi-IN-MadhurNeural` / `en-IN-PrabhatNeural`)
     try:
@@ -281,7 +292,9 @@ def generate_niche_bgm_stem(
         f"High-spirited, engaging YouTube documentary pace, clean midrange space so voiceover sits cleanly on top."
     )
 
-    if use_lyria_api and cfg.has_valid_gemini_key:
+    # Skip Interactions lyria-3.5 when running on Vertex AI (where lyria-3.5 isn't supported in Interactions API)
+    v_creds, v_proj = get_vertex_adc_credentials()
+    if use_lyria_api and cfg.has_valid_gemini_key and v_creds is None:
         try:
             client = get_genai_client(cfg.gemini_api_key)
             interaction = call_interaction_with_fallback(
@@ -429,3 +442,24 @@ def mix_scene_master_audio(
         wf.setframerate(sr)
         wf.writeframes(out_buf)
     return output_master_wav
+
+
+def concat_wav_segments(wav_paths: List[Path], output_wav: Path) -> Path:
+    """
+    Concatenates scene master WAVs directly at the raw PCM level into ONE seamless continuous WAV
+    (eliminating AAC concat edit-list discontinuities that mute audio in browsers!).
+    """
+    output_wav.parent.mkdir(parents=True, exist_ok=True)
+    sr = 24000
+    all_frames = bytearray()
+    for p in wav_paths:
+        if not p.exists():
+            continue
+        with wave.open(str(p), "rb") as wf:
+            all_frames.extend(wf.readframes(wf.getnframes()))
+    with wave.open(str(output_wav), "wb") as out_wf:
+        out_wf.setnchannels(1)
+        out_wf.setsampwidth(2)
+        out_wf.setframerate(sr)
+        out_wf.writeframes(all_frames)
+    return output_wav

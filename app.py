@@ -34,6 +34,7 @@ from backend.config import (
     OmniStudioConfig,
     format_timestamp,
     sanitize_slug,
+    sync_streamlit_secrets_to_env,
 )
 from backend.schemas import Agent1Output, Agent2Output, Agent3Output, Agent4Output, SceneClipSpec
 from render_engine.thumbnail_studio import generate_high_ctr_thumbnail
@@ -215,6 +216,7 @@ def _load_project_into_session(project_id: str) -> None:
     st.session_state["publish_balloons_shown"] = False
 
 
+sync_streamlit_secrets_to_env()
 _init_session_state()
 cfg = OmniStudioConfig()
 db = get_db()
@@ -887,6 +889,10 @@ elif step == 3:
                 st.markdown("#### 📺 Final 1080p Long-Form Video (16:9 + Burned-In Active Subtitles)")
                 if Path(a3.video_16x9_path).exists():
                     st.video(a3.video_16x9_path)
+                    master_wav_p = Path(a3.video_16x9_path).parent / "master_audio_16x9.wav"
+                    if master_wav_p.exists():
+                        st.caption("🔊 Master Voiceover + (-24dB) Ducked BGM Audio Preview:")
+                        st.audio(str(master_wav_p))
                     with open(a3.video_16x9_path, "rb") as vfp:
                         st.download_button(
                             "⬇️ Download 16:9 1080p MP4",
