@@ -139,6 +139,25 @@ class OmniDatabase:
                     updated_at TEXT NOT NULL,
                     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
                 );
+
+                CREATE TABLE IF NOT EXISTS api_spend_log (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date_utc TEXT NOT NULL,
+                    project_id TEXT DEFAULT '',
+                    operation TEXT NOT NULL,
+                    model TEXT DEFAULT '',
+                    estimated_usd REAL NOT NULL,
+                    created_at TEXT NOT NULL
+                );
+
+                CREATE INDEX IF NOT EXISTS idx_spend_date
+                    ON api_spend_log(date_utc);
+
+                CREATE TABLE IF NOT EXISTS studio_settings (
+                    key TEXT PRIMARY KEY,
+                    value TEXT NOT NULL,
+                    updated_at TEXT NOT NULL
+                );
                 """
             )
             # Safe, race-proof, retryable idempotent migration for existing SQLite databases
@@ -708,6 +727,77 @@ class OmniDatabase:
                     (limit,),
                 ).fetchall()
             return [dict(r) for r in rows]
+
+    # ------------------------------------------------------------------
+    # Daily API Spend Tracking & Studio Settings (Budget Throttle)
+    # ------------------------------------------------------------------
+    def record_api_spend(
+        self,
+        project_id: str,
+        operation: str,
+        estimated_usd: float,
+        *,
+        model: str = "",
+    ) -> float:
+        """Records an estimated paid AI API call (USD) for today's UTC date and returns updated daily total."""
+        amt = max(0.0, float(estimated_usd))
+        now = _utc_now()
+        today = now[:10]
+        with self._connect() as conn:
+            if amt > 0.0:
+                conn.execute(
+                    """
+                    INSERT INTO api_spend_log (date_utc, project_id, operation, model, estimated_usd, created_at)
+                    VALUES (?, ?, ?, ?, ?, ?)
+                    """,
+                    (today, (project_id or "").strip(), operation.strip(), (model or "").strip(), amt, now),
+                )
+            row = conn.execute(
+                "SELECT COALESCE(SUM(estimated_usd), 0.0) AS total FROM api_spend_log WHERE date_utc = ?",
+                (today,),
+            ).fetchone()
+            return round(float(row["total"] if row else 0.0), 4)
+
+    def get_daily_spend_usd(self, date_utc: Optional[str] = None) -> float:
+        target_day = (date_utc or _utc_now()[:10]).strip()
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT COALESCE(SUM(estimated_usd), 0.0) AS total FROM api_spend_log WHERE date_utc = ?",
+                (target_day,),
+            ).fetchone()
+            return round(float(row["total"] if row else 0.0), 4)
+
+    def get_daily_spend_breakdown(self, date_utc: Optional[str] = None) -> List[Dict[str, Any]]:
+        target_day = (date_utc or _utc_now()[:10]).strip()
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT operation, COUNT(*) AS calls, ROUND(SUM(estimated_usd), 3) AS total_usd
+                FROM api_spend_log
+                WHERE date_utc = ?
+                GROUP BY operation
+                ORDER BY total_usd DESC
+                """,
+                (target_day,),
+            ).fetchall()
+            return [dict(r) for r in rows]
+
+    def get_setting(self, key: str, default: str = "") -> str:
+        with self._connect() as conn:
+            row = conn.execute("SELECT value FROM studio_settings WHERE key = ?", (key.strip(),)).fetchone()
+            return str(row["value"]) if row else default
+
+    def set_setting(self, key: str, value: str) -> None:
+        now = _utc_now()
+        with self._connect() as conn:
+            conn.execute(
+                """
+                INSERT INTO studio_settings (key, value, updated_at)
+                VALUES (?, ?, ?)
+                ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+                """,
+                (key.strip(), str(value), now),
+            )
 
 
 _DB_SINGLETON: Optional[OmniDatabase] = None

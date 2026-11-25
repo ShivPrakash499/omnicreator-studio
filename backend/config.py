@@ -400,10 +400,18 @@ STRICT_PHYSICAL_REALISM_AND_NO_CAMERA_RULE: str = (
     "Maintain 100% realistic human and animal anatomy and natural physical laws (no surreal or misplaced liquids/limbs)."
 )
 
+NEGATIVE_PROMPT_BLACKLIST: str = (
+    "NEGATIVE PROMPT BLACKLIST: Video camera, film camera, modern filming gear, camera crew, tripod, film crew, "
+    "boom mic, studio lights, modern tech, lens, wires, production rigs, contemporary materials, plastic, "
+    "fantastical artificial glow, surreal distortions, mutant animals, unnatural liquid from mouth, deformed anatomy, "
+    "morphing faces, floating text, Chinese or foreign letters, watermarks."
+)
+
 VEO_STRICT_NEGATIVE_PROMPT: str = (
-    "camera, video camera, film camera, DSLR, camera lens, tripod, gimbal, Steadicam, drone, film crane, "
-    "film crew, boom microphone, studio lights, behind the scenes, modern equipment, smartphone, "
-    "deformed anatomy, unnatural liquid from mouth, extra limbs, morphing faces, "
+    "video camera, film camera, modern filming gear, camera crew, tripod, film crew, boom microphone, studio lights, "
+    "modern tech, camera lens, wires, production rigs, DSLR, gimbal, Steadicam, drone, film crane, behind the scenes, "
+    "contemporary materials, plastic, artificial glow, surreal distortions, mutant animals, unnatural liquid from mouth, "
+    "deformed anatomy, extra limbs, morphing faces, "
     "Chinese text, Mandarin characters, Hanzi, Kanji, Japanese text, Korean Hangul, Cyrillic text, "
     "gibberish letters, garbled text, distorted license plates, watermarks, floating subtitles, text overlays, "
     "PowerPoint slides, flat 2D clipart, infographic bar charts, wireframe grid floor, neon grid clipart, "
@@ -450,6 +458,10 @@ def _scrub_camera_gear_and_anachronisms(text: str) -> str:
         (r"\bCamera\s+(tracks|glides|slides|pulls|rises|pans|orbits|moves|sweeps)\b", r"The viewpoint smoothly \1"),
         (r"\bthe\s+camera\s+(tracks|glides|slides|pulls|rises|pans|orbits|moves|sweeps)\b", r"the viewpoint smoothly \1"),
         (r"\b(?:video|film|cinema)\s+camera\b", "theatrical perspective"),
+        (r"\bcamera\s+style\b", "visual style"),
+        (r"\bfilm\s+look\b", "natural theatrical aesthetic"),
+        (r"\ban\s+actor\b", "a realistic historical figure"),
+        (r"\bactors\b", "historical figures"),
         (r"\b120fps\b", "graceful slow-motion"),
         (r"\bat\s+f/1\.4\b", "with shallow depth of field"),
         (r"\bshallow\s+f/1\.4\b", "shallow"),
@@ -502,7 +514,7 @@ def build_cinematic_video_prompt(
 
     cleaned = (raw_prompt or "").strip()
     # Idempotently strip prior appended boilerplate so re-enhancing (Agent 2 -> Agent 3) never duplicates clauses
-    for marker in ("Sound design:", "Execution:", "ZERO CAMERAS", "STRICT VISUAL LANGUAGE RULE:"):
+    for marker in ("Sound design:", "Execution:", "ZERO CAMERAS", "NEGATIVE PROMPT BLACKLIST:", "STRICT VISUAL LANGUAGE RULE:"):
         if marker in cleaned:
             cleaned = cleaned.split(marker)[0].strip()
 
@@ -567,7 +579,8 @@ def build_cinematic_video_prompt(
     parts.append(
         f"Execution: Single unbroken continuous {dur_int}-second {aspect_phrase} shot with lived-in natural micro-motion "
         f"(drifting atmospheric haze, realistic reflections, fluid physics). No scene cuts, no split screens, "
-        f"no UI overlays. {STRICT_PHYSICAL_REALISM_AND_NO_CAMERA_RULE} {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
+        f"no UI overlays. {STRICT_PHYSICAL_REALISM_AND_NO_CAMERA_RULE} {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE} "
+        f"{NEGATIVE_PROMPT_BLACKLIST}"
     )
     return " ".join(parts)
 

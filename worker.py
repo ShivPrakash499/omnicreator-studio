@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import argparse
 import logging
+import os
 import threading
 import traceback
 from concurrent.futures import Future, ThreadPoolExecutor
@@ -24,17 +25,104 @@ from storage.db import OmniDatabase, get_db
 
 logger = logging.getLogger("omni_studio.worker")
 
+DEFAULT_DAILY_COST_LIMIT_USD: float = float(os.getenv("OMNI_DAILY_COST_LIMIT_USD", "10.0") or "10.0")
+
+
+class BudgetLimitExceededError(RuntimeError):
+    """Raised when today's cumulative AI API spend would cross the user's hard daily cost limit."""
+
+    def __init__(self, spent_usd: float, limit_usd: float, requested_usd: float = 0.0) -> None:
+        self.spent_usd = round(float(spent_usd), 2)
+        self.limit_usd = round(float(limit_usd), 2)
+        self.requested_usd = round(float(requested_usd), 2)
+        spent_inr = int(round(self.spent_usd * 85.5))
+        limit_inr = int(round(self.limit_usd * 85.5))
+        super().__init__(
+            f"Daily Budget Guard paused generation: Today's AI spend (${self.spent_usd:.2f} / ≈ ₹{spent_inr:,}) "
+            f"+ next step (${self.requested_usd:.2f}) exceeds your daily limit (${self.limit_usd:.2f} / ≈ ₹{limit_inr:,}). "
+            f"All already-completed frames and clips are safely saved on disk. Increase your Daily Budget Limit in Studio if you want to continue."
+        )
+
 
 class BackgroundWorkerManager:
-    """Singleton process-level background worker coordinator backed by SQLite telemetry."""
+    """Singleton process-level background worker coordinator backed by SQLite telemetry & Daily Budget Throttle."""
 
-    def __init__(self, max_workers: Optional[int] = None, db: Optional[OmniDatabase] = None) -> None:
+    def __init__(
+        self,
+        max_workers: Optional[int] = None,
+        db: Optional[OmniDatabase] = None,
+        cost_limit_usd: Optional[float] = None,
+    ) -> None:
         cfg = OmniStudioConfig()
         self.max_workers = max_workers or cfg.max_workers
         self.db = db or get_db()
+        self._default_cost_limit_usd = float(cost_limit_usd) if cost_limit_usd is not None else DEFAULT_DAILY_COST_LIMIT_USD
         self._executor = ThreadPoolExecutor(max_workers=self.max_workers, thread_name_prefix="omni_worker")
         self._lock = threading.RLock()
         self._active_futures: Dict[str, Future[Any]] = {}
+
+    # ------------------------------------------------------------------
+    # Hard Daily Budget Throttle (`cost_limit`)
+    # ------------------------------------------------------------------
+    def get_daily_cost_limit_usd(self) -> float:
+        raw = self.db.get_setting("daily_cost_limit_usd", "")
+        if raw:
+            try:
+                val = float(raw)
+                if val > 0:
+                    return round(val, 2)
+            except Exception:
+                pass
+        return round(self._default_cost_limit_usd, 2)
+
+    def set_daily_cost_limit_usd(self, limit_usd: float) -> float:
+        clamped = round(max(1.0, min(500.0, float(limit_usd))), 2)
+        self.db.set_setting("daily_cost_limit_usd", f"{clamped:.2f}")
+        return clamped
+
+    def get_daily_budget_status(self, cost_limit_usd: Optional[float] = None) -> Dict[str, Any]:
+        limit = round(float(cost_limit_usd), 2) if (cost_limit_usd is not None and cost_limit_usd > 0) else self.get_daily_cost_limit_usd()
+        spent = round(self.db.get_daily_spend_usd(), 2)
+        remaining = round(max(0.0, limit - spent), 2)
+        pct = min(100, int(round((spent / max(0.01, limit)) * 100)))
+        return {
+            "spent_usd": spent,
+            "limit_usd": limit,
+            "remaining_usd": remaining,
+            "pct_used": pct,
+            "is_exceeded": spent >= limit,
+            "breakdown": self.db.get_daily_spend_breakdown(),
+        }
+
+    def check_daily_budget(
+        self,
+        next_cost_usd: float = 0.0,
+        *,
+        cost_limit_usd: Optional[float] = None,
+    ) -> float:
+        """
+        Enforces the hard daily spend cap BEFORE executing any paid AI API call.
+        Raises `BudgetLimitExceededError` if today's spend + `next_cost_usd` crosses `cost_limit_usd`.
+        Returns remaining daily budget (USD) if allowed.
+        """
+        with self._lock:
+            limit = round(float(cost_limit_usd), 2) if (cost_limit_usd is not None and cost_limit_usd > 0) else self.get_daily_cost_limit_usd()
+            spent = self.db.get_daily_spend_usd()
+            req = max(0.0, float(next_cost_usd))
+            if (req > 0.0 and (spent + req) > limit + 1e-6) or (req == 0.0 and spent >= limit):
+                raise BudgetLimitExceededError(spent_usd=spent, limit_usd=limit, requested_usd=req)
+            return round(max(0.0, limit - spent), 2)
+
+    def record_api_spend(
+        self,
+        project_id: str,
+        operation: str,
+        estimated_usd: float,
+        *,
+        model: str = "",
+    ) -> float:
+        with self._lock:
+            return self.db.record_api_spend(project_id, operation, estimated_usd, model=model)
 
     def is_running(self, task_key: str) -> bool:
         with self._lock:
@@ -59,9 +147,12 @@ class BackgroundWorkerManager:
         fn: Callable[..., Any],
         args: tuple = (),
         kwargs: Optional[Dict[str, Any]] = None,
+        estimated_cost_usd: float = 0.0,
+        cost_limit_usd: Optional[float] = None,
     ) -> bool:
         """
         Submits a background callable if not already running under `task_key`.
+        Enforces the hard Daily Budget Throttle before launching paid tasks.
         Returns True if newly launched, False if already in progress.
         """
         kwargs = kwargs or {}
@@ -69,6 +160,10 @@ class BackgroundWorkerManager:
             existing = self._active_futures.get(task_key)
             if existing is not None and not existing.done():
                 return False
+
+            # Hard pre-flight budget check: refuse to launch new paid jobs if daily budget is already exhausted
+            if float(estimated_cost_usd or 0.0) > 0.0:
+                self.check_daily_budget(next_cost_usd=0.0, cost_limit_usd=cost_limit_usd)
 
             self.db.upsert_job(
                 job_id=task_key,

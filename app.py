@@ -23,7 +23,13 @@ import streamlit as st
 
 from backend.agent1_seo_storyboard import run_agent1_seo_and_storyboard
 from backend.agent2_scene_scripter import enhance_all_scenes_to_cinema, run_agent2_scene_scripting
-from backend.agent3_media_composer import estimate_render_cost_usd, run_agent3_media_pipeline
+from backend.agent3_media_composer import (
+    estimate_render_cost_usd,
+    regenerate_single_scene_frame,
+    run_agent3_keyframe_preview_batch,
+    run_agent3_media_pipeline,
+    select_hybrid_hero_scene_indices,
+)
 from backend.agent4_youtube_publisher import (
     build_youtube_oauth_url,
     create_youtube_playlist,
@@ -56,7 +62,7 @@ from storage.cloud_sync import (
     restore_projects_from_gcs_once,
 )
 from storage.db import get_db
-from worker import get_worker_manager
+from worker import BudgetLimitExceededError, get_worker_manager
 
 # ==============================================================================
 # PAGE CONFIG & MODERN HIGH-CONTRAST 3D STUDIO STYLING
@@ -1754,23 +1760,275 @@ elif step == 3:
                         st.success("✅ Studio photo updated!")
 
         is_rendering = worker.is_running(render_task_key)
-        proj_clips_dir = cfg.projects_dir / f"{pid}_{sanitize_slug(a1.topic)}" / "clips_16x9"
+        frames_task_key = f"frames_{pid}"
+        is_previewing_frames = worker.is_running(frames_task_key)
+        any_busy = is_rendering or is_previewing_frames
+
+        proj_dir_s3 = cfg.projects_dir / f"{pid}_{sanitize_slug(a1.topic)}"
+        proj_clips_dir = proj_dir_s3 / "clips_16x9"
         cached_vis_count = (
             len([fp for fp in proj_clips_dir.glob("scene_*_vis.mp4") if fp.stat().st_size > 16384])
             if proj_clips_dir.exists()
             else 0
         )
+        approved_kf_indices: set = set()
+        if proj_clips_dir.exists():
+            for sc_chk in a2.scenes:
+                kfp = proj_clips_dir / f"scene_{sc_chk.scene_index:03d}_keyframe.png"
+                if kfp.exists() and kfp.stat().st_size > 16384:
+                    approved_kf_indices.add(sc_chk.scene_index)
 
-        # Transparent Live Credit Cost Estimator Card (shown BEFORE clicking Generate!)
-        fresh_est = estimate_render_cost_usd(a2.scenes, render_quality, cached_scene_count=0, use_fast_tts=fast_tts)
+        # ------------------------------------------------------------------
+        # 🛡️ HARD DAILY BUDGET THROTTLE BAR (Prevents Surprise Cloud Bills!)
+        # ------------------------------------------------------------------
+        cur_limit_usd = worker.get_daily_cost_limit_usd()
+        budget_stat = worker.get_daily_budget_status()
+        with st.container(border=True):
+            bg_c1, bg_c2 = st.columns([2.1, 0.9])
+            with bg_c1:
+                spent_inr = int(round(budget_stat["spent_usd"] * 85.5))
+                limit_inr = int(round(budget_stat["limit_usd"] * 85.5))
+                if budget_stat["is_exceeded"]:
+                    st.error(
+                        f"🛑 **Daily Budget Limit Reached:** `${budget_stat['spent_usd']:.2f}` / `${budget_stat['limit_usd']:.2f}` "
+                        f"(≈ ₹{spent_inr:,} / ₹{limit_inr:,}) — paid generation is paused automatically."
+                    )
+                else:
+                    st.markdown(
+                        f"🛡️ **Daily Budget Guard:** `${budget_stat['spent_usd']:.2f}` / `${budget_stat['limit_usd']:.2f}` used today "
+                        f"(≈ ₹{spent_inr:,} / ₹{limit_inr:,}) · Auto-pauses if daily cap is crossed"
+                    )
+                st.progress(min(1.0, budget_stat["pct_used"] / 100.0))
+            with bg_c2:
+                new_daily_limit = st.number_input(
+                    "Daily Cap ($ USD):",
+                    min_value=1.0,
+                    max_value=200.0,
+                    value=float(cur_limit_usd),
+                    step=1.0,
+                    help="Hard daily spend cap enforced before every paid AI image or video API call.",
+                    key="daily_budget_limit_in",
+                )
+                if abs(float(new_daily_limit) - float(cur_limit_usd)) > 0.01:
+                    worker.set_daily_cost_limit_usd(float(new_daily_limit))
+                    st.rerun()
+
+        active_daily_limit = float(new_daily_limit)
+
+        # Resolve per-scene I2V animation selection (defaults cleanly to Hybrid Hero / All / None)
+        ai_scenes_s3 = [
+            s for s in a2.scenes
+            if not (s.asset_mode == "custom_upload" and bool((s.custom_asset_path or "").strip()))
+        ]
+        default_hero_ids = select_hybrid_hero_scene_indices(a2.scenes)
+        anim_state_key = f"i2v_anim_mode_{pid}"
+        if st.session_state.get(anim_state_key) != render_quality:
+            st.session_state[anim_state_key] = render_quality
+            for sc_i in a2.scenes:
+                if render_quality == "hybrid_cinema":
+                    st.session_state[f"i2v_chk_{pid}_{sc_i.scene_index}"] = (sc_i.scene_index in default_hero_ids)
+                elif render_quality == "full_omni_video":
+                    st.session_state[f"i2v_chk_{pid}_{sc_i.scene_index}"] = True
+                else:
+                    st.session_state[f"i2v_chk_{pid}_{sc_i.scene_index}"] = False
+
+        selected_i2v_ids: set = {
+            s.scene_index
+            for s in ai_scenes_s3
+            if st.session_state.get(f"i2v_chk_{pid}_{s.scene_index}", s.scene_index in default_hero_ids)
+        }
+
+        # ------------------------------------------------------------------
+        # STAGE A: 🖼️ HUMAN-IN-THE-LOOP 2D FRAME PREVIEW & APPROVAL GATE (I2V)
+        # ------------------------------------------------------------------
+        needs_ai_gate = (len(ai_scenes_s3) > 0 and render_quality != "fast_studio_preview")
+        frames_approved = not needs_ai_gate
+        if needs_ai_gate:
+            preview_est = estimate_render_cost_usd(
+                a2.scenes,
+                render_quality,
+                cached_scene_count=0,
+                use_fast_tts=fast_tts,
+                approved_keyframe_indices=approved_kf_indices,
+                animate_scene_indices=selected_i2v_ids,
+            )
+            prev_usd = preview_est["preview_frames_usd"]
+            prev_inr = int(round(prev_usd * 85.5))
+            missing_preview_cnt = sum(1 for s in ai_scenes_s3 if s.scene_index not in approved_kf_indices)
+            with st.container(border=True):
+                st.markdown("#### 🖼️ Step 1: Preview & Approve 2D Scene Frames First (Image-to-Video Gate)")
+                st.caption(
+                    "Verify every scene's face, anatomy, and zero-camera accuracy as cheap 2D frames (~₹4/frame) "
+                    "BEFORE animating video clips — fix any single scene for ₹4 instead of wasting ₹560 on retries!"
+                )
+                fp_c1, fp_c2 = st.columns([1.8, 1.0])
+                with fp_c1:
+                    gen_frames_lbl = (
+                        f"🖼️ Generate {missing_preview_cnt} Missing Preview Frames (~${prev_usd:.2f} / ≈ ₹{prev_inr:,})"
+                        if missing_preview_cnt > 0
+                        else f"✅ All {len(approved_kf_indices)}/{len(ai_scenes_s3)} Scene Frames Ready for Review"
+                    )
+                    run_frame_preview = st.button(
+                        gen_frames_lbl,
+                        type="primary" if missing_preview_cnt > 0 else "secondary",
+                        use_container_width=True,
+                        disabled=any_busy or (missing_preview_cnt == 0),
+                        key=f"btn_gen_preview_frames_{pid}",
+                    )
+                with fp_c2:
+                    regen_all_frames = st.button(
+                        "🔄 Regenerate All Frames",
+                        use_container_width=True,
+                        disabled=any_busy or (len(approved_kf_indices) == 0),
+                        key=f"btn_regen_all_frames_{pid}",
+                    )
+
+                if run_frame_preview or regen_all_frames:
+                    try:
+                        launched_fp = worker.submit_task(
+                            task_key=frames_task_key,
+                            project_id=pid,
+                            job_type="frame_preview",
+                            label=f"Preview Frames: {a1.topic[:28]}",
+                            fn=run_agent3_keyframe_preview_batch,
+                            kwargs={
+                                "project_id": pid,
+                                "agent1": a1,
+                                "agent2": a2,
+                                "cinema_preset": cinema_preset_s3,
+                                "regenerate_existing": bool(regen_all_frames),
+                                "cost_limit_usd": active_daily_limit,
+                                "config": cfg,
+                                "db": db,
+                            },
+                            estimated_cost_usd=max(0.05, prev_usd),
+                            cost_limit_usd=active_daily_limit,
+                        )
+                        if launched_fp:
+                            st.toast("Generating 2D preview frames...", icon="🖼️")
+                            st.rerun()
+                    except BudgetLimitExceededError as b_err:
+                        st.error(f"🛑 {b_err}")
+
+                fp_jobs = db.get_project_jobs(pid, job_type="frame_preview")
+                if is_previewing_frames or (fp_jobs and fp_jobs[-1].get("status") == "failed"):
+                    latest_fp = fp_jobs[-1] if fp_jobs else {"progress_pct": 5, "message": "Preparing preview frames..."}
+                    st.progress(latest_fp["progress_pct"] / 100.0)
+                    st.caption(f"🖼️ {latest_fp.get('message', '')}")
+                    fp_err = worker.get_task_error(frames_task_key)
+                    if fp_err:
+                        st.error(f"Frame preview paused: {fp_err}")
+                    if is_previewing_frames:
+                        time.sleep(2.0)
+                        st.rerun()
+
+                # Visual 3-Column Frame Review Gallery (with per-frame Edit Prompt + Regenerate ~₹4 + I2V toggle!)
+                if approved_kf_indices:
+                    st.markdown(f"**🔍 Visual Inspection Gallery ({len(approved_kf_indices)}/{len(ai_scenes_s3)} frames ready):**")
+                    per_gallery_page = 9
+                    g_pages = max(1, (len(ai_scenes_s3) + per_gallery_page - 1) // per_gallery_page)
+                    gal_page = (
+                        st.number_input(
+                            f"Gallery Page (9 frames/page, {g_pages} pages):",
+                            min_value=1,
+                            max_value=g_pages,
+                            value=1,
+                            step=1,
+                            key=f"gal_page_{pid}",
+                        )
+                        if g_pages > 1
+                        else 1
+                    )
+                    g_start = (int(gal_page) - 1) * per_gallery_page
+                    g_slice = ai_scenes_s3[g_start : g_start + per_gallery_page]
+                    for row_i in range(0, len(g_slice), 3):
+                        cols_g = st.columns(3)
+                        for col_j, sc_g in enumerate(g_slice[row_i : row_i + 3]):
+                            with cols_g[col_j]:
+                                kfp_g = proj_clips_dir / f"scene_{sc_g.scene_index:03d}_keyframe.png"
+                                with st.container(border=True):
+                                    st.markdown(f"**Scene {sc_g.scene_index:02d}** · {sc_g.chapter_label[:26]}")
+                                    if kfp_g.exists() and kfp_g.stat().st_size > 16384:
+                                        st.image(str(kfp_g), use_container_width=True)
+                                    else:
+                                        st.info("Not generated yet")
+                                    st.checkbox(
+                                        "🎬 Animate with I2V (~₹39)",
+                                        key=f"i2v_chk_{pid}_{sc_g.scene_index}",
+                                        disabled=any_busy,
+                                    )
+                                    with st.expander("✏️ Edit / Regenerate (~₹4)", expanded=False):
+                                        ed_p = st.text_area(
+                                            "Scene Prompt:",
+                                            value=sc_g.visual_prompt_veo_omni,
+                                            height=76,
+                                            key=f"i2v_edit_p_{pid}_{sc_g.scene_index}",
+                                        )
+                                        if st.button(
+                                            "🔄 Regenerate This Frame (~₹4)",
+                                            use_container_width=True,
+                                            disabled=any_busy,
+                                            key=f"btn_regen_one_{pid}_{sc_g.scene_index}",
+                                        ):
+                                            try:
+                                                # Save any prompt edit first before regenerating
+                                                if ed_p.strip() and ed_p.strip() != sc_g.visual_prompt_veo_omni:
+                                                    a2_mod = a2.model_dump()
+                                                    for sd in a2_mod["scenes"]:
+                                                        if sd["scene_index"] == sc_g.scene_index:
+                                                            sd["visual_prompt_veo_omni"] = ed_p.strip()
+                                                    st.session_state["agent2_output"] = a2_mod
+                                                    db.update_project_stage(pid, agent2_data=a2_mod)
+                                                    a2 = Agent2Output.model_validate(a2_mod)
+                                                with st.spinner(f"Regenerating Scene {sc_g.scene_index:02d} frame..."):
+                                                    regenerate_single_scene_frame(
+                                                        pid,
+                                                        a1,
+                                                        a2,
+                                                        sc_g.scene_index,
+                                                        cinema_preset=cinema_preset_s3,
+                                                        cost_limit_usd=active_daily_limit,
+                                                        config=cfg,
+                                                        db=db,
+                                                    )
+                                                st.toast(f"Scene {sc_g.scene_index:02d} frame updated!", icon="✅")
+                                                st.rerun()
+                                            except BudgetLimitExceededError as b_err:
+                                                st.error(f"🛑 {b_err}")
+
+                    # Refresh selected I2V indices from checkboxes rendered above
+                    selected_i2v_ids = {
+                        s.scene_index
+                        for s in ai_scenes_s3
+                        if st.session_state.get(f"i2v_chk_{pid}_{s.scene_index}", False)
+                    }
+                    frames_approved = st.checkbox(
+                        f"✅ I visually inspected the frames above (zero cameras, consistent face & natural anatomy) — approve & unlock Step 2 ({len(selected_i2v_ids)} I2V animated + {max(0, len(ai_scenes_s3) - len(selected_i2v_ids))} verified motion visuals)",
+                        value=st.session_state.get(f"i2v_approved_{pid}", False),
+                        key=f"i2v_approved_{pid}",
+                    )
+                else:
+                    frames_approved = False
+
+        # Transparent Live Credit Cost Estimator Card for Step 2 (reflects reused verified frames = $0 extra!)
+        fresh_est = estimate_render_cost_usd(
+            a2.scenes,
+            render_quality,
+            cached_scene_count=0,
+            use_fast_tts=fast_tts,
+            approved_keyframe_indices=approved_kf_indices,
+            animate_scene_indices=selected_i2v_ids if (needs_ai_gate and approved_kf_indices) else None,
+        )
         est_usd = fresh_est["total_usd"]
         est_inr = int(round(est_usd * 85.5))
         full_usd = fresh_est["full_motion_usd"]
         savings_usd = max(0.0, round(full_usd - est_usd, 2))
         custom_cnt = int(fresh_est.get("custom_scenes", 0))
+        reused_kf_cnt = int(fresh_est.get("reused_keyframes", 0))
         custom_prefix = f"{custom_cnt} Flow/uploaded clips (₹0 AI video cost) + " if custom_cnt > 0 else ""
+        reused_kf_note = f"{reused_kf_cnt} verified frames reused (₹0 extra) + " if reused_kf_cnt > 0 else ""
         char_lock_note = (
-            " · 🎭 Same-Face Character Lock Active"
+            " · 🎭 Same-Face Lock Active"
             if (a1.character_bible or "").strip() and (fresh_est["video_scenes"] + fresh_est["keyframe_scenes"] > 0)
             else (
                 " · 🎭 Auto Same-Face Lock Ready"
@@ -1780,18 +2038,17 @@ elif step == 3:
         )
         if custom_cnt >= len(a2.scenes):
             est_detail = f"All {custom_cnt} scenes use your Flow/uploaded clips (₹0 AI video cost) — only voiceover, music, thumbnail & Long+Short assembly"
-        elif render_quality == "hybrid_cinema":
-            est_detail = f"{custom_prefix}{fresh_est['video_scenes']} full-motion hero clips + {fresh_est['keyframe_scenes']} AI cinema visuals + voice, thumbnail & Shorts{char_lock_note}"
-        elif render_quality == "ai_keyframes_kenburns":
-            est_detail = f"{custom_prefix}{fresh_est['keyframe_scenes']} AI cinema visual scenes with smooth motion + voice, thumbnail & Shorts{char_lock_note}"
         elif render_quality == "fast_studio_preview":
             est_detail = "Free offline draft preview (no AI video or image credits used)"
         else:
-            est_detail = f"{custom_prefix}{fresh_est['video_scenes']} full-motion AI video clips + voice, thumbnail & Shorts{char_lock_note}"
+            est_detail = (
+                f"{custom_prefix}{fresh_est['video_scenes']} I2V animated hero clips + "
+                f"{reused_kf_note}{fresh_est['keyframe_scenes']} new AI visuals + voice, thumbnail & Shorts{char_lock_note}"
+            )
         cost_headline = (
-            "💰 Estimated Credit Cost: Free (₹0)"
+            "💰 Step 2 Estimated Credit Cost: Free (₹0)"
             if est_usd <= 0.0
-            else f"💰 Estimated Credit Cost: ~${est_usd:.2f} (≈ ₹{est_inr:,}) — includes Long + Short"
+            else f"💰 Step 2 Estimated Credit Cost: ~${est_usd:.2f} (≈ ₹{est_inr:,}) — includes Long + Short"
         )
         save_badge = f'<span class="omni-cost-save">Saves ~${savings_usd:.2f} vs Full Motion</span>' if savings_usd >= 0.50 else ""
         st.markdown(
@@ -1818,59 +2075,84 @@ elif step == 3:
                 f"⚡ Finish Video from Saved Clips ({cached_vis_count}/{len(a2.scenes)} Ready)",
                 type="primary",
                 use_container_width=True,
-                disabled=is_rendering,
+                disabled=any_busy,
                 key="btn_resume_stitch_only",
             )
 
         btn_r1, btn_r2 = st.columns([2.0, 1.0])
         with btn_r1:
+            step2_lbl = (
+                "🎬 Step 2: Animate Approved Frames & Build Video + Shorts"
+                if (needs_ai_gate and approved_kf_indices)
+                else ("🎬 Generate Fresh Video & Shorts" if cached_vis_count > 0 else "🎬 Generate Full HD Video & Shorts")
+            )
             start_render = st.button(
-                "🎬 Generate Fresh Video & Shorts" if cached_vis_count > 0 else "🎬 Generate Full HD Video & Shorts",
+                step2_lbl,
                 type="secondary" if cached_vis_count > 0 else "primary",
                 use_container_width=True,
-                disabled=is_rendering,
+                disabled=any_busy or (needs_ai_gate and not frames_approved),
+                help="Preview and approve your 2D frames in Step 1 above first to guarantee zero wasted video credits!" if (needs_ai_gate and not frames_approved) else None,
             )
         with btn_r2:
             regen_thumb = st.button(
                 "🖼️ Regenerate Thumbnail",
                 use_container_width=True,
-                disabled=is_rendering,
+                disabled=any_busy,
             )
 
-        if start_render or resume_stitch:
+        direct_skip_render = False
+        if needs_ai_gate and not frames_approved:
+            st.caption("🛡️ **Image-to-Video Safety Gate Active:** Generate & approve your 2D scene frames in Step 1 above to unlock Step 2 animation with zero wasted credits.")
+            with st.expander("⚡ Advanced: Direct 1-Click Render (Skip 2D Frame Preview)", expanded=False):
+                direct_skip_render = st.button(
+                    "🚀 Render Directly Without Previewing Frames",
+                    use_container_width=True,
+                    disabled=any_busy,
+                    key=f"btn_direct_skip_{pid}",
+                )
+
+        if start_render or direct_skip_render or resume_stitch:
             st.session_state["agent3_output"] = None
-            launched = worker.submit_task(
-                task_key=render_task_key,
-                project_id=pid,
-                job_type="master_render",
-                label=f"{'Resume' if resume_stitch else 'Create'} Video: {a1.topic[:32]}",
-                fn=run_agent3_media_pipeline,
-                kwargs={
-                    "project_id": pid,
-                    "agent1": a1,
-                    "agent2": a2,
-                    "render_quality": render_quality,
-                    "force_ai_cinema": force_ai_cinema,
-                    "cinema_preset": cinema_preset_s3,
-                    "bgm_preset": selected_bgm_preset_s3,
-                    "custom_bgm_path": custom_bgm_file_path,
-                    "bgm_duck_db": selected_bgm_duck_db,
-                    "enable_foley_sfx": enable_foley_sfx,
-                    "reuse_existing_clips": bool(resume_stitch),
-                    "include_avatar_in_thumbnail": include_avatar_thumb,
-                    "avatar_thumbnail_mode": avatar_thumb_mode,
-                    "include_avatar_in_video": include_avatar_video,
-                    "creator_side": creator_side,
-                    "prefer_fast_local_tts": fast_tts,
-                    "use_ai_thumbnail": (render_quality != "fast_studio_preview"),
-                    "config": cfg,
-                    "db": db,
-                },
-            )
-            if launched:
-                st.session_state["render_task_key"] = render_task_key
-                st.toast("Video production started!", icon="🎬")
-                st.rerun()
+            task_est_cost = 0.22 if resume_stitch else est_usd
+            try:
+                launched = worker.submit_task(
+                    task_key=render_task_key,
+                    project_id=pid,
+                    job_type="master_render",
+                    label=f"{'Resume' if resume_stitch else 'Create'} Video: {a1.topic[:32]}",
+                    fn=run_agent3_media_pipeline,
+                    kwargs={
+                        "project_id": pid,
+                        "agent1": a1,
+                        "agent2": a2,
+                        "render_quality": render_quality,
+                        "force_ai_cinema": force_ai_cinema,
+                        "cinema_preset": cinema_preset_s3,
+                        "bgm_preset": selected_bgm_preset_s3,
+                        "custom_bgm_path": custom_bgm_file_path,
+                        "bgm_duck_db": selected_bgm_duck_db,
+                        "enable_foley_sfx": enable_foley_sfx,
+                        "reuse_existing_clips": bool(resume_stitch),
+                        "include_avatar_in_thumbnail": include_avatar_thumb,
+                        "avatar_thumbnail_mode": avatar_thumb_mode,
+                        "include_avatar_in_video": include_avatar_video,
+                        "creator_side": creator_side,
+                        "prefer_fast_local_tts": fast_tts,
+                        "use_ai_thumbnail": (render_quality != "fast_studio_preview"),
+                        "animate_scene_indices": selected_i2v_ids if (start_render and approved_kf_indices) else None,
+                        "cost_limit_usd": active_daily_limit,
+                        "config": cfg,
+                        "db": db,
+                    },
+                    estimated_cost_usd=task_est_cost,
+                    cost_limit_usd=active_daily_limit,
+                )
+                if launched:
+                    st.session_state["render_task_key"] = render_task_key
+                    st.toast("Video production started!", icon="🎬")
+                    st.rerun()
+            except BudgetLimitExceededError as b_err:
+                st.error(f"🛑 {b_err}")
 
         if regen_thumb:
             a3_existing = st.session_state.get("agent3_output")
