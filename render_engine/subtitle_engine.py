@@ -137,7 +137,7 @@ def extract_scene_word_timestamps(
 
     lead_in = 0.08
     usable = max(0.5, float(scene_duration_sec) - 0.24)
-    weights = [max(2, len(re.sub(r"[^A-Za-z0-9]", "", w))) + (2 if w.endswith((".", "!", "?", ",")) else 0) for w in words]
+    weights = [max(2, len(re.sub(r"[^\w]", "", w))) + (2 if w.endswith(("।", ".", "!", "?", ",")) else 0) for w in words]
     total_w = float(sum(weights))
 
     cursor = scene_start_offset_sec + lead_in

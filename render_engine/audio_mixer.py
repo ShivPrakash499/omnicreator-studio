@@ -75,10 +75,56 @@ def _convert_any_audio_to_wav24k(src_path: Path, dst_wav: Path) -> Path:
 
 
 def _strip_ssml_for_plain_tts(text: str) -> str:
-    txt = re.sub(r"<break\s+time=['\"][^'\"]+['\"]\s*/>", "... ", text)
+    txt = re.sub(r"[,।]\s*<break\s+time=['\"][^'\"]+['\"]\s*/>", ", ", text)
+    txt = re.sub(r"<break\s+time=['\"][^'\"]+['\"]\s*/>", ", ", txt)
     txt = re.sub(r"<[^>]+>", " ", txt)
     txt = re.sub(r"\[[^\]]+\]", " ", txt)
+    txt = re.sub(r"\s+([,।.!?])", r"\1", txt)
     return re.sub(r"\s+", " ", txt).strip()
+
+
+def _trim_wav_edge_silence(wav_path: Path, *, lead_keep_sec: float = 0.08, tail_keep_sec: float = 0.20) -> float:
+    """Trims excessive leading/trailing dead air from a 24kHz mono PCM WAV and returns final duration."""
+    if not wav_path.exists() or wav_path.stat().st_size < 1024:
+        return get_wav_duration_sec(wav_path)
+    try:
+        with wave.open(str(wav_path), "rb") as wf:
+            ch = wf.getnchannels()
+            sw = wf.getsampwidth()
+            sr = wf.getframerate()
+            raw = wf.readframes(wf.getnframes())
+        if ch != 1 or sw != 2 or len(raw) < sr:
+            return get_wav_duration_sec(wav_path)
+        n = len(raw) // 2
+        samples = struct.unpack(f"<{n}h", raw[: n * 2])
+        win = max(1, int(0.02 * sr))
+        thresh = 260
+        first_active = 0
+        for i in range(0, n, win):
+            if max(abs(x) for x in samples[i : i + win]) >= thresh:
+                first_active = i
+                break
+        last_active = n
+        for i in range(n - win, -1, -win):
+            if max(abs(x) for x in samples[i : i + win]) >= thresh:
+                last_active = min(n, i + win)
+                break
+        if last_active <= first_active:
+            return round(n / float(sr), 3)
+        s0 = max(0, first_active - int(lead_keep_sec * sr))
+        s1 = min(n, last_active + int(tail_keep_sec * sr))
+        if s0 > int(0.15 * sr) or (n - s1) > int(0.35 * sr):
+            trimmed = raw[s0 * 2 : s1 * 2]
+            if len(trimmed) >= int(0.5 * sr) * 2:
+                with wave.open(str(wav_path), "wb") as wf_o:
+                    wf_o.setnchannels(1)
+                    wf_o.setsampwidth(2)
+                    wf_o.setframerate(sr)
+                    wf_o.writeframes(trimmed)
+                return round((s1 - s0) / float(sr), 3)
+        return round(n / float(sr), 3)
+    except Exception:
+        return get_wav_duration_sec(wav_path)
 
 
 def synthesize_scene_voiceover(
@@ -93,19 +139,35 @@ def synthesize_scene_voiceover(
 ) -> Tuple[Path, float, str]:
     """
     Synthesizes one scene's narration WAV and returns `(wav_path, actual_duration_sec, engine_used)`.
+    Enforces strictly verbatim Gemini 3.8 TTS prompting + anti-repetition duration guard so a single
+    scene sentence can NEVER be spoken twice!
     """
     cfg = config or OmniStudioConfig()
     vprof = get_language_voice_profile(language_tone)
     output_wav_path.parent.mkdir(parents=True, exist_ok=True)
-    plain_text = _strip_ssml_for_plain_tts(ssml_voice_cues or voiceover_text) or voiceover_text
 
-    # Content-verified cache: ONLY reuse cached voice WAV if the exact script + language + mode match!
+    clean_vo = _strip_ssml_for_plain_tts(voiceover_text or "")
+    clean_ssml = _strip_ssml_for_plain_tts(ssml_voice_cues or "")
+    # Prefer clean_ssml only when it faithfully matches voiceover_text (avoid extra/duplicated cue drift)
+    if clean_vo and (not clean_ssml or abs(len(clean_ssml.split()) - len(clean_vo.split())) > max(3, int(len(clean_vo.split()) * 0.2))):
+        plain_text = clean_vo
+    else:
+        plain_text = clean_ssml or clean_vo or (voiceover_text or "").strip()
+
+    word_count = max(1, len(plain_text.split()))
+    # Normal Indian dramatic narration is 0.28-0.44 s/word; double-spoken TTS is ~0.75-0.95 s/word.
+    max_sane_dur = max(6.5, word_count * 0.56 + 2.2)
+
+    # Content-verified cache (v2_verbatim invalidates legacy pre-fix WAVs that had style-prefix repetition!)
     sig_file = output_wav_path.with_suffix(".sig")
-    voice_sig = hashlib.sha1(f"{plain_text}|{language_tone}|{prefer_fast_local_tts}".encode("utf-8", errors="ignore")).hexdigest()[:12]
+    voice_sig = hashlib.sha1(
+        f"v2_verbatim|{plain_text}|{language_tone}|{prefer_fast_local_tts}".encode("utf-8", errors="ignore")
+    ).hexdigest()[:12]
     if output_wav_path.exists() and output_wav_path.stat().st_size > 2048 and sig_file.exists():
-        if sig_file.read_text(encoding="utf-8", errors="ignore").strip() == voice_sig:
-            return output_wav_path, max(1.5, get_wav_duration_sec(output_wav_path)), "cached"
-    # Clear stale WAV if text was edited
+        cached_d = get_wav_duration_sec(output_wav_path)
+        if sig_file.read_text(encoding="utf-8", errors="ignore").strip() == voice_sig and 0.8 <= cached_d <= max_sane_dur:
+            return output_wav_path, max(1.5, cached_d), "cached"
+    # Clear stale WAV if text was edited or legacy cache version expired
     output_wav_path.unlink(missing_ok=True)
 
     def _finalize_cached(dur_val: float, eng_label: str) -> Tuple[Path, float, str]:
@@ -134,24 +196,27 @@ def synthesize_scene_voiceover(
             tmp_raw.write_bytes(response.audio_content)
             _convert_any_audio_to_wav24k(tmp_raw, output_wav_path)
             tmp_raw.unlink(missing_ok=True)
-            dur = get_wav_duration_sec(output_wav_path)
-            if dur > 0.5:
+            dur = _trim_wav_edge_silence(output_wav_path)
+            if 0.5 < dur <= max_sane_dur:
                 return _finalize_cached(dur, "cloud_tts_chirp3_hd")
         except Exception as exc:
             logger.debug("Cloud TTS Chirp 3 HD skipped (%s); trying Gemini 3.8 TTS.", exc)
 
-    # 2. Gemini 3.8 Flash TTS (Vertex AI native `generate_content` with retry/backoff OR Developer API)
+    # 2. Gemini 3.8 Flash TTS (Vertex AI strictly verbatim `contents=plain_text` + anti-repetition guard!)
     if cfg.has_valid_gemini_key and not prefer_fast_local_tts:
         tts_model = resolve_current_model(TTS_EXPRESSIVE_MODEL, "gemini-3.8-flash-tts")
         v_creds, v_proj = get_vertex_adc_credentials()
         if v_creds is not None and v_proj:
             import time as _t
-            for attempt in range(1, 5):
+            vertex_models = [tts_model, tts_model, "gemini-3.8-flash-lite-tts", "gemini-3.8-flash-lite-tts"]
+            for attempt, m_try in enumerate(vertex_models, start=1):
                 try:
                     client = get_genai_client(cfg.gemini_api_key)
+                    # CRITICAL: Gemini 3.8 TTS treats `contents` strictly as a verbatim transcript.
+                    # Never prepend "Speak naturally in this style (...):" or the model can stutter/repeat the sentence twice!
                     resp = client.models.generate_content(
-                        model=tts_model,
-                        contents=f"Speak naturally in this style ({vprof['style_prompt']}): {plain_text}",
+                        model=m_try,
+                        contents=plain_text,
                         config=genai_types.GenerateContentConfig(
                             response_modalities=["AUDIO"],
                             speech_config=genai_types.SpeechConfig(
@@ -162,12 +227,10 @@ def synthesize_scene_voiceover(
                         ),
                     )
                     raw_pcm: Optional[bytes] = None
-                    mime_a = "audio/wav"
                     for cand in getattr(resp, "candidates", []) or []:
                         for part in getattr(getattr(cand, "content", None), "parts", []) or []:
                             if getattr(part, "inline_data", None) and part.inline_data.data:
                                 raw_pcm = bytes(part.inline_data.data)
-                                mime_a = getattr(part.inline_data, "mime_type", "audio/wav") or "audio/wav"
                                 break
                         if raw_pcm:
                             break
@@ -183,12 +246,19 @@ def synthesize_scene_voiceover(
                                 wf.setsampwidth(2)
                                 wf.setframerate(24000)
                                 wf.writeframes(raw_pcm)
-                        dur = get_wav_duration_sec(output_wav_path)
+                        dur = _trim_wav_edge_silence(output_wav_path)
+                        if dur > max_sane_dur:
+                            logger.warning(
+                                "Vertex TTS (%s) returned abnormally long audio (%.2fs > %.2fs cap for %d words) — retrying to prevent speech repetition.",
+                                m_try, dur, max_sane_dur, word_count,
+                            )
+                            output_wav_path.unlink(missing_ok=True)
+                            continue
                         if dur > 0.5:
-                            return _finalize_cached(dur, f"vertex_tts({tts_model})")
+                            return _finalize_cached(dur, f"vertex_tts({m_try})")
                 except Exception as exc:
                     err_low = str(exc).lower()
-                    if any(tok in err_low for tok in ("429", "resource_exhausted", "quota", "503", "timeout")) and attempt < 4:
+                    if any(tok in err_low for tok in ("429", "resource_exhausted", "quota", "503", "timeout")) and attempt < len(vertex_models):
                         _t.sleep(min(12.0, 1.8 * (2 ** (attempt - 1))))
                         continue
                     logger.info("Vertex Gemini 3.8 TTS fell back to Edge-TTS (attempt %d): %s", attempt, exc)
@@ -231,9 +301,10 @@ def synthesize_scene_voiceover(
                     tmp_raw.write_bytes(raw_bytes)
                     _convert_any_audio_to_wav24k(tmp_raw, output_wav_path)
                     tmp_raw.unlink(missing_ok=True)
-                    dur = get_wav_duration_sec(output_wav_path)
-                    if dur > 0.5:
+                    dur = _trim_wav_edge_silence(output_wav_path)
+                    if 0.5 < dur <= max_sane_dur:
                         return _finalize_cached(dur, f"gemini_tts({tts_model})")
+                    output_wav_path.unlink(missing_ok=True)
             except Exception as exc:
                 logger.info("Gemini 3.8 TTS fell back to Edge-TTS: %s", exc)
 
@@ -257,7 +328,7 @@ def synthesize_scene_voiceover(
                 if mp3_tmp.exists() and mp3_tmp.stat().st_size > 256:
                     _convert_any_audio_to_wav24k(mp3_tmp, output_wav_path)
                     mp3_tmp.unlink(missing_ok=True)
-                    dur = get_wav_duration_sec(output_wav_path)
+                    dur = _trim_wav_edge_silence(output_wav_path)
                     if dur > 0.5:
                         return _finalize_cached(dur, f"edge_tts({v_name})")
             except Exception:

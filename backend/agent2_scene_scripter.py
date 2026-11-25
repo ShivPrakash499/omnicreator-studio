@@ -123,10 +123,15 @@ def _expand_deterministic_scenes(
                         f"Notice how {b.retention_device.lower()} reveals what really drives {agent1.topic}."
                     )
 
-            ssml_cues = (
-                f"[Energetic, warm Indian creator tone] {vo.split('.')[0]}. "
-                f"<break time=\"0.4s\"/> {'. '.join(vo.split('.')[1:]).strip() or 'Keep watching closely!'}"
-            )
+            split_char = "।" if "।" in vo else "."
+            vo_parts = [p.strip() for p in vo.split(split_char) if p.strip()]
+            if len(vo_parts) >= 2:
+                ssml_cues = (
+                    f"[Energetic, warm Indian creator tone] {vo_parts[0]}{split_char} "
+                    f"<break time=\"0.4s\"/> {f'{split_char} '.join(vo_parts[1:])}{split_char}"
+                )
+            else:
+                ssml_cues = f"[Energetic, warm Indian creator tone] {vo}"
 
             choreo = CINEMATIC_SHOT_CHOREOGRAPHY[(scene_idx - 1) % len(CINEMATIC_SHOT_CHOREOGRAPHY)]
             cam = f"{choreo['shot_type']}: {choreo['camera_move']}. {choreo['lighting']}."

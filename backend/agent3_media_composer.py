@@ -189,6 +189,7 @@ def _normalize_video_clip_exact(
     h: int,
     fps: int,
     exact_frames: int,
+    trim_source_sec: Optional[float] = None,
 ) -> Path:
     """
     Normalizes ANY source video clip (Omni 1.2 Flash, Veo 3.1, Custom Upload, Motion Graphic)
@@ -197,28 +198,34 @@ def _normalize_video_clip_exact(
     """
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     target_dur = exact_frames / float(fps)
-    src_dur = _probe_video_duration_sec(raw_src)
+    full_src_dur = _probe_video_duration_sec(raw_src)
+    in_trim_args: List[str] = []
+    if trim_source_sec and trim_source_sec > 1.0 and (full_src_dur <= 0.0 or trim_source_sec < full_src_dur - 0.1):
+        in_trim_args = ["-t", f"{trim_source_sec:.4f}"]
+        src_dur = min(full_src_dur, trim_source_sec) if full_src_dur > 0.0 else trim_source_sec
+    else:
+        src_dur = full_src_dur
     scale_crop = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
 
     if src_dur > 0.4 and src_dur < target_dur - 0.08:
         stretch = target_dur / src_dur
-        if stretch <= 1.85:
-            # Smooth theatrical slow-motion stretch + tpad safety clone (zero jarring loop restart & exact frame count!)
+        if stretch <= 2.15:
+            # Smooth theatrical slow-motion stretch + tpad safety clone (zero ping-pong reversal & exact frame count!)
             vf = f"{scale_crop},setpts={stretch:.5f}*(PTS-STARTPTS),fps={fps},tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p"
-            cmd = [ffmpeg_exe, "-y", "-i", str(raw_src), "-vf", vf]
+            cmd = [ffmpeg_exe, "-y", *in_trim_args, "-i", str(raw_src), "-vf", vf]
         else:
-            # Smooth forward + reverse ping-pong with gentle slow-mo so long scenes stay fluid & exact
-            half_stretch = max(1.0, min(1.85, target_dur / (2.0 * src_dur)))
+            # Extreme fallback (>2.15x): forward + reverse ping-pong with gentle slow-mo
+            half_stretch = max(1.0, min(2.0, target_dur / (2.0 * src_dur)))
             fc = (
                 f"[0:v]{scale_crop},setpts=PTS-STARTPTS,split[a][b];"
                 f"[b]reverse,setpts=PTS-STARTPTS[r];"
                 f"[a][r]concat=n=2:v=1:a=0,setpts={half_stretch:.5f}*(PTS-STARTPTS),fps={fps},"
                 f"tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p[vout]"
             )
-            cmd = [ffmpeg_exe, "-y", "-i", str(raw_src), "-filter_complex", fc, "-map", "[vout]"]
+            cmd = [ffmpeg_exe, "-y", *in_trim_args, "-i", str(raw_src), "-filter_complex", fc, "-map", "[vout]"]
     else:
         vf = f"{scale_crop},setpts=PTS-STARTPTS,fps={fps},tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p"
-        cmd = [ffmpeg_exe, "-y", "-i", str(raw_src), "-vf", vf]
+        cmd = [ffmpeg_exe, "-y", *in_trim_args, "-i", str(raw_src), "-vf", vf]
 
     # Always pad last frame via tpad safety if source was a hair short, then cut to EXACT `exact_frames`
     # Using uniform closed-GOP `-bf 0 -g fps -video_track_timescale 24000` guarantees zero concat bleed!
@@ -877,7 +884,18 @@ def run_agent3_media_pipeline(
             cached_dur = _probe_video_duration_sec(out_mp4)
             if abs(cached_dur - dur) > 0.08:
                 resync_tmp = out_mp4.with_suffix(".resync_tmp.mp4")
-                _normalize_video_clip_exact(out_mp4, resync_tmp, w=1920, h=1080, fps=cfg.fps, exact_frames=n_frames)
+                # If a legacy cached clip was ping-ponged (>=15s and >1.38x the clean voiceover duration),
+                # keep ONLY its pure forward first half so reversed frames NEVER sneak into the resynced clip!
+                forward_cap = (cached_dur * 0.5) if (cached_dur >= 15.0 and cached_dur > dur * 1.38) else None
+                _normalize_video_clip_exact(
+                    out_mp4,
+                    resync_tmp,
+                    w=1920,
+                    h=1080,
+                    fps=cfg.fps,
+                    exact_frames=n_frames,
+                    trim_source_sec=forward_cap,
+                )
                 resync_tmp.replace(out_mp4)
                 p, src = out_mp4, "cached_ai_cinema(resynced)"
             else:
