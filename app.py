@@ -284,6 +284,18 @@ if query_code and not st.session_state.get("_oauth_code_handled"):
         st.toast(f"OAuth exchange note: {msg_cb}", icon="⚠️")
 
 
+def _format_channel_label(ch: Dict[str, Any], *, with_icon: bool = True) -> str:
+    """Formats a clean, human-readable YouTube channel label with ZERO raw `UC...` GUID clutter."""
+    ctitle = (ch.get("channel_title") or "Connected Channel").strip()
+    handle = (ch.get("account_email") or (ch.get("token_dict") or {}).get("connected_custom_url") or "").strip()
+    if handle and not handle.startswith("@") and "@" not in handle:
+        handle = f"@{handle}"
+    prefix = "📺 " if with_icon else ""
+    if handle and handle.lower() not in ctitle.lower():
+        return f"{prefix}{ctitle} ({handle})"
+    return f"{prefix}{ctitle}"
+
+
 def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[str, Any]]) -> None:
     """Reusable multi-channel OAuth & Token Import panel used in BOTH Step 0 and Step 4."""
     st.caption(
@@ -373,10 +385,15 @@ def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[st
                 st.error(msg_imp)
     with imp_c2:
         if connected_channels:
-            rem_opts = {
-                f"{c.get('channel_title') or 'Channel'} ({c.get('channel_id')})": c.get("channel_id") or c.get("provider")
-                for c in connected_channels
-            }
+            rem_opts: Dict[str, str] = {}
+            for c in connected_channels:
+                base_lbl = _format_channel_label(c, with_icon=False)
+                lbl_u = base_lbl
+                n_dup = 2
+                while lbl_u in rem_opts:
+                    lbl_u = f"{base_lbl} #{n_dup}"
+                    n_dup += 1
+                rem_opts[lbl_u] = str(c.get("channel_id") or c.get("provider") or "")
             rem_pick = st.selectbox("🗑️ Disconnect a Channel:", options=list(rem_opts.keys()), key=f"{prefix}_rem_sel")
             if st.button("Disconnect Selected Channel", use_container_width=True, key=f"{prefix}_rem_btn"):
                 target_rm = rem_opts[rem_pick]
@@ -480,9 +497,9 @@ st.markdown("")
 if step == 0:
     st.subheader("Pre-Step • Select YouTube Channel & Target Playlist")
 
+    selected_ch_auth_ok = True
     with st.container(border=True):
         if all_connected_channels:
-            st.success(f"🔐 **{len(all_connected_channels)} YouTube Channel(s) Connected** — Pick the channel & playlist for this video below.")
             ch_labels: List[str] = []
             ch_by_label: Dict[str, Optional[Dict[str, Any]]] = {}
             default_ch_idx = 0
@@ -490,10 +507,12 @@ if step == 0:
 
             for i, ch in enumerate(all_connected_channels):
                 cid = ch.get("channel_id") or ""
-                ctitle = ch.get("channel_title") or "Connected Channel"
-                handle = ch.get("account_email") or (ch.get("token_dict") or {}).get("connected_custom_url") or ""
-                handle_str = f" • {handle}" if handle else ""
-                lbl = f"📺 {ctitle}{handle_str} ({cid})"
+                base_lbl = _format_channel_label(ch, with_icon=True)
+                lbl = base_lbl
+                n_dup = 2
+                while lbl in ch_by_label:
+                    lbl = f"{base_lbl} #{n_dup}"
+                    n_dup += 1
                 ch_labels.append(lbl)
                 ch_by_label[lbl] = ch
                 if cid == cur_cid:
@@ -535,8 +554,13 @@ if step == 0:
                     st.session_state["omni_playlist_id"] = "NONE"
                     st.session_state["omni_playlist_title"] = "(No Playlist)"
 
+            sel_cid = st.session_state.get("omni_channel_id", "")
+            sel_creds = None
+            if sel_cid:
+                sel_creds, _ = get_valid_youtube_credentials(cfg, db, channel_id=sel_cid)
+                selected_ch_auth_ok = sel_creds is not None
+
             with pl_col:
-                sel_cid = st.session_state.get("omni_channel_id", "")
                 if sel_cid:
                     playlists = list_user_youtube_playlists(cfg, db, channel_id=sel_cid)
                     pl_map: Dict[str, str] = {"(No Playlist)": "NONE"}
@@ -560,8 +584,19 @@ if step == 0:
                 else:
                     st.selectbox("📂 Target Playlist:", options=["(Connect/Select Channel First)"], disabled=True, key="prestep_pl_disabled")
 
+            # Live OAuth token status feedback (honestly alerts when Google's 7-day Testing token expired!)
+            if sel_cid:
+                if selected_ch_auth_ok:
+                    st.success(f"🔐 **{st.session_state.get('omni_channel_title')}** OAuth Active — Live playlists synced & ready for direct YouTube upload.")
+                else:
+                    st.warning(
+                        f"⚠️ **{st.session_state.get('omni_channel_title')} OAuth Token Expired / Revoked** "
+                        f"(Google revokes refresh tokens after 7 days while an OAuth app is in 'Testing' mode). "
+                        f"Re-authorize **{st.session_state.get('omni_channel_title')}** below to pull all your playlists & enable uploading!"
+                    )
+
             # Inline Create New Playlist widget for the selected channel
-            if st.session_state.get("omni_channel_id"):
+            if sel_cid and selected_ch_auth_ok:
                 with st.expander(f"➕ Create a New Playlist on {st.session_state.get('omni_channel_title')}", expanded=False):
                     npl_c1, npl_c2, npl_c3 = st.columns([1.8, 0.9, 1.0])
                     with npl_c1:
@@ -588,10 +623,14 @@ if step == 0:
         else:
             st.warning("🔒 **No YouTube Channel Connected Yet** — Connect your first channel below, or proceed to Step 1 in offline mode.")
 
-    # Multi-Channel OAuth Connect / Manage Drawer
+    # Multi-Channel OAuth Connect / Re-Authorize Drawer (auto-opens when token expired or no channels yet!)
     with st.expander(
-        "➕ Connect Another YouTube Channel (Religious Stories / Any New Channel)",
-        expanded=(not all_connected_channels or bool(st.session_state.get("newly_connected_secret_toml"))),
+        "➕ Connect or Re-Authorize YouTube Channel (TopperLab 3D / DharmaGatha / Any Channel)",
+        expanded=(
+            not all_connected_channels
+            or not selected_ch_auth_ok
+            or bool(st.session_state.get("newly_connected_secret_toml"))
+        ),
     ):
         _render_connect_channel_drawer("prestep", all_connected_channels)
 
@@ -1431,9 +1470,12 @@ elif step == 4:
                 default_s4_idx = 0
                 for ci, ch in enumerate(connected_chs_s4):
                     cid = ch.get("channel_id") or ""
-                    ctitle = ch.get("channel_title") or "Connected Channel"
-                    handle = ch.get("account_email") or (ch.get("token_dict") or {}).get("connected_custom_url") or ""
-                    lbl = f"📺 {ctitle}{' • ' + handle if handle else ''} ({cid})"
+                    base_lbl = _format_channel_label(ch, with_icon=True)
+                    lbl = base_lbl
+                    n_dup = 2
+                    while lbl in ch_opts_s4:
+                        lbl = f"{base_lbl} #{n_dup}"
+                        n_dup += 1
                     ch_opts_s4[lbl] = ch
                     if cid == active_ch_id_s4:
                         default_s4_idx = ci
@@ -1450,10 +1492,10 @@ elif step == 4:
                 creds, tok_rec = get_valid_youtube_credentials(cfg, db, channel_id=active_ch_id_s4)
                 if creds and tok_rec:
                     st.success(
-                        f"🔐 **Ready to Publish** — Target Channel: **{tok_rec.get('channel_title')}** (`{tok_rec.get('channel_id')}`)"
+                        f"🔐 **Ready to Publish** — Target Channel: **{_format_channel_label(tok_rec, with_icon=False)}**"
                     )
                 else:
-                    st.warning("⚠️ Stored token for this channel needs re-authorization below.")
+                    st.warning("⚠️ Stored OAuth token for this channel expired/revoked — re-authorize below before uploading.")
             else:
                 creds, tok_rec = None, None
                 st.warning("🔒 **No YouTube Channel Connected Yet** — Authorize your channel below to enable 4MB chunked direct upload.")

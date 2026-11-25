@@ -25,6 +25,7 @@ import os
 import time
 import urllib.parse
 import uuid
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
@@ -230,8 +231,31 @@ def hydrate_local_token_into_sqlite(
     return database.get_youtube_channel(channel_id)
 
 
-def _credentials_from_token_dict(token_dict: Dict[str, Any]) -> Optional[Credentials]:
+def _parse_utc_naive_expiry(raw_val: Any) -> Optional[datetime]:
+    """Parses ISO-8601 `expiry` / `expires_at` strings into naive UTC datetime for `google.oauth2.credentials.Credentials`."""
+    if not raw_val:
+        return None
+    if isinstance(raw_val, datetime):
+        return raw_val.astimezone(timezone.utc).replace(tzinfo=None) if raw_val.tzinfo else raw_val
     try:
+        s = str(raw_val).strip()
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        dt = datetime.fromisoformat(s)
+        if dt.tzinfo is not None:
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None)
+        return dt
+    except Exception:
+        return None
+
+
+def _credentials_from_token_dict(
+    token_dict: Dict[str, Any],
+    *,
+    force_refresh: bool = False,
+) -> Optional[Credentials]:
+    try:
+        expiry_dt = _parse_utc_naive_expiry(token_dict.get("expiry") or token_dict.get("expires_at"))
         creds = Credentials(
             token=token_dict.get("token") or token_dict.get("access_token"),
             refresh_token=token_dict.get("refresh_token"),
@@ -239,11 +263,23 @@ def _credentials_from_token_dict(token_dict: Dict[str, Any]) -> Optional[Credent
             client_id=token_dict.get("client_id"),
             client_secret=token_dict.get("client_secret"),
             scopes=token_dict.get("scopes") or YOUTUBE_SCOPES,
+            expiry=expiry_dt,
         )
-        if creds.expired and creds.refresh_token:
-            creds.refresh(Request())
-        elif not creds.token and creds.refresh_token:
-            creds.refresh(Request())
+        # CRITICAL: If expiry is missing OR within 2 minutes of expiring (or force_refresh=True),
+        # ALWAYS refresh via `refresh_token`! Otherwise google-auth treats expiry=None as never expired -> HTTP 401!
+        now_utc_naive = datetime.now(timezone.utc).replace(tzinfo=None)
+        needs_refresh = (
+            force_refresh
+            or not creds.token
+            or creds.expired
+            or expiry_dt is None
+            or (expiry_dt - now_utc_naive) < timedelta(minutes=2)
+        )
+        if needs_refresh:
+            if creds.refresh_token:
+                creds.refresh(Request())
+            else:
+                return None
         return creds
     except Exception as exc:
         logger.warning("Failed refreshing OAuth credentials: %s", exc)
@@ -254,6 +290,8 @@ def get_valid_youtube_credentials(
     config: Optional[OmniStudioConfig] = None,
     db: Optional[OmniDatabase] = None,
     channel_id: Optional[str] = None,
+    *,
+    force_refresh: bool = False,
 ) -> Tuple[Optional[Credentials], Optional[Dict[str, Any]]]:
     """Fetches & refreshes OAuth credentials for the specified `channel_id` (or first connected channel)."""
     cfg = config or OmniStudioConfig()
@@ -261,15 +299,22 @@ def get_valid_youtube_credentials(
     record = hydrate_local_token_into_sqlite(cfg, database, channel_id=channel_id)
     if not record or not record.get("token_dict"):
         return None, None
-    creds = _credentials_from_token_dict(record["token_dict"])
+    creds = _credentials_from_token_dict(record["token_dict"], force_refresh=force_refresh)
     if creds is None:
         return None, record
-    # Persist refreshed access token back into SQLite under the EXACT same channel provider key!
+    # Persist refreshed access token + exact expiry back into SQLite under the EXACT same channel key!
     updated_dict = dict(record["token_dict"])
+    expiry_iso = (
+        creds.expiry.replace(tzinfo=timezone.utc).isoformat()
+        if isinstance(creds.expiry, datetime)
+        else (datetime.now(timezone.utc) + timedelta(minutes=50)).isoformat()
+    )
     updated_dict.update(
         {
             "token": creds.token,
             "access_token": creds.token,
+            "expiry": expiry_iso,
+            "expires_at": expiry_iso,
             "refresh_token": creds.refresh_token or record["token_dict"].get("refresh_token"),
             "token_uri": creds.token_uri,
             "client_id": creds.client_id,
@@ -520,24 +565,78 @@ def list_user_youtube_playlists(
     db: Optional[OmniDatabase] = None,
     channel_id: Optional[str] = None,
 ) -> List[Dict[str, str]]:
-    """Lists playlists belonging to the SPECIFIC selected YouTube channel (`channel_id`)."""
-    creds, _ = get_valid_youtube_credentials(config, db, channel_id=channel_id)
-    if not creds:
-        return []
-    try:
-        resp = requests.get(
-            "https://www.googleapis.com/youtube/v3/playlists",
-            params={"part": "snippet", "mine": "true", "maxResults": 50},
-            headers={"Authorization": f"Bearer {creds.token}"},
-            timeout=10.0,
-        )
-        if resp.status_code == 200:
-            return [
-                {"id": item["id"], "title": item.get("snippet", {}).get("title", item["id"])}
-                for item in resp.json().get("items", [])
-            ]
-    except Exception as exc:
-        logger.debug("Playlist list skipped: %s", exc)
+    """
+    Lists ALL playlists (paginated up to 150) belonging to the selected YouTube channel:
+    1. Primary (OAuth 2.0): fetches Public + Unlisted + Private playlists via `mine=true`
+       (auto-refreshes token on HTTP 401 and also checks `channelId` if `mine=true` returns empty).
+    2. Fallback (YouTube Data API v3 `YOUTUBE_API_KEY` or public `channelId` query): ensures all
+       public playlists still appear immediately even if an OAuth refresh token needs re-auth!
+    """
+    cfg = config or OmniStudioConfig()
+    database = db or get_db()
+    creds, ch_rec = get_valid_youtube_credentials(cfg, database, channel_id=channel_id)
+    resolved_cid = (channel_id or (ch_rec or {}).get("channel_id") or "").strip()
+
+    def _fetch_paginated(params_base: Dict[str, Any], headers: Optional[Dict[str, str]] = None) -> Tuple[int, List[Dict[str, str]]]:
+        collected: List[Dict[str, str]] = []
+        seen_pids = set()
+        page_token: Optional[str] = None
+        last_status = 200
+        for _ in range(4):  # up to 200 playlists
+            p = dict(params_base)
+            p["maxResults"] = 50
+            if page_token:
+                p["pageToken"] = page_token
+            resp = requests.get(
+                "https://www.googleapis.com/youtube/v3/playlists",
+                params=p,
+                headers=headers or {},
+                timeout=10.0,
+            )
+            last_status = resp.status_code
+            if resp.status_code != 200:
+                return last_status, collected
+            data = resp.json()
+            for item in data.get("items", []):
+                pid = item.get("id")
+                if pid and pid not in seen_pids:
+                    seen_pids.add(pid)
+                    collected.append(
+                        {"id": pid, "title": item.get("snippet", {}).get("title", pid)}
+                    )
+            page_token = data.get("nextPageToken")
+            if not page_token:
+                break
+        return last_status, collected
+
+    # 1. Authenticated OAuth fetch (`mine=true` returns ALL public + unlisted + private playlists!)
+    if creds is not None:
+        try:
+            status, items = _fetch_paginated({"part": "snippet", "mine": "true"}, {"Authorization": f"Bearer {creds.token}"})
+            if status == 401:
+                creds2, _ = get_valid_youtube_credentials(cfg, database, channel_id=resolved_cid or None, force_refresh=True)
+                if creds2 is not None:
+                    creds = creds2
+                    status, items = _fetch_paginated({"part": "snippet", "mine": "true"}, {"Authorization": f"Bearer {creds.token}"})
+            if items:
+                return items
+            # If mine=true returned empty, try explicit channelId with OAuth token
+            if resolved_cid.startswith("UC"):
+                _, items_cid = _fetch_paginated({"part": "snippet", "channelId": resolved_cid}, {"Authorization": f"Bearer {creds.token}"})
+                if items_cid:
+                    return items_cid
+        except Exception as exc:
+            logger.debug("OAuth playlist list skipped: %s", exc)
+
+    # 2. Public YouTube Data API v3 fallback (`YOUTUBE_API_KEY`) so public playlists always appear cleanly
+    if resolved_cid.startswith("UC") and cfg.youtube_api_key:
+        try:
+            _, pub_items = _fetch_paginated({"part": "snippet", "channelId": resolved_cid, "key": cfg.youtube_api_key})
+            if pub_items:
+                return pub_items
+        except Exception as exc:
+            logger.debug("Public API playlist fallback skipped: %s", exc)
+
     return []
 
 
