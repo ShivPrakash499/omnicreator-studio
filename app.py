@@ -367,13 +367,26 @@ def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[st
     else:
         st.info(f"OAuth Client note: {auth_msg} You can also import a channel token JSON below.")
 
-    if st.session_state.get("newly_connected_secret_toml"):
-        with st.expander("☁️ Save New Channel Permanently on Streamlit Cloud (Optional 1-Time Paste)", expanded=True):
+    if connected_channels:
+        all_toml_blocks = "\n\n".join(format_channel_streamlit_secret_toml(c) for c in connected_channels)
+        with st.expander(
+            f"☁️ Copy Streamlit Cloud Secrets for ALL {len(connected_channels)} Connected Channel(s) (1-Time Paste)",
+            expanded=bool(st.session_state.get("newly_connected_secret_toml")),
+        ):
             st.caption(
-                "Your new channel is live right now! To make it survive Streamlit Cloud reboots automatically, "
-                "append this block at the bottom of your **Streamlit Cloud → Settings → Secrets**:"
+                "Click the copy icon on the top-right of the box below and paste it into "
+                "**Streamlit Cloud → Manage app → Settings → Secrets** (replace any old `YOUTUBE_OAUTH_TOKEN_JSON` block, "
+                "keeping your `VERTEX_PROJECT_ID` and `VERTEX_ADC_JSON` untouched) so ALL connected channels persist permanently across reboots:"
             )
-            st.code(st.session_state["newly_connected_secret_toml"], language="toml")
+            st.code(all_toml_blocks, language="toml")
+            st.download_button(
+                "⬇️ Download All Channel Secrets (.toml)",
+                data=all_toml_blocks.encode("utf-8"),
+                file_name="omni_studio_youtube_secrets.toml",
+                mime="text/plain",
+                use_container_width=True,
+                key=f"{prefix}_dl_all_secrets_toml",
+            )
 
     st.markdown("---")
     imp_c1, imp_c2 = st.columns(2)
