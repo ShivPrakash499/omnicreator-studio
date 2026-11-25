@@ -262,8 +262,14 @@ if all_connected_channels and not st.session_state.get("omni_channel_id"):
 
 # Handle OAuth 2.0 callback `?code=...` cleanly if Google redirected back to Streamlit
 query_code = st.query_params.get("code")
-if query_code and not st.session_state.get("_oauth_code_handled"):
-    cb_redirect = st.session_state.get("omni_oauth_redirect_uri") or cfg.youtube_redirect_uri
+if query_code and st.session_state.get("_oauth_last_code") != str(query_code):
+    # Recover exact redirect_uri from OAuth `state` parameter (works even in a brand-new browser tab!)
+    query_state = str(st.query_params.get("state") or "").strip()
+    cb_redirect = (
+        query_state
+        if query_state.startswith(("http://", "https://"))
+        else (st.session_state.get("omni_oauth_redirect_uri") or "https://onebillionviews.streamlit.app")
+    )
     ok_cb, msg_cb, saved_ch = exchange_oauth_code_and_store(
         str(query_code),
         cfg.youtube_client_secrets,
@@ -271,7 +277,11 @@ if query_code and not st.session_state.get("_oauth_code_handled"):
         db=db,
         config=cfg,
     )
-    st.session_state["_oauth_code_handled"] = True
+    st.session_state["_oauth_last_code"] = str(query_code)
+    try:
+        st.query_params.clear()
+    except Exception:
+        pass
     if ok_cb and saved_ch:
         st.session_state["omni_channel_id"] = saved_ch.get("channel_id") or ""
         st.session_state["omni_channel_title"] = saved_ch.get("channel_title") or ""
@@ -303,18 +313,18 @@ def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[st
         "Each channel is stored independently and never overwrites existing connected channels."
     )
     redir_opts = [
+        "https://onebillionviews.streamlit.app",
         "http://localhost:8501",
         "http://localhost:8080",
         "http://localhost",
-        "https://onebillionviews.streamlit.app",
     ]
     if cfg.youtube_redirect_uri and cfg.youtube_redirect_uri not in redir_opts:
-        redir_opts.insert(0, cfg.youtube_redirect_uri)
+        redir_opts.append(cfg.youtube_redirect_uri)
     sel_redir = st.selectbox(
         "🔗 OAuth Redirect URI:",
         options=redir_opts,
         index=0,
-        help="Desktop OAuth apps work with `http://localhost:8501` or `http://localhost` (just copy the redirected URL from your browser address bar and paste below!). Use `https://onebillionviews.streamlit.app` only if registered in Google Cloud Console.",
+        help="Add `https://onebillionviews.streamlit.app` (and `http://localhost:8501`) under Google Cloud → Google Auth Platform → Clients → Authorized redirect URIs for 1-click automatic login!",
         key=f"{prefix}_redir_uri",
     )
     st.session_state["omni_oauth_redirect_uri"] = sel_redir

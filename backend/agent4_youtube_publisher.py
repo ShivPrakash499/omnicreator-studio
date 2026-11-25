@@ -441,6 +441,7 @@ def build_youtube_oauth_url(
         "scope": " ".join(YOUTUBE_SCOPES),
         "access_type": "offline",
         "prompt": "consent select_account",
+        "state": redirect_uri.strip(),
     }
     return f"{oauth_cfg['auth_uri']}?{urllib.parse.urlencode(params)}", "OK"
 
