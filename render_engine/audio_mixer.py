@@ -94,13 +94,23 @@ def synthesize_scene_voiceover(
     """
     Synthesizes one scene's narration WAV and returns `(wav_path, actual_duration_sec, engine_used)`.
     """
-    if output_wav_path.exists() and output_wav_path.stat().st_size > 2048:
-        return output_wav_path, max(1.5, get_wav_duration_sec(output_wav_path)), "cached"
-
     cfg = config or OmniStudioConfig()
     vprof = get_language_voice_profile(language_tone)
     output_wav_path.parent.mkdir(parents=True, exist_ok=True)
     plain_text = _strip_ssml_for_plain_tts(ssml_voice_cues or voiceover_text) or voiceover_text
+
+    # Content-verified cache: ONLY reuse cached voice WAV if the exact script + language + mode match!
+    sig_file = output_wav_path.with_suffix(".sig")
+    voice_sig = hashlib.sha1(f"{plain_text}|{language_tone}|{prefer_fast_local_tts}".encode("utf-8", errors="ignore")).hexdigest()[:12]
+    if output_wav_path.exists() and output_wav_path.stat().st_size > 2048 and sig_file.exists():
+        if sig_file.read_text(encoding="utf-8", errors="ignore").strip() == voice_sig:
+            return output_wav_path, max(1.5, get_wav_duration_sec(output_wav_path)), "cached"
+    # Clear stale WAV if text was edited
+    output_wav_path.unlink(missing_ok=True)
+
+    def _finalize_cached(dur_val: float, eng_label: str) -> Tuple[Path, float, str]:
+        sig_file.write_text(voice_sig, encoding="utf-8")
+        return output_wav_path, dur_val, eng_label
 
     # 1. Google Cloud TTS Chirp 3 HD (if explicitly enabled & credentials + library installed)
     if cfg.use_cloud_tts_chirp3 and not prefer_fast_local_tts:
@@ -126,7 +136,7 @@ def synthesize_scene_voiceover(
             tmp_raw.unlink(missing_ok=True)
             dur = get_wav_duration_sec(output_wav_path)
             if dur > 0.5:
-                return output_wav_path, dur, "cloud_tts_chirp3_hd"
+                return _finalize_cached(dur, "cloud_tts_chirp3_hd")
         except Exception as exc:
             logger.debug("Cloud TTS Chirp 3 HD skipped (%s); trying Gemini 3.8 TTS.", exc)
 
@@ -175,7 +185,7 @@ def synthesize_scene_voiceover(
                                 wf.writeframes(raw_pcm)
                         dur = get_wav_duration_sec(output_wav_path)
                         if dur > 0.5:
-                            return output_wav_path, dur, f"vertex_tts({tts_model})"
+                            return _finalize_cached(dur, f"vertex_tts({tts_model})")
                 except Exception as exc:
                     err_low = str(exc).lower()
                     if any(tok in err_low for tok in ("429", "resource_exhausted", "quota", "503", "timeout")) and attempt < 4:
@@ -223,7 +233,7 @@ def synthesize_scene_voiceover(
                     tmp_raw.unlink(missing_ok=True)
                     dur = get_wav_duration_sec(output_wav_path)
                     if dur > 0.5:
-                        return output_wav_path, dur, f"gemini_tts({tts_model})"
+                        return _finalize_cached(dur, f"gemini_tts({tts_model})")
             except Exception as exc:
                 logger.info("Gemini 3.8 TTS fell back to Edge-TTS: %s", exc)
 
@@ -249,7 +259,7 @@ def synthesize_scene_voiceover(
                     mp3_tmp.unlink(missing_ok=True)
                     dur = get_wav_duration_sec(output_wav_path)
                     if dur > 0.5:
-                        return output_wav_path, dur, f"edge_tts({v_name})"
+                        return _finalize_cached(dur, f"edge_tts({v_name})")
             except Exception:
                 continue
     except Exception as exc:
@@ -668,23 +678,24 @@ def mix_scene_master_audio(
     *,
     bgm_offset_sec: float,
     target_duration_sec: float,
+    exact_samples: Optional[int] = None,
     duck_db: float = -13.5,
     foley_wav_path: Optional[Path] = None,
-    foley_db: float = -8.5,
+    foley_db: float = -13.5,
     add_cut_sfx: bool = False,  # Kept for signature compatibility; cartoon cut-ting is permanently removed!
 ) -> Path:
     """
-    Broadcast-grade 3-stem cinematic mixer (ZERO cartoon transition 'ting' sounds!):
-    1. Voiceover Narration: EBU R128 loudness-normalized (-14 LUFS) for crystal clarity.
+    Broadcast-grade 3-stem frame-locked cinematic mixer (ZERO cartoon cut-ting, ZERO overlap!):
+    1. Voiceover Narration: Safe zero-DC-offset RMS-normalized (-14 dBFS) with crisp 18ms fades.
     2. Topic-Matched BGM Score: Continuous sample-aligned playback with buttery-smooth
        RMS sidechain envelope ducking (`duck_db` during speech, swelling +5dB in pauses).
-    3. Frame-Synced Foley SFX (native Omni/Veo Foley or realistic procedural cinema Foley):
-       Blended at `foley_db` during speech and +4dB brighter during action pauses so arrows,
-       revolving Sudarshan Chakra, thunder, fire, and rain pop naturally in the mix!
+    3. Frame-Synced Foley SFX (vocal-notched Omni/Veo Foley or realistic cinema Foley):
+       Politely tucked at `foley_db` (-13.5 dB) under spoken words and blooming to -8.0 dB
+       during natural action pauses so SFX NEVER overlaps or obscures narration!
     """
     del add_cut_sfx  # Permanently disabled cartoon transition sine-sweep
     sr = 24000
-    n_total = max(1, int(round(target_duration_sec * sr)))
+    n_total = int(exact_samples) if (exact_samples and exact_samples > 0) else max(1, int(round(target_duration_sec * sr)))
 
     # Normalize voiceover stem cleanly to -14 LUFS so voice/BGM/Foley levels are always balanced
     norm_voice = output_master_wav.with_suffix(".vnorm.wav")
@@ -730,7 +741,7 @@ def mix_scene_master_audio(
     bgm_pause_gain = math.pow(10.0, min(-5.0, clamped_duck + 5.0) / 20.0)
 
     foley_speech_gain = math.pow(10.0, float(foley_db) / 20.0)
-    foley_pause_gain = math.pow(10.0, min(-2.5, float(foley_db) + 4.0) / 20.0)
+    foley_pause_gain = math.pow(10.0, min(-5.5, float(foley_db) + 5.5) / 20.0)
 
     # Smooth RMS-like speech activity envelope follower (attack ~55ms, release ~320ms — zero pumping!)
     attack_coeff = 1.0 - math.exp(-1.0 / (0.055 * sr))

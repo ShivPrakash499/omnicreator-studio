@@ -29,6 +29,7 @@ class TimedWord:
     word: str
     start_sec: float
     end_sec: float
+    scene_id: int = 0
 
 
 def _clean_spoken_text(text: str) -> str:
@@ -59,6 +60,7 @@ def extract_scene_word_timestamps(
     scene_start_offset_sec: float,
     scene_duration_sec: float,
     *,
+    scene_id: int = 0,
     config: Optional[OmniStudioConfig] = None,
     use_cloud_transcribe: bool = False,
 ) -> List[TimedWord]:
@@ -81,7 +83,8 @@ def extract_scene_word_timestamps(
                         TimedWord(
                             word=token,
                             start_sec=round(scene_start_offset_sec + float(w.start), 3),
-                            end_sec=round(scene_start_offset_sec + float(w.end), 3),
+                            end_sec=round(min(scene_start_offset_sec + scene_duration_sec - 0.04, scene_start_offset_sec + float(w.end)), 3),
+                            scene_id=scene_id,
                         )
                     )
         if fw_words:
@@ -133,7 +136,7 @@ def extract_scene_word_timestamps(
         return []
 
     lead_in = 0.08
-    usable = max(0.5, float(scene_duration_sec) - 0.16)
+    usable = max(0.5, float(scene_duration_sec) - 0.24)
     weights = [max(2, len(re.sub(r"[^A-Za-z0-9]", "", w))) + (2 if w.endswith((".", "!", "?", ",")) else 0) for w in words]
     total_w = float(sum(weights))
 
@@ -141,7 +144,7 @@ def extract_scene_word_timestamps(
     timed: List[TimedWord] = []
     for w, wt in zip(words, weights):
         dur = usable * (wt / total_w)
-        timed.append(TimedWord(word=w, start_sec=round(cursor, 3), end_sec=round(cursor + dur, 3)))
+        timed.append(TimedWord(word=w, start_sec=round(cursor, 3), end_sec=round(cursor + dur, 3), scene_id=scene_id))
         cursor += dur
     return timed
 
@@ -189,13 +192,30 @@ Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """
     lines: List[str] = [header.strip()]
 
-    for start_idx in range(0, len(timed_words), chunk_size):
-        chunk = timed_words[start_idx : start_idx + chunk_size]
-        if not chunk:
-            continue
+    # Group words into chunks NEVER crossing scene boundaries, and strictly clamp end <= next start (zero overlapping lines!)
+    chunks: List[List[TimedWord]] = []
+    cur_chunk: List[TimedWord] = []
+    for tw in timed_words:
+        if cur_chunk and (len(cur_chunk) >= chunk_size or cur_chunk[-1].scene_id != tw.scene_id):
+            chunks.append(cur_chunk)
+            cur_chunk = []
+        cur_chunk.append(tw)
+    if cur_chunk:
+        chunks.append(cur_chunk)
+
+    for c_idx, chunk in enumerate(chunks):
+        next_chunk_start = chunks[c_idx + 1][0].start_sec if (c_idx + 1) < len(chunks) else None
         for active_i, active_w in enumerate(chunk):
+            next_start = (
+                chunk[active_i + 1].start_sec
+                if (active_i + 1) < len(chunk)
+                else next_chunk_start
+            )
+            raw_end = max(active_w.end_sec, active_w.start_sec + 0.06)
+            if next_start is not None:
+                raw_end = min(raw_end, max(active_w.start_sec + 0.02, next_start - 0.01))
             st = _format_ass_time(active_w.start_sec)
-            et = _format_ass_time(max(active_w.end_sec, active_w.start_sec + 0.08))
+            et = _format_ass_time(raw_end)
             rendered_tokens: List[str] = []
             for j, tok in enumerate(chunk):
                 safe = _escape_ass_text(tok.word)

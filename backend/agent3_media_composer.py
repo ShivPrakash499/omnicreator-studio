@@ -165,6 +165,80 @@ def _render_kinetic_cinematic_plate(
     return output_png
 
 
+def _probe_video_duration_sec(video_path: Path) -> float:
+    """Measures exact source duration (in seconds) of an MP4 clip via FFmpeg header inspection."""
+    import re as _re
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    res = subprocess.run(
+        [ffmpeg_exe, "-i", str(video_path)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    m = _re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", res.stderr or "")
+    if m:
+        return int(m.group(1)) * 3600 + int(m.group(2)) * 60 + float(m.group(3))
+    return 0.0
+
+
+def _normalize_video_clip_exact(
+    raw_src: Path,
+    output_mp4: Path,
+    *,
+    w: int,
+    h: int,
+    fps: int,
+    exact_frames: int,
+) -> Path:
+    """
+    Normalizes ANY source video clip (Omni 1.2 Flash, Veo 3.1, Custom Upload, Motion Graphic)
+    to EXACTLY `exact_frames` closed-GOP zero-B-frame CFR frames at `fps` with uniform bt709
+    pixel format & 24000 timescale — ZERO hard loop jumps, ZERO frame drift, ZERO overlap!
+    """
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    target_dur = exact_frames / float(fps)
+    src_dur = _probe_video_duration_sec(raw_src)
+    scale_crop = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
+
+    if src_dur > 0.4 and src_dur < target_dur - 0.08:
+        stretch = target_dur / src_dur
+        if stretch <= 1.85:
+            # Smooth theatrical slow-motion stretch + tpad safety clone (zero jarring loop restart & exact frame count!)
+            vf = f"{scale_crop},setpts={stretch:.5f}*(PTS-STARTPTS),fps={fps},tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p"
+            cmd = [ffmpeg_exe, "-y", "-i", str(raw_src), "-vf", vf]
+        else:
+            # Smooth forward + reverse ping-pong with gentle slow-mo so long scenes stay fluid & exact
+            half_stretch = max(1.0, min(1.85, target_dur / (2.0 * src_dur)))
+            fc = (
+                f"[0:v]{scale_crop},setpts=PTS-STARTPTS,split[a][b];"
+                f"[b]reverse,setpts=PTS-STARTPTS[r];"
+                f"[a][r]concat=n=2:v=1:a=0,setpts={half_stretch:.5f}*(PTS-STARTPTS),fps={fps},"
+                f"tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p[vout]"
+            )
+            cmd = [ffmpeg_exe, "-y", "-i", str(raw_src), "-filter_complex", fc, "-map", "[vout]"]
+    else:
+        vf = f"{scale_crop},setpts=PTS-STARTPTS,fps={fps},tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p"
+        cmd = [ffmpeg_exe, "-y", "-i", str(raw_src), "-vf", vf]
+
+    # Always pad last frame via tpad safety if source was a hair short, then cut to EXACT `exact_frames`
+    # Using uniform closed-GOP `-bf 0 -g fps -video_track_timescale 24000` guarantees zero concat bleed!
+    cmd.extend([
+        "-r", str(fps),
+        "-frames:v", str(exact_frames),
+        "-video_track_timescale", "24000",
+        "-bf", "0",
+        "-g", str(fps),
+        "-colorspace", "bt709",
+        "-color_primaries", "bt709",
+        "-color_trc", "bt709",
+        "-an",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+        str(output_mp4),
+    ])
+    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    return output_mp4
+
+
 def _generate_ai_scene_visual(
     scene: SceneClipSpec,
     output_mp4: Path,
@@ -172,6 +246,7 @@ def _generate_ai_scene_visual(
     topic: str,
     niche: str,
     duration_sec: float,
+    exact_frames: Optional[int] = None,
     aspect_ratio: str,
     render_quality: str,
     force_ai_cinema: bool = True,
@@ -180,24 +255,17 @@ def _generate_ai_scene_visual(
     config: OmniStudioConfig,
 ) -> Tuple[Path, str]:
     """
-    Produces a single scene's visual MP4 clip with Hollywood cinematography, frame-synced Foley audio
-    extraction, ZERO unwanted Python fallbacks & ZERO Chinese/foreign glyphs:
-    - `custom_upload`: normalizes user's uploaded MP4/image directly.
-    - `motion_graphics`: ONLY used if `force_ai_cinema=False` AND user explicitly set `asset_mode='motion_graphics'`.
-    - `full_omni_video` (Dual Full-Motion AI Video Stack):
-        1. Primary: `gemini-omni-1.2-flash` via Vertex AI global (`interactions.create` plain input — verified live!)
-           or Developer API, with exponential backoff retry & native Foley SFX extraction.
-        2. Backup Full Video: Vertex AI `veo-3.1-generate-001` (`us-central1`) with `negative_prompt=VEO_STRICT_NEGATIVE_PROMPT`
-           & native Foley SFX extraction.
-        3. Tertiary AI Cinema: `gemini-3-pro-image` / `gemini-nano-banana-2.1` keyframe + smooth 24fps motion (with retries).
-    - `ai_keyframes_kenburns`: `gemini-3-pro-image` / `gemini-nano-banana-2.1` with 3 retries + smooth 24fps motion.
+    Produces a single scene's visual MP4 clip locked to EXACTLY `exact_frames` frames (0.000ms drift!)
+    with Hollywood cinematography, vocal-notched native Foley extraction, ZERO unwanted Python fallbacks
+    & ZERO Chinese/foreign glyphs.
     """
     import time as _time
 
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     w, h = (1920, 1080) if aspect_ratio == "16:9" else (1080, 1920)
     fps = config.fps
-    dur = max(2.5, float(duration_sec))
+    n_frames = int(exact_frames) if (exact_frames and exact_frames > 0) else max(fps * 3, int(round(max(2.5, float(duration_sec)) * fps)))
+    dur = n_frames / float(fps)
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
 
     # Always elevate scene prompt through the Hollywood DP cinematography, Foley sound-design & zero-foreign-text enhancer
@@ -216,30 +284,21 @@ def _generate_ai_scene_visual(
     if scene.custom_asset_path and Path(scene.custom_asset_path).exists():
         custom_p = Path(scene.custom_asset_path)
         if custom_p.suffix.lower() in (".mp4", ".mov", ".mkv", ".webm"):
-            subprocess.run(
-                [
-                    ffmpeg_exe, "-y",
-                    "-stream_loop", "-1", "-i", str(custom_p),
-                    "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},format=yuv420p",
-                    "-t", f"{dur:.2f}", "-r", str(fps), "-an",
-                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
-                    str(output_mp4),
-                ],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
+            _normalize_video_clip_exact(custom_p, output_mp4, w=w, h=h, fps=fps, exact_frames=n_frames)
             return output_mp4, "custom_uploaded_video"
         else:
             vf = (
                 f"scale={int(w*1.06)}:{int(h*1.06)}:force_original_aspect_ratio=increase,"
-                f"crop={w}:{h}:x='(iw-ow)/2+((iw-ow)/4)*sin(2*PI*t/{dur:.2f})':y='(ih-oh)/2',format=yuv420p"
+                f"crop={w}:{h}:x='(iw-ow)/2+((iw-ow)/4)*sin(2*PI*t/{dur:.4f})':y='(ih-oh)/2',"
+                f"setsar=1,setpts=PTS-STARTPTS,fps={fps},format=yuv420p"
             )
             subprocess.run(
                 [
                     ffmpeg_exe, "-y", "-loop", "1", "-i", str(custom_p),
-                    "-vf", vf, "-t", f"{dur:.2f}", "-r", str(fps), "-an",
-                    "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+                    "-vf", vf, "-r", str(fps), "-frames:v", str(n_frames),
+                    "-video_track_timescale", "24000", "-bf", "0", "-g", str(fps),
+                    "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+                    "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
                     str(output_mp4),
                 ],
                 check=True,
@@ -255,8 +314,9 @@ def _generate_ai_scene_visual(
         and scene.motion_graphic_type
         and scene.motion_graphic_type != "none"
     ):
+        mg_raw = output_mp4.with_suffix(".mg_raw.mp4")
         render_motion_graphic_clip(
-            output_mp4,
+            mg_raw,
             graphic_type=scene.motion_graphic_type,
             title=scene.chapter_label or topic,
             callout=scene.on_screen_callout or scene.voiceover_text[:72],
@@ -266,13 +326,14 @@ def _generate_ai_scene_visual(
             aspect_ratio=aspect_ratio,
             fps=fps,
         )
+        _normalize_video_clip_exact(mg_raw, output_mp4, w=w, h=h, fps=fps, exact_frames=n_frames)
+        mg_raw.unlink(missing_ok=True)
         return output_mp4, f"procedural_{scene.motion_graphic_type}"
 
     # 3. Full-Motion AI Video Stack (`gemini-omni-1.2-flash` Primary -> `veo-3.1-generate-001` Backup)
     if render_quality == "full_omni_video" and config.has_valid_gemini_key:
         v_creds, v_proj = get_vertex_adc_credentials()
         omni_dur = max(4, min(12, int(round(dur))))
-        aspect_phrase = "16:9 widescreen landscape" if aspect_ratio == "16:9" else "9:16 vertical portrait"
 
         # 3A. Primary: Gemini Omni 1.2 Flash (Works live on BOTH Vertex AI global & AI Studio!)
         omni_model = resolve_current_model(VIDEO_OMNI_MODEL, "gemini-omni-1.2-flash")
@@ -303,22 +364,10 @@ def _generate_ai_scene_visual(
                 if raw_vid and len(raw_vid) > 16384:
                     raw_tmp = output_mp4.with_suffix(".omni_raw.mp4")
                     raw_tmp.write_bytes(raw_vid)
-                    # Preserve Omni 1.2 Flash's frame-accurate native Foley SFX before normalizing silent video track!
+                    # Preserve Omni 1.2 Flash's frame-accurate native Foley SFX (vocal-notched, played ONCE!)
                     if foley_out_wav is not None:
                         extract_native_video_foley(raw_tmp, foley_out_wav, target_duration_sec=dur)
-                    subprocess.run(
-                        [
-                            ffmpeg_exe, "-y",
-                            "-stream_loop", "-1", "-i", str(raw_tmp),
-                            "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},format=yuv420p",
-                            "-t", f"{dur:.2f}", "-r", str(fps), "-an",
-                            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
-                            str(output_mp4),
-                        ],
-                        check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
-                    )
+                    _normalize_video_clip_exact(raw_tmp, output_mp4, w=w, h=h, fps=fps, exact_frames=n_frames)
                     raw_tmp.unlink(missing_ok=True)
                     return output_mp4, f"gemini_omni({omni_model})"
             except Exception as exc:
@@ -352,22 +401,10 @@ def _generate_ai_scene_visual(
                     if gen_vids and getattr(gen_vids[0], "video", None) and getattr(gen_vids[0].video, "video_bytes", None):
                         raw_tmp = output_mp4.with_suffix(".veo_raw.mp4")
                         raw_tmp.write_bytes(gen_vids[0].video.video_bytes)
-                        # Preserve Veo 3.1's native frame-synced Foley SFX before normalizing silent video track!
+                        # Preserve Veo 3.1's native frame-synced Foley SFX (vocal-notched, played ONCE!)
                         if foley_out_wav is not None:
                             extract_native_video_foley(raw_tmp, foley_out_wav, target_duration_sec=dur)
-                        subprocess.run(
-                            [
-                                ffmpeg_exe, "-y",
-                                "-stream_loop", "-1", "-i", str(raw_tmp),
-                                "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},format=yuv420p",
-                                "-t", f"{dur:.2f}", "-r", str(fps), "-an",
-                                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
-                                str(output_mp4),
-                            ],
-                            check=True,
-                            stdout=subprocess.PIPE,
-                            stderr=subprocess.PIPE,
-                        )
+                        _normalize_video_clip_exact(raw_tmp, output_mp4, w=w, h=h, fps=fps, exact_frames=n_frames)
                         raw_tmp.unlink(missing_ok=True)
                         return output_mp4, f"vertex_veo({VERTEX_VEO_MODEL})"
                 except Exception as exc:
@@ -438,21 +475,24 @@ def _generate_ai_scene_visual(
     if not frame_png.exists():
         _render_kinetic_cinematic_plate(frame_png, scene=scene, topic=topic, niche=niche, size=(w, h))
 
-    # Animate smooth broadcast Ken-Burns drift keeping centered safe zone intact
+    # Animate smooth broadcast Ken-Burns drift locked to EXACT `n_frames` (zero drift, zero B-frame bleed!)
     vf = (
         f"scale={int(w * 1.05)}:{int(h * 1.05)}:force_original_aspect_ratio=increase,"
-        f"crop={w}:{h}:x='(iw-ow)/2+((iw-ow)/4)*sin(2*PI*t/{dur:.2f})':y='(ih-oh)/2+((ih-oh)/4)*cos(2*PI*t/{dur:.2f})',"
-        f"format=yuv420p"
+        f"crop={w}:{h}:x='(iw-ow)/2+((iw-ow)/4)*sin(2*PI*t/{dur:.4f})':y='(ih-oh)/2+((ih-oh)/4)*cos(2*PI*t/{dur:.4f})',"
+        f"setsar=1,setpts=PTS-STARTPTS,fps={fps},format=yuv420p"
     )
     subprocess.run(
         [
             ffmpeg_exe, "-y",
             "-loop", "1", "-i", str(frame_png),
             "-vf", vf,
-            "-t", f"{dur:.2f}",
             "-r", str(fps),
+            "-frames:v", str(n_frames),
+            "-video_track_timescale", "24000",
+            "-bf", "0", "-g", str(fps),
+            "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
             "-an",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
             str(output_mp4),
         ],
         check=True,
@@ -506,55 +546,70 @@ def _overlay_host_pip_on_clip(
     input_mp4: Path,
     pip_png: Path,
     output_mp4: Path,
+    *,
+    fps: int = 24,
+    exact_frames: Optional[int] = None,
 ) -> Path:
-    """Overlays the optional circular host PIP cleanly into the bottom-left safe zone."""
+    """Overlays the optional circular host PIP cleanly while preserving exact frame count & closed GOP."""
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
-    subprocess.run(
-        [
-            ffmpeg_exe, "-y",
-            "-i", str(input_mp4),
-            "-i", str(pip_png),
-            "-filter_complex", "[0:v][1:v]overlay=44:H-h-180[outv]",
-            "-map", "[outv]",
-            "-an",
-            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
-            str(output_mp4),
-        ],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    cmd = [
+        ffmpeg_exe, "-y",
+        "-i", str(input_mp4),
+        "-i", str(pip_png),
+        "-filter_complex", f"[0:v][1:v]overlay=44:H-h-180,setpts=PTS-STARTPTS,fps={fps},format=yuv420p[outv]",
+        "-map", "[outv]",
+        "-r", str(fps),
+        "-video_track_timescale", "24000",
+        "-bf", "0", "-g", str(fps),
+        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+        "-an",
+        "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+    ]
+    if exact_frames and exact_frames > 0:
+        cmd.extend(["-frames:v", str(exact_frames)])
+    cmd.append(str(output_mp4))
+    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return output_mp4
 
 
 def _mux_continuous_audio_and_burn_ass(
-    video_only_mp4: Path,
+    concat_txt_or_video: Path,
     continuous_master_wav: Path,
     ass_path: Path,
     output_mp4: Path,
+    *,
+    fps: int = 24,
+    is_concat_list: bool = True,
 ) -> Path:
     """
-    Single-pass broadcast mux: combines concatenated silent video + ONE continuous PCM master WAV,
-    burns word-level active-highlight `.ass` subtitles (with bundled Devanagari fontsdir),
-    encodes browser-universal 44.1kHz STEREO AAC-LC (`-ar 44100 -ac 2 -c:a aac -b:a 192k`)
-    with `-movflags +faststart` so Chrome, Edge, Safari, Mobile & YouTube ALWAYS play crystal-clear sound!
+    Single-pass frame-exact broadcast stitch & mux (ZERO `-c:v copy` overlap or drift!):
+    - Decodes the frame-locked concat list directly into ONE continuous CFR `fps` H.264 stream
+    - Burns word-level active-highlight `.ass` subtitles (with bundled Devanagari fontsdir)
+    - Muxes ONE continuous 44.1kHz STEREO AAC-LC (`192k`) audio stream with `-movflags +faststart`.
     """
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     escaped_ass = _ffmpeg_ass_filter_escape(ass_path)
     fonts_dir = Path("assets/fonts")
-    vf_str = (
+    ass_filter = (
         f"ass='{escaped_ass}':fontsdir='{_ffmpeg_ass_filter_escape(fonts_dir)}'"
         if fonts_dir.exists()
         else f"ass='{escaped_ass}'"
+    )
+    vf_str = f"fps={fps},{ass_filter},format=yuv420p"
+    vid_in_args = (
+        ["-f", "concat", "-safe", "0", "-i", str(concat_txt_or_video)]
+        if is_concat_list
+        else ["-i", str(concat_txt_or_video)]
     )
     try:
         subprocess.run(
             [
                 ffmpeg_exe, "-y",
-                "-i", str(video_only_mp4),
+                *vid_in_args,
                 "-i", str(continuous_master_wav),
                 "-map", "0:v:0", "-map", "1:a:0",
                 "-vf", vf_str,
+                "-vsync", "cfr", "-r", str(fps),
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
                 "-movflags", "+faststart",
@@ -568,16 +623,18 @@ def _mux_continuous_audio_and_burn_ass(
         if output_mp4.exists() and output_mp4.stat().st_size > 4096:
             return output_mp4
     except Exception as exc:
-        logger.warning("FFmpeg ASS burn pass failed (%s); muxing clean stereo audio without ASS filter.", exc)
+        logger.warning("FFmpeg ASS burn pass failed (%s); stitching clean CFR video + stereo audio without ASS.", exc)
 
-    # Guaranteed fallback WITH full 44.1kHz stereo audio (never drops audio!)
+    # Guaranteed fallback WITH clean CFR re-encode & full 44.1kHz stereo audio (never uses broken -c:v copy!)
     subprocess.run(
         [
             ffmpeg_exe, "-y",
-            "-i", str(video_only_mp4),
+            *vid_in_args,
             "-i", str(continuous_master_wav),
             "-map", "0:v:0", "-map", "1:a:0",
-            "-c:v", "copy",
+            "-vf", f"fps={fps},format=yuv420p",
+            "-vsync", "cfr", "-r", str(fps),
+            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
             "-movflags", "+faststart",
             "-shortest",
@@ -625,6 +682,15 @@ def run_agent3_media_pipeline(
     for d in (audio_dir, clips_16_dir, clips_9_dir, renders_dir):
         d.mkdir(parents=True, exist_ok=True)
 
+    # Clean stale per-scene intermediate renders/Foley so previous runs can NEVER bleed or overlap!
+    for stale_pat in ("scene_*_foley_*.wav", "scene_*_master.wav"):
+        for fp in audio_dir.glob(stale_pat):
+            fp.unlink(missing_ok=True)
+    for fp in clips_16_dir.glob("scene_*_vis*.mp4"):
+        fp.unlink(missing_ok=True)
+    for fp in clips_9_dir.glob("short_vid_*.mp4"):
+        fp.unlink(missing_ok=True)
+
     scenes = agent2.scenes
     total_scenes = len(scenes)
 
@@ -665,7 +731,11 @@ def run_agent3_media_pipeline(
     )
     voice_results: Dict[int, Tuple[Path, float, str]] = {}
 
-    def _synth_one(sc: SceneClipSpec) -> Tuple[int, Path, float, str]:
+    # Quantize every scene to an EXACT integer frame count (`24000 Hz / 24 fps = 1000 samples/frame EXACTLY`)!
+    # Eliminates cumulative floating-point A/V drift & visual/audio overlap across 30-50+ stitched scenes.
+    scene_frame_counts: Dict[int, int] = {}
+
+    def _synth_one(sc: SceneClipSpec) -> Tuple[int, Path, float, int, str]:
         wav_p = audio_dir / f"scene_{sc.scene_index:03d}_voice.wav"
         p, dur, eng = synthesize_scene_voiceover(
             sc.voiceover_text,
@@ -676,14 +746,17 @@ def run_agent3_media_pipeline(
             config=cfg,
             prefer_fast_local_tts=prefer_fast_local_tts,
         )
-        return sc.scene_index, p, max(3.0, dur + 0.25), eng
+        n_frames = max(cfg.fps * 3, int(math.ceil((dur + 0.35) * cfg.fps)))
+        exact_dur = n_frames / float(cfg.fps)
+        return sc.scene_index, p, exact_dur, n_frames, eng
 
     with ThreadPoolExecutor(max_workers=2) as pool:
         futs = [pool.submit(_synth_one, sc) for sc in scenes]
         done_cnt = 0
         for fut in as_completed(futs):
-            s_idx, wav_p, actual_dur, eng = fut.result()
-            voice_results[s_idx] = (wav_p, actual_dur, eng)
+            s_idx, wav_p, exact_dur, n_frames, eng = fut.result()
+            voice_results[s_idx] = (wav_p, exact_dur, eng)
+            scene_frame_counts[s_idx] = n_frames
             done_cnt += 1
             pct = int((done_cnt / float(total_scenes)) * 100)
             database.upsert_job(
@@ -694,22 +767,23 @@ def run_agent3_media_pipeline(
                 label=stage_defs[0][1],
                 status="running" if done_cnt < total_scenes else "completed",
                 progress_pct=pct,
-                message=f"Processing ({pct}%) — {done_cnt}/{total_scenes} clips anchored ({eng})" if done_cnt < total_scenes else f"Completed ✅ ({total_scenes} voiceovers anchored)",
+                message=f"Processing ({pct}%) — {done_cnt}/{total_scenes} clips frame-locked ({eng})" if done_cnt < total_scenes else f"Completed ✅ ({total_scenes} voiceovers frame-locked)",
             )
 
-    # Exact global offsets & YouTube Chapters derived from measured WAV durations
+    # Exact global offsets & YouTube Chapters derived from exact quantized frame counts (0.000ms drift!)
     scene_offsets: Dict[int, float] = {}
-    cursor = 0.0
+    cum_frames = 0
     chapter_seen: List[str] = []
     exact_chapter_lines: List[str] = []
     for sc in scenes:
-        scene_offsets[sc.scene_index] = round(cursor, 3)
+        offset_sec = cum_frames / float(cfg.fps)
+        scene_offsets[sc.scene_index] = offset_sec
         lbl = (sc.chapter_label or sc.beat_phase.replace("_", " ")).strip()
         if lbl and lbl not in chapter_seen:
             chapter_seen.append(lbl)
-            exact_chapter_lines.append(f"{format_timestamp(cursor)} - {lbl}")
-        cursor += voice_results[sc.scene_index][1]
-    total_actual_duration = round(cursor, 2)
+            exact_chapter_lines.append(f"{format_timestamp(offset_sec)} - {lbl}")
+        cum_frames += scene_frame_counts[sc.scene_index]
+    total_actual_duration = round(cum_frames / float(cfg.fps), 2)
     exact_chapters_text = "\n".join(exact_chapter_lines)
 
     # ------------------------------------------------------------------
@@ -783,6 +857,7 @@ def run_agent3_media_pipeline(
 
     def _render_vis(sc: SceneClipSpec) -> Tuple[int, Path, str]:
         dur = voice_results[sc.scene_index][1]
+        n_frames = scene_frame_counts[sc.scene_index]
         out_mp4 = clips_16_dir / f"scene_{sc.scene_index:03d}_vis.mp4"
         foley_wav = (audio_dir / f"scene_{sc.scene_index:03d}_foley_native.wav") if enable_foley_sfx else None
         p, src = _generate_ai_scene_visual(
@@ -791,6 +866,7 @@ def run_agent3_media_pipeline(
             topic=agent1.topic,
             niche=agent1.niche,
             duration_sec=dur,
+            exact_frames=n_frames,
             aspect_ratio="16:9",
             render_quality=render_quality,
             force_ai_cinema=force_ai_cinema,
@@ -801,7 +877,7 @@ def run_agent3_media_pipeline(
         # Apply optional presenter PIP badge cleanly on Opening Hook (Scene 1) & Final Outro scene
         if host_pip_png and sc.scene_index in (1, total_scenes):
             pip_mp4 = clips_16_dir / f"scene_{sc.scene_index:03d}_vis_pip.mp4"
-            _overlay_host_pip_on_clip(p, host_pip_png, pip_mp4)
+            _overlay_host_pip_on_clip(p, host_pip_png, pip_mp4, fps=cfg.fps, exact_frames=n_frames)
             p = pip_mp4
             src = f"{src}+host_pip"
         return sc.scene_index, p, src
@@ -893,15 +969,18 @@ def run_agent3_media_pipeline(
                     active_foley = created_f
                     cinema_foley_cnt += 1
 
+        n_frames = scene_frame_counts[sc.scene_index]
+        exact_audio_samples = int(round(n_frames * (24000.0 / float(cfg.fps))))
         mix_scene_master_audio(
             wav_p,
             bgm_stem_path,
             master_wav,
             bgm_offset_sec=offset,
             target_duration_sec=actual_dur,
+            exact_samples=exact_audio_samples,
             duck_db=effective_duck_db,
             foley_wav_path=active_foley,
-            foley_db=-8.5,
+            foley_db=-13.5,
             add_cut_sfx=False,
         )
         master_audio_paths[sc.scene_index] = master_wav
@@ -911,6 +990,7 @@ def run_agent3_media_pipeline(
             sc.voiceover_text,
             scene_start_offset_sec=offset,
             scene_duration_sec=actual_dur,
+            scene_id=sc.scene_index,
             config=cfg,
             use_cloud_transcribe=False,
         )
@@ -959,25 +1039,31 @@ def run_agent3_media_pipeline(
         vid_16_list.append(visual_results[sc.scene_index][0])
         aud_16_list.append(master_audio_paths[sc.scene_index])
 
-    # Seamless single continuous PCM master track (zero AAC concat discontinuities!)
+    # Seamless single continuous PCM master track (exact sample-locked to video frames!)
     full_master_16_wav = renders_dir / "master_audio_16x9.wav"
     concat_wav_segments(aud_16_list, full_master_16_wav)
 
+    # Frame-exact concat manifest decoded directly into ONE clean CFR H.264 stream (ZERO -c:v copy overlap!)
+    concat_16_lines: List[str] = []
+    for sc, vp in zip(scenes, vid_16_list):
+        exact_d = scene_frame_counts[sc.scene_index] / float(cfg.fps)
+        concat_16_lines.append(f"file '{vp.resolve().as_posix()}'")
+        concat_16_lines.append(f"duration {exact_d:.6f}")
     concat_16_txt = renders_dir / "concat_16x9.txt"
-    concat_16_txt.write_text("\n".join(f"file '{p.resolve().as_posix()}'" for p in vid_16_list), encoding="utf-8")
-    raw_vid_16x9 = renders_dir / "raw_video_only_16x9.mp4"
-    subprocess.run(
-        [ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_16_txt), "-c:v", "copy", "-an", str(raw_vid_16x9)],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    concat_16_txt.write_text("\n".join(concat_16_lines) + "\n", encoding="utf-8")
 
     ass_16_path = renders_dir / "subtitles_16x9.ass"
     write_active_highlight_ass_file(all_words_16x9, ass_16_path, aspect_ratio="16:9")
 
     final_16x9_mp4 = renders_dir / "OMNI_FINAL_16x9_1080p.mp4"
-    _mux_continuous_audio_and_burn_ass(raw_vid_16x9, full_master_16_wav, ass_16_path, final_16x9_mp4)
+    _mux_continuous_audio_and_burn_ass(
+        concat_16_txt,
+        full_master_16_wav,
+        ass_16_path,
+        final_16x9_mp4,
+        fps=cfg.fps,
+        is_concat_list=True,
+    )
     database.upsert_job(
         job_id=f"{project_id}_assemble_16x9",
         project_id=project_id,
@@ -1025,26 +1111,14 @@ def run_agent3_media_pipeline(
     vid_9_list: List[Path] = []
     aud_9_list: List[Path] = []
     short_words: List[TimedWord] = []
-    short_cursor = 0.0
+    short_frames_acc = 0
     for sc in short_scenes:
-        dur = voice_results[sc.scene_index][1]
+        n_frames = scene_frame_counts[sc.scene_index]
+        dur = n_frames / float(cfg.fps)
+        short_cursor = short_frames_acc / float(cfg.fps)
         vis_16 = visual_results[sc.scene_index][0]
         seg_9 = clips_9_dir / f"short_vid_{sc.scene_index:03d}.mp4"
-        subprocess.run(
-            [
-                ffmpeg_exe, "-y",
-                "-i", str(vis_16),
-                "-vf", "scale=1080:1920:force_original_aspect_ratio=increase,crop=1080:1920,format=yuv420p",
-                "-t", f"{dur:.2f}",
-                "-r", str(cfg.fps),
-                "-an",
-                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "21",
-                str(seg_9),
-            ],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        _normalize_video_clip_exact(vis_16, seg_9, w=1080, h=1920, fps=cfg.fps, exact_frames=n_frames)
         vid_9_list.append(seg_9)
         aud_9_list.append(master_audio_paths[sc.scene_index])
         short_words.extend(
@@ -1053,30 +1127,37 @@ def run_agent3_media_pipeline(
                 sc.voiceover_text,
                 scene_start_offset_sec=short_cursor,
                 scene_duration_sec=dur,
+                scene_id=sc.scene_index,
                 config=cfg,
                 use_cloud_transcribe=False,
             )
         )
-        short_cursor += dur
+        short_frames_acc += n_frames
+    short_cursor = short_frames_acc / float(cfg.fps)
 
     full_master_9_wav = renders_dir / "master_audio_9x16.wav"
     concat_wav_segments(aud_9_list, full_master_9_wav)
 
+    concat_9_lines: List[str] = []
+    for sc, vp in zip(short_scenes, vid_9_list):
+        exact_d = scene_frame_counts[sc.scene_index] / float(cfg.fps)
+        concat_9_lines.append(f"file '{vp.resolve().as_posix()}'")
+        concat_9_lines.append(f"duration {exact_d:.6f}")
     concat_9_txt = renders_dir / "concat_9x16.txt"
-    concat_9_txt.write_text("\n".join(f"file '{p.resolve().as_posix()}'" for p in vid_9_list), encoding="utf-8")
-    raw_vid_9x16 = renders_dir / "raw_video_only_9x16.mp4"
-    subprocess.run(
-        [ffmpeg_exe, "-y", "-f", "concat", "-safe", "0", "-i", str(concat_9_txt), "-c:v", "copy", "-an", str(raw_vid_9x16)],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    concat_9_txt.write_text("\n".join(concat_9_lines) + "\n", encoding="utf-8")
 
     ass_9_path = renders_dir / "subtitles_9x16.ass"
     write_active_highlight_ass_file(short_words, ass_9_path, aspect_ratio="9:16")
 
     final_9x16_mp4 = renders_dir / "OMNI_SHORTS_9x16.mp4"
-    _mux_continuous_audio_and_burn_ass(raw_vid_9x16, full_master_9_wav, ass_9_path, final_9x16_mp4)
+    _mux_continuous_audio_and_burn_ass(
+        concat_9_txt,
+        full_master_9_wav,
+        ass_9_path,
+        final_9x16_mp4,
+        fps=cfg.fps,
+        is_concat_list=True,
+    )
     database.upsert_job(
         job_id=f"{project_id}_assemble_9x16",
         project_id=project_id,

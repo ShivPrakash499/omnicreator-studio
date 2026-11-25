@@ -59,41 +59,57 @@ def extract_native_video_foley(
     target_duration_sec: float,
 ) -> Optional[Path]:
     """
-    Extracts frame-accurate native Foley SFX from an Omni 1.2 Flash or Veo 3.1 MP4 clip.
-    Applies speech-pocket EQ (so Foley shines around narration without muddying dialogue),
-    gentle loudness normalization, and smooth 60ms fade-in/out to prevent boundary clicks.
+    Extracts frame-accurate native Foley SFX ONCE from an Omni 1.2 Flash or Veo 3.1 MP4 clip
+    (NEVER loops audio mid-scene!). Applies vocal-formant notch EQ (suppressing any accidental
+    model speech/singing so it never overlaps our narrator!), pads trailing silence to exact
+    scene duration, and adds clean 60ms fade-in / 250ms fade-out.
     Returns `output_foley_wav` if real non-silent audio was present, else `None`.
     """
     if not raw_video_path.exists():
         return None
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     dur = max(1.0, float(target_duration_sec))
-    fade_out_start = max(0.05, dur - 0.08)
+    exact_samples = int(round(dur * SAMPLE_RATE))
     output_foley_wav.parent.mkdir(parents=True, exist_ok=True)
 
-    # Probe if raw video contains an audio stream
+    # Probe if raw video contains an audio stream & measure its actual source duration
     probe = subprocess.run(
         [ffmpeg_exe, "-i", str(raw_video_path)],
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
         text=True,
     )
-    if "Audio:" not in (probe.stderr or ""):
+    stderr_txt = probe.stderr or ""
+    if "Audio:" not in stderr_txt:
         return None
 
+    import re as _re
+    src_dur = dur
+    m_dur = _re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", stderr_txt)
+    if m_dur:
+        src_dur = int(m_dur.group(1)) * 3600 + int(m_dur.group(2)) * 60 + float(m_dur.group(3))
+    play_dur = max(0.5, min(dur, src_dur))
+    fade_out_d = min(0.28, play_dur * 0.25)
+    fade_out_st = max(0.05, play_dur - fade_out_d)
+
+    # Suppress speech/vocal formants (350Hz, 1.2kHz, 2.6kHz) so accidental Omni voices never overlap narrator,
+    # while keeping crisp Foley transients (arrows, chakra shimmer, thunder sub-bass, fire, rain) vivid!
     af_chain = (
-        f"highpass=f=45,"
-        f"equalizer=f=1800:width_type=q:w=1.2:g=-4,"
+        f"highpass=f=55,"
+        f"equalizer=f=350:width_type=q:w=0.9:g=-7,"
+        f"equalizer=f=1200:width_type=q:w=0.8:g=-9,"
+        f"equalizer=f=2600:width_type=q:w=1.0:g=-7,"
         f"afade=t=in:st=0:d=0.06,"
-        f"afade=t=out:st={fade_out_start:.3f}:d=0.08"
+        f"afade=t=out:st={fade_out_st:.3f}:d={fade_out_d:.3f},"
+        f"apad=whole_dur={dur:.4f}"
     )
     try:
         subprocess.run(
             [
                 ffmpeg_exe, "-y",
-                "-stream_loop", "-1", "-i", str(raw_video_path),
+                "-i", str(raw_video_path),
                 "-vn",
-                "-t", f"{dur:.3f}",
+                "-t", f"{dur:.4f}",
                 "-af", af_chain,
                 "-ar", str(SAMPLE_RATE), "-ac", "1", "-c:a", "pcm_s16le",
                 str(output_foley_wav),
@@ -104,15 +120,19 @@ def extract_native_video_foley(
         )
         rms = _compute_wav_rms(output_foley_wav)
         if rms > 120.0:
-            # Normalize native Foley gently to ~-17 dBFS RMS with true-peak safety (zero loudnorm DC offset)
+            # Normalize native Foley gently to ~-18 dBFS RMS & lock to exact sample count
             with wave.open(str(output_foley_wav), "rb") as wf:
                 raw = wf.readframes(wf.getnframes())
             n = len(raw) // 2
-            samples = struct.unpack(f"<{n}h", raw[: n * 2])
+            samples = list(struct.unpack(f"<{n}h", raw[: n * 2]))
+            if len(samples) < exact_samples:
+                samples.extend([0] * (exact_samples - len(samples)))
+            else:
+                samples = samples[:exact_samples]
             peak = max((abs(s) for s in samples), default=1)
-            target_rms = 32767.0 * math.pow(10.0, -17.0 / 20.0)
-            gain = min(4.5, max(0.25, target_rms / rms), 25500.0 / float(max(1, peak)))
-            out_b = bytearray(n * 2)
+            target_rms = 32767.0 * math.pow(10.0, -18.0 / 20.0)
+            gain = min(4.0, max(0.22, target_rms / rms), 24000.0 / float(max(1, peak)))
+            out_b = bytearray(exact_samples * 2)
             for i, s in enumerate(samples):
                 struct.pack_into("<h", out_b, i * 2, int(max(-32767, min(32767, s * gain))))
             with wave.open(str(output_foley_wav), "wb") as wf_o:
