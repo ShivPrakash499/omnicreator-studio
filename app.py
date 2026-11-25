@@ -185,7 +185,15 @@ def _init_session_state() -> None:
             st.session_state[k] = v
 
 
+def _clear_step1_widget_keys() -> None:
+    """Clears cached Step 1 form widget state when switching/regenerating a project."""
+    for k in list(st.session_state.keys()):
+        if k.startswith(("a1_", "beat_", "sc_")):
+            st.session_state.pop(k, None)
+
+
 def _reset_workspace() -> None:
+    _clear_step1_widget_keys()
     for k in [
         "omni_step",
         "omni_project_id",
@@ -208,6 +216,7 @@ def _load_project_into_session(project_id: str) -> None:
     proj = db.get_project(project_id)
     if not proj:
         return
+    _clear_step1_widget_keys()
     st.session_state["omni_project_id"] = proj["id"]
     st.session_state["omni_topic"] = proj["topic"]
     st.session_state["omni_niche"] = proj["niche"] if proj["niche"] in SUPPORTED_NICHES else SUPPORTED_NICHES[0]
@@ -415,6 +424,7 @@ if step == 1:
                     agent1_data=a1_obj.model_dump(),
                 )
                 st.session_state["agent1_output"] = a1_obj.model_dump()
+                _clear_step1_widget_keys()
                 # Clear downstream stale stages only when user explicitly re-runs Agent 1
                 st.session_state["agent2_output"] = None
                 st.session_state["agent3_output"] = None
@@ -444,8 +454,20 @@ if step == 1:
         with st.expander("📝 High-CTR Titles, SEO Description & 20+ Search Tags (Editable)", expanded=True):
             t_options = list(a1.title_options)
             default_idx = t_options.index(a1.selected_title) if a1.selected_title in t_options else 0
-            picked_title = st.radio("Choose Winning CTR Title:", options=t_options, index=default_idx, key="a1_title_pick")
-            edited_title = st.text_input("Fine-Tune Selected Title:", value=picked_title, key="a1_title_edit")
+
+            def _sync_selected_title_to_input() -> None:
+                st.session_state["a1_title_edit"] = st.session_state.get("a1_title_pick", t_options[default_idx])
+
+            picked_title = st.radio(
+                "Choose Winning CTR Title:",
+                options=t_options,
+                index=default_idx,
+                key="a1_title_pick",
+                on_change=_sync_selected_title_to_input,
+            )
+            if "a1_title_edit" not in st.session_state:
+                st.session_state["a1_title_edit"] = a1.selected_title or picked_title
+            edited_title = st.text_input("Fine-Tune Selected Title:", key="a1_title_edit")
             edited_desc = st.text_area("SEO Description (with Auto-Timestamps):", value=a1.seo_description, height=170, key="a1_desc_edit")
             edited_tags_str = st.text_area("Targeted Search Tags (comma-separated, 20+):", value=", ".join(a1.tags), height=90, key="a1_tags_edit")
 
