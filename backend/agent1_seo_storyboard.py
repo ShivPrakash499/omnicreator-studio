@@ -433,7 +433,8 @@ def run_agent1_seo_and_storyboard(
             f"   - End with an `Outro_CTA` beat driving comments & subscriptions.\n"
             f"   - CRITICAL FOR `visual_direction`: Write like a Hollywood Director of Photography! Describe concrete, filmable real-world locations, physical subjects in motion, lighting atmosphere, and camera framing (e.g., rain-soaked twilight streets, glowing macro hardware, sweeping aerial landscapes). NEVER ask for flat charts, PowerPoint slides, summary cards, wireframe grids, or text panels.\n"
             f"5. Write `hook_script_0_45s`, `climax_misconception_aha`, and `outro_cta_script` authentically in {language_tone}.\n"
-            f"6. Craft `thumbnail_hook_headline` (2-4 punchy words — use clean Roman English/Hinglish if language is English or Hinglish, or clean crisp Hindi Devanagari ONLY if language is Hindi), `thumbnail_badge_label` (1-2 crisp words in the same script), and "
+            f"6. Craft `bgm_style_reference` specifically matched to the exact culture, era, and emotional soul of '{topic}' for Google Lyria-002 instrumental scoring (e.g. expressive bansuri flute, warm tanpura drone, sitar/sarangi, subtle temple pakhawaj & sweeping Indian orchestral strings for Indian devotional/mythological stories; deep cello & brass for history; analog synth for AI; strictly instrumental, zero vocals/singing).\n"
+            f"7. Craft `thumbnail_hook_headline` (2-4 punchy words — use clean Roman English/Hinglish if language is English or Hinglish, or clean crisp Hindi Devanagari ONLY if language is Hindi), `thumbnail_badge_label` (1-2 crisp words in the same script), and "
             f"`thumbnail_graphic_concept` (dramatic, photorealistic, high-contrast theatrical subject/scene symbolizing '{topic}' with glowing volumetric rim light — zero flat clipart or garbled text).\n"
             f"Return STRICT JSON matching the Agent1Output schema."
         )

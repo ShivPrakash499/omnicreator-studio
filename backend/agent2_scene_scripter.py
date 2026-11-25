@@ -142,6 +142,7 @@ def _expand_deterministic_scenes(
                 niche=agent1.niche,
                 cinema_preset=cinema_preset,
                 camera_cue=cam,
+                sfx_cue=f"realistic environmental ambience and physical foley matching '{b.beat_title}'",
                 duration_sec=dur,
                 scene_index=scene_idx,
             )
@@ -163,7 +164,7 @@ def _expand_deterministic_scenes(
                     voiceover_text=vo,
                     ssml_voice_cues=ssml_cues,
                     on_screen_callout=f"{b.beat_title[:42]}",
-                    sfx_cue="crisp whoosh riser" if sub_i == 0 else "subtle kinetic click",
+                    sfx_cue=f"realistic environmental ambience and physical foley matching '{b.beat_title}'",
                 )
             )
             cursor += dur
@@ -243,8 +244,12 @@ def run_agent2_scene_scripting(
                 f"   (d) MOTIVATED LIGHTING & FILM GRADE: Practical key lights, dramatic rim backlighting, volumetric shafts, shallow f/1.4 depth of field, cohesive with '{cinema_preset}'.\n"
                 f"   (e) SINGLE UNBROKEN TAKE: Explicitly end with single unbroken continuous shot, no scene cuts, no dialogue, and {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}\n"
                 f"4. `camera_and_lighting_cue`: Concise 1-line DP note matching the scene's exact lens, movement, and lighting.\n"
-                f"5. Keep `asset_mode='ai_video'` and `motion_graphic_type='none'` for EVERY scene (zero flat Python charts).\n"
-                f"6. Provide a crisp 3-6 word `on_screen_callout` in proper English for each scene.\n\n"
+                f"5. `sfx_cue` (CRITICAL — FRAME-SYNCED CINEMA FOLEY SOUND DESIGN): Describe the EXACT realistic physical sound effects "
+                f"heard during the visible action of this scene (e.g., 'taut bowstring creak, explosive arrow release twang, and whistling flaming arrow cutting through air', "
+                f"'revolving metallic divine chakra resonant cosmic hum with swirling wind vortex', 'distant temple conch shankh and rolling thunder', "
+                f"'rain pattering on wet asphalt with deep electric hum', 'crackling fire embers and wind'). NEVER write cartoon beeps, 'ting', 'kinetic click', or generic risers.\n"
+                f"6. Keep `asset_mode='ai_video'` and `motion_graphic_type='none'` for EVERY scene (zero flat Python charts).\n"
+                f"7. Provide a crisp 3-6 word `on_screen_callout` in proper English for each scene.\n\n"
                 f"Baseline scaffold JSON:\n{json.dumps([s.model_dump() for s in slice_scenes], ensure_ascii=False)}"
             )
 
@@ -282,6 +287,7 @@ def run_agent2_scene_scripting(
                 niche=agent1.niche,
                 cinema_preset=cinema_preset,
                 camera_cue=sc.camera_and_lighting_cue,
+                sfx_cue=sc.sfx_cue,
                 duration_sec=sc.duration_sec,
                 scene_index=idx,
             )
@@ -329,6 +335,7 @@ def enhance_all_scenes_to_cinema(
                 scene_index: int
                 visual_prompt_veo_omni: str
                 camera_and_lighting_cue: str
+                sfx_cue: str
 
             class _CinemaRewriteBatch(_PydBase):
                 items: List[_CinemaRewriteItem]
@@ -343,22 +350,25 @@ def enhance_all_scenes_to_cinema(
                         "duration_sec": s.duration_sec,
                         "voiceover_text": s.voiceover_text,
                         "current_visual_prompt": s.visual_prompt_veo_omni,
+                        "current_sfx_cue": s.sfx_cue,
                     }
                     for s in chunk
                 ]
                 prompt = (
-                    f"You are an Academy-Award Director of Photography upgrading video generation prompts for "
+                    f"You are an Academy-Award Director of Photography & Supervising Sound Editor upgrading scenes for "
                     f"Gemini Omni 1.2 Flash & Veo 3.1.\n"
                     f"Topic: {agent2.topic} | Niche: {agent2.niche} | Cinema Look: {cinema_preset}\n"
                     f"Rig & Grade: {preset['camera_rig']}; {preset['lighting_signature']}; {preset['color_grade']}\n"
                     f"Niche Visual Grammar: {prof['visual_style']}\n\n"
-                    f"Rewrite ONLY `visual_prompt_veo_omni` and `camera_and_lighting_cue` for each scene below into "
-                    f"jaw-dropping 55-90 word photorealistic single-take cinema prompts:\n"
+                    f"Rewrite `visual_prompt_veo_omni`, `camera_and_lighting_cue`, and `sfx_cue` for each scene below into "
+                    f"jaw-dropping 55-90 word photorealistic single-take cinema prompts with frame-accurate Foley SFX:\n"
                     f"- Alternate shot scales across consecutive scenes (Wide Establishing, Low-Angle Tracking, 100mm Macro, "
                     f"Orbital Steadicam, Aerial Top-Down, 120fps Slow-Mo, Foreground Parallax, Horizon Pull-Back).\n"
                     f"- Replace any chart, slide, text card, infographic, or wireframe grid imagery with vivid physical "
                     f"real-world environments, tactile materials, atmospheric depth (rain/mist/dust/reflections), and natural motion.\n"
-                    f"- Strictly single unbroken shot, no scene cuts, no dialogue, zero Chinese/foreign letters.\n\n"
+                    f"- In `sfx_cue`, write concrete physical sound effects matching the action (e.g. bowstring snap & arrow whistle, "
+                    f"revolving metallic chakra cosmic hum, rolling thunder, fire crackle, wet tires) — zero cartoon beeps or clicks.\n"
+                    f"- Strictly single unbroken shot, no scene cuts, no spoken dialogue, zero Chinese/foreign letters.\n\n"
                     f"Scenes:\n{json.dumps(compact_in, ensure_ascii=False)}"
                 )
                 interaction = call_interaction_with_fallback(
@@ -380,6 +390,8 @@ def enhance_all_scenes_to_cinema(
                         if s.scene_index in by_idx:
                             s.visual_prompt_veo_omni = by_idx[s.scene_index].visual_prompt_veo_omni
                             s.camera_and_lighting_cue = by_idx[s.scene_index].camera_and_lighting_cue
+                            if by_idx[s.scene_index].sfx_cue.strip():
+                                s.sfx_cue = by_idx[s.scene_index].sfx_cue.strip()
         except Exception as exc:
             logger.info("LLM batch cinema prompt enhancer fell back to deterministic DP polish: %s", exc)
 
@@ -394,6 +406,7 @@ def enhance_all_scenes_to_cinema(
             niche=agent2.niche,
             cinema_preset=cinema_preset,
             camera_cue=sc.camera_and_lighting_cue,
+            sfx_cue=sc.sfx_cue,
             duration_sec=sc.duration_sec,
             scene_index=idx,
         )

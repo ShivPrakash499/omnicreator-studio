@@ -81,6 +81,7 @@ VERTEX_VEO_MODEL: str = os.getenv("VERTEX_VEO_MODEL", "veo-3.1-generate-001")
 TTS_EXPRESSIVE_MODEL: str = os.getenv("TTS_MODEL", "gemini-3.8-flash-tts")
 TRANSCRIBE_MODEL: str = os.getenv("TRANSCRIBE_MODEL", "gemini-3.5-transcribe")
 MUSIC_LYRIA_MODEL: str = os.getenv("MUSIC_MODEL", "lyria-3.5")
+VERTEX_LYRIA_MODEL: str = os.getenv("VERTEX_LYRIA_MODEL", "lyria-002")
 
 # Safety guard against legacy deprecated models in `.env`
 _DEPRECATED_PREFIXES = ("gemini-1.5-", "gemini-2.0-", "gemini-2.5-", "gemini-3.1-flash-image")
@@ -348,6 +349,7 @@ def build_cinematic_video_prompt(
     niche: str,
     cinema_preset: Optional[str] = None,
     camera_cue: str = "",
+    sfx_cue: str = "",
     aspect_ratio: str = "16:9",
     duration_sec: float = 8.0,
     scene_index: int = 1,
@@ -357,7 +359,8 @@ def build_cinematic_video_prompt(
     optimized for Gemini Omni 1.2 Flash & Vertex Veo 3.1:
     - Strips anti-cinema chart/UI clichés (`wireframe grid`, `summary card`, `analytical chart`, etc.)
     - Injects concrete lens/rig, motivated lighting, film color grade, and smooth continuous motion
-    - Enforces Omni's single-unbroken-shot rule (zero jump cuts, zero dialogue) + zero foreign glyphs.
+    - Embeds frame-synced pure-Foley sound design (NO spoken dialogue, NO singing, NO background music)
+    - Enforces Omni's single-unbroken-shot rule (zero jump cuts) + zero foreign glyphs.
     """
     prof = get_niche_profile(niche)
     preset = get_cinema_preset(cinema_preset)
@@ -365,7 +368,7 @@ def build_cinematic_video_prompt(
 
     cleaned = (raw_prompt or "").strip()
     # Idempotently strip prior appended boilerplate so re-enhancing (Agent 2 -> Agent 3) never duplicates clauses
-    for marker in ("Execution:", "STRICT VISUAL LANGUAGE RULE:"):
+    for marker in ("Sound design:", "Execution:", "STRICT VISUAL LANGUAGE RULE:"):
         if marker in cleaned:
             cleaned = cleaned.split(marker)[0].strip()
 
@@ -405,12 +408,21 @@ def build_cinematic_video_prompt(
             f"{preset['color_grade']}. Visual tone anchored to {prof['visual_style']}."
         )
 
+    # Inject rich frame-synced physical Foley sound design (strictly NO dialogue/music so it blends cleanly!)
+    clean_sfx = (sfx_cue or "").strip()
+    if clean_sfx.lower() in ("", "subtle whoosh transition", "crisp whoosh riser", "subtle kinetic click"):
+        clean_sfx = "subtle realistic environmental ambience and physical foley matching the visible on-screen motion"
+    parts.append(
+        f"Sound design: {clean_sfx}; authentic frame-synced realistic foley sound effects matching every visible "
+        f"physical motion, strictly NO spoken dialogue, NO human voices, NO singing, NO background music."
+    )
+
     dur_int = max(4, min(12, int(round(duration_sec))))
     aspect_phrase = "16:9 widescreen theatrical" if aspect_ratio == "16:9" else "9:16 vertical cinematic"
     parts.append(
         f"Execution: Single unbroken continuous {dur_int}-second {aspect_phrase} shot with lived-in natural micro-motion "
         f"(drifting atmospheric haze, realistic reflections, fluid physics). No scene cuts, no split screens, "
-        f"no UI overlays, no dialogue. {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
+        f"no UI overlays. {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
     )
     return " ".join(parts)
 
@@ -479,7 +491,7 @@ class OmniStudioConfig:
     projects_dir: Path = field(default_factory=lambda: Path(os.getenv("OMNI_PROJECTS_DIR", "storage/projects")))
     resolution: str = field(default_factory=lambda: os.getenv("OMNI_VIDEO_RESOLUTION", "1080p").strip())
     fps: int = field(default_factory=lambda: int(os.getenv("OMNI_VIDEO_FPS", "24")))
-    bgm_duck_db: float = field(default_factory=lambda: float(os.getenv("OMNI_BGM_DUCK_DB", "-24.0")))
+    bgm_duck_db: float = field(default_factory=lambda: float(os.getenv("OMNI_BGM_DUCK_DB", "-13.5")))
     max_workers: int = field(default_factory=lambda: int(os.getenv("OMNI_MAX_WORKERS", "4")))
     use_cloud_tts_chirp3: bool = field(
         default_factory=lambda: os.getenv("USE_CLOUD_TTS_CHIRP3", "false").strip().lower() in ("1", "true", "yes")

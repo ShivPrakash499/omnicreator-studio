@@ -59,6 +59,7 @@ from render_engine.audio_mixer import (
     mix_scene_master_audio,
     synthesize_scene_voiceover,
 )
+from render_engine.foley_sfx import extract_native_video_foley, synthesize_scene_foley_fallback
 from render_engine.motion_graphics import render_motion_graphic_clip
 from render_engine.subtitle_engine import (
     TimedWord,
@@ -174,16 +175,19 @@ def _generate_ai_scene_visual(
     render_quality: str,
     force_ai_cinema: bool = True,
     cinema_preset: str = DEFAULT_CINEMA_PRESET,
+    foley_out_wav: Optional[Path] = None,
     config: OmniStudioConfig,
 ) -> Tuple[Path, str]:
     """
-    Produces a single scene's visual MP4 clip with Hollywood cinematography, ZERO unwanted Python fallbacks & ZERO Chinese/foreign glyphs:
+    Produces a single scene's visual MP4 clip with Hollywood cinematography, frame-synced Foley audio
+    extraction, ZERO unwanted Python fallbacks & ZERO Chinese/foreign glyphs:
     - `custom_upload`: normalizes user's uploaded MP4/image directly.
     - `motion_graphics`: ONLY used if `force_ai_cinema=False` AND user explicitly set `asset_mode='motion_graphics'`.
     - `full_omni_video` (Dual Full-Motion AI Video Stack):
         1. Primary: `gemini-omni-1.2-flash` via Vertex AI global (`interactions.create` plain input — verified live!)
-           or Developer API, with exponential backoff retry.
-        2. Backup Full Video: Vertex AI `veo-3.1-generate-001` (`us-central1`) with `negative_prompt=VEO_STRICT_NEGATIVE_PROMPT`.
+           or Developer API, with exponential backoff retry & native Foley SFX extraction.
+        2. Backup Full Video: Vertex AI `veo-3.1-generate-001` (`us-central1`) with `negative_prompt=VEO_STRICT_NEGATIVE_PROMPT`
+           & native Foley SFX extraction.
         3. Tertiary AI Cinema: `gemini-3-pro-image` / `gemini-nano-banana-2.1` keyframe + smooth 24fps motion (with retries).
     - `ai_keyframes_kenburns`: `gemini-3-pro-image` / `gemini-nano-banana-2.1` with 3 retries + smooth 24fps motion.
     """
@@ -195,12 +199,13 @@ def _generate_ai_scene_visual(
     dur = max(2.5, float(duration_sec))
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
 
-    # Always elevate scene prompt through the Hollywood DP cinematography & zero-foreign-text enhancer
+    # Always elevate scene prompt through the Hollywood DP cinematography, Foley sound-design & zero-foreign-text enhancer
     safe_prompt = build_cinematic_video_prompt(
         scene.visual_prompt_veo_omni,
         niche=niche,
         cinema_preset=cinema_preset,
         camera_cue=scene.camera_and_lighting_cue,
+        sfx_cue=scene.sfx_cue,
         aspect_ratio=aspect_ratio,
         duration_sec=dur,
         scene_index=scene.scene_index,
@@ -297,6 +302,9 @@ def _generate_ai_scene_visual(
                 if raw_vid and len(raw_vid) > 16384:
                     raw_tmp = output_mp4.with_suffix(".omni_raw.mp4")
                     raw_tmp.write_bytes(raw_vid)
+                    # Preserve Omni 1.2 Flash's frame-accurate native Foley SFX before normalizing silent video track!
+                    if foley_out_wav is not None:
+                        extract_native_video_foley(raw_tmp, foley_out_wav, target_duration_sec=dur)
                     subprocess.run(
                         [
                             ffmpeg_exe, "-y",
@@ -343,6 +351,9 @@ def _generate_ai_scene_visual(
                     if gen_vids and getattr(gen_vids[0], "video", None) and getattr(gen_vids[0].video, "video_bytes", None):
                         raw_tmp = output_mp4.with_suffix(".veo_raw.mp4")
                         raw_tmp.write_bytes(gen_vids[0].video.video_bytes)
+                        # Preserve Veo 3.1's native frame-synced Foley SFX before normalizing silent video track!
+                        if foley_out_wav is not None:
+                            extract_native_video_foley(raw_tmp, foley_out_wav, target_duration_sec=dur)
                         subprocess.run(
                             [
                                 ffmpeg_exe, "-y",
@@ -586,6 +597,8 @@ def run_agent3_media_pipeline(
     render_quality: str = "full_omni_video",
     force_ai_cinema: bool = True,
     cinema_preset: str = DEFAULT_CINEMA_PRESET,
+    bgm_duck_db: Optional[float] = None,
+    enable_foley_sfx: bool = True,
     include_avatar_in_thumbnail: bool = False,
     avatar_thumbnail_mode: str = "real_photo",
     include_avatar_in_video: bool = False,
@@ -616,9 +629,9 @@ def run_agent3_media_pipeline(
     # Seed stage trackers in SQLite so UI shows live progress immediately
     stage_defs = [
         ("voiceover", "1. Indian Voiceover Synthesis & Duration Anchoring"),
-        ("thumbnail", "2. High-CTR @jwalashiva Likeness Thumbnail Studio"),
-        ("visuals_16x9", "3. Scene Visuals & Procedural Motion Graphics (16:9)"),
-        ("bgm_mix", "4. Niche BGM (-24dB Ducking) & Master Audio Mixing"),
+        ("thumbnail", "2. High-CTR Cinema Thumbnail Studio"),
+        ("visuals_16x9", "3. Full-Motion AI Cinema & Frame-Synced Foley Capture (16:9)"),
+        ("bgm_mix", "4. Topic-Matched Lyria Film Score, Foley SFX & Smooth Audio Mix"),
         ("assemble_16x9", "5. 1080p Final Assembly & Active-Highlight .ass Subtitles"),
         ("assemble_9x16", "6. 9:16 Vertical Shorts Cutdown & Vertical Subtitles"),
     ]
@@ -768,6 +781,7 @@ def run_agent3_media_pipeline(
     def _render_vis(sc: SceneClipSpec) -> Tuple[int, Path, str]:
         dur = voice_results[sc.scene_index][1]
         out_mp4 = clips_16_dir / f"scene_{sc.scene_index:03d}_vis.mp4"
+        foley_wav = (audio_dir / f"scene_{sc.scene_index:03d}_foley_native.wav") if enable_foley_sfx else None
         p, src = _generate_ai_scene_visual(
             sc,
             out_mp4,
@@ -778,6 +792,7 @@ def run_agent3_media_pipeline(
             render_quality=render_quality,
             force_ai_cinema=force_ai_cinema,
             cinema_preset=cinema_preset,
+            foley_out_wav=foley_wav,
             config=cfg,
         )
         # Apply optional presenter PIP badge cleanly on Opening Hook (Scene 1) & Final Outro scene
@@ -813,8 +828,9 @@ def run_agent3_media_pipeline(
             )
 
     # ------------------------------------------------------------------
-    # STAGE 4: Niche BGM Stem (-24dB Ducking) + Scene Master Audio & Word Alignment
+    # STAGE 4: Topic-Matched Lyria Film Score + Frame-Synced Foley SFX + Smooth RMS Mixing (Zero Cut-Ting!)
     # ------------------------------------------------------------------
+    effective_duck_db = float(bgm_duck_db) if bgm_duck_db is not None else float(cfg.bgm_duck_db)
     database.upsert_job(
         job_id=f"{project_id}_bgm_mix",
         project_id=project_id,
@@ -823,34 +839,65 @@ def run_agent3_media_pipeline(
         label=stage_defs[3][1],
         status="running",
         progress_pct=20,
-        message="Generating high-spirited niche BGM stem & ducking to -24dB...",
+        message=f"Composing topic-matched Lyria film score for '{agent1.topic[:32]}' & blending frame-synced Foley SFX...",
     )
-    bgm_stem_path = audio_dir / "niche_bgm_stem.wav"
+    bgm_stem_path = audio_dir / "topic_film_score_bgm.wav"
     generate_niche_bgm_stem(
         bgm_stem_path,
+        topic=agent1.topic,
         niche=agent1.niche,
         bgm_style_reference=agent1.bgm_style_reference,
         duration_sec=total_actual_duration,
         config=cfg,
         use_lyria_api=(render_quality != "fast_studio_preview"),
     )
+    bgm_engine_note = (
+        bgm_stem_path.with_suffix(".engine.txt").read_text(encoding="utf-8").strip()
+        if bgm_stem_path.with_suffix(".engine.txt").exists()
+        else "topic_score"
+    )
 
     all_words_16x9: List[TimedWord] = []
     master_audio_paths: Dict[int, Path] = {}
     scene_artifacts: List[RenderedSceneArtifact] = []
+    native_foley_cnt = 0
+    cinema_foley_cnt = 0
 
     for sc in scenes:
         wav_p, actual_dur, _ = voice_results[sc.scene_index]
         offset = scene_offsets[sc.scene_index]
         master_wav = audio_dir / f"scene_{sc.scene_index:03d}_master.wav"
+
+        # Resolve per-scene Foley SFX track (Priority 1: Native Omni/Veo Foley; Priority 2: Cinema Foley synth)
+        active_foley: Optional[Path] = None
+        if enable_foley_sfx:
+            native_f = audio_dir / f"scene_{sc.scene_index:03d}_foley_native.wav"
+            if native_f.exists() and native_f.stat().st_size > 2048:
+                active_foley = native_f
+                native_foley_cnt += 1
+            else:
+                synth_f = audio_dir / f"scene_{sc.scene_index:03d}_foley_cinema.wav"
+                created_f = synthesize_scene_foley_fallback(
+                    synth_f,
+                    sfx_cue=sc.sfx_cue,
+                    visual_prompt=sc.visual_prompt_veo_omni,
+                    duration_sec=actual_dur,
+                    scene_index=sc.scene_index,
+                )
+                if created_f is not None:
+                    active_foley = created_f
+                    cinema_foley_cnt += 1
+
         mix_scene_master_audio(
             wav_p,
             bgm_stem_path,
             master_wav,
             bgm_offset_sec=offset,
             target_duration_sec=actual_dur,
-            duck_db=cfg.bgm_duck_db,
-            add_cut_sfx=True,
+            duck_db=effective_duck_db,
+            foley_wav_path=active_foley,
+            foley_db=-8.5,
+            add_cut_sfx=False,
         )
         master_audio_paths[sc.scene_index] = master_wav
 
@@ -881,7 +928,10 @@ def run_agent3_media_pipeline(
         label=stage_defs[3][1],
         status="completed",
         progress_pct=100,
-        message=f"Completed ✅ (BGM ducked strictly at {cfg.bgm_duck_db}dB + {len(all_words_16x9)} word timestamps)",
+        message=(
+            f"Completed ✅ ({bgm_engine_note.split('|')[0].strip()} @ {effective_duck_db:.1f}dB | "
+            f"{native_foley_cnt}x native Omni/Veo Foley, {cinema_foley_cnt}x cinema Foley | zero cut-ting)"
+        ),
     )
 
     # ------------------------------------------------------------------

@@ -444,6 +444,11 @@ if step == 1:
                 value=a1.thumbnail_graphic_concept,
                 key="a1_th_concept",
             )
+            edited_bgm_style = st.text_input(
+                "🎼 Topic BGM Film Score Direction (Google Lyria-002 Instrumental):",
+                value=a1.bgm_style_reference,
+                key="a1_bgm_style",
+            )
 
         # Editable High-Retention Storyboard & Hook Beats
         with st.expander("🎬 High-Retention Storyboard Manifest (0:00-0:45 Hook • Retention Loops • Climax & CTA)", expanded=True):
@@ -503,6 +508,7 @@ if step == 1:
             edited_a1_dict["thumbnail_hook_headline"] = edited_thumb_hl.strip() or a1.thumbnail_hook_headline
             edited_a1_dict["thumbnail_badge_label"] = edited_thumb_badge.strip() or a1.thumbnail_badge_label
             edited_a1_dict["thumbnail_graphic_concept"] = edited_thumb_concept.strip() or a1.thumbnail_graphic_concept
+            edited_a1_dict["bgm_style_reference"] = edited_bgm_style.strip() or a1.bgm_style_reference
             edited_a1_dict["storyboard_beats"] = updated_beats
 
             committed_a1 = Agent1Output.model_validate(edited_a1_dict)
@@ -578,6 +584,7 @@ elif step == 2:
                     # Clear stale per-scene widget keys so updated cinema prompts render immediately
                     for s_i in range(1, len(boosted_a2.scenes) + 1):
                         st.session_state.pop(f"sc_vprompt_{s_i}", None)
+                        st.session_state.pop(f"sc_sfx_{s_i}", None)
                         st.session_state.pop(f"sc_mode_{s_i}", None)
                         st.session_state.pop(f"sc_mg_{s_i}", None)
                 st.success("✅ Upgraded all scenes to Hollywood Cinema Grade!")
@@ -671,6 +678,11 @@ elif step == 2:
                     value=sc.get("ssml_voice_cues", ""),
                     key=f"sc_ssml_{s_num}",
                 )
+                new_sfx = st.text_input(
+                    "🔊 Frame-Synced Foley SFX Cue (e.g., arrow release, revolving chakra hum, rain, thunder):",
+                    value=sc.get("sfx_cue", ""),
+                    key=f"sc_sfx_{s_num}",
+                )
                 new_callout = st.text_input(
                     "✨ On-Screen Visual Callout:",
                     value=sc.get("on_screen_callout", ""),
@@ -698,6 +710,7 @@ elif step == 2:
                 sc["visual_prompt_veo_omni"] = new_vis_prompt
                 sc["voiceover_text"] = new_vo
                 sc["ssml_voice_cues"] = new_ssml
+                sc["sfx_cue"] = new_sfx
                 sc["on_screen_callout"] = new_callout
 
         # Persist edits seamlessly in session_state on every rerun
@@ -748,7 +761,7 @@ elif step == 3:
         if fresh_proj and fresh_proj.get("agent3_data"):
             st.session_state["agent3_output"] = fresh_proj["agent3_data"]
 
-        with st.expander("⚙️ Render Quality, Avatar Opt-In & Audio Ducking (-24dB) Settings", expanded=True):
+        with st.expander("⚙️ Render Quality, Topic Film Score (Lyria), Foley SFX & Avatar Settings", expanded=True):
             rc1, rc2 = st.columns([1.4, 1.0])
             with rc1:
                 quality_label = st.selectbox(
@@ -777,6 +790,28 @@ elif step == 3:
                 )
                 st.session_state["omni_cinema_preset"] = cinema_preset_s3
             with rc2:
+                bgm_level_label = st.selectbox(
+                    "🎵 Topic Background Music Level (Lyria-002):",
+                    options=[
+                        "Cinema Balanced (-13.5 dB — Clearly Audible, Default)",
+                        "Rich Dramatic Score (-10.5 dB — Bold Film Presence)",
+                        "Subtle Documentary (-17.5 dB — Soft Under Voice)",
+                    ],
+                    index=0,
+                    key="opt_bgm_level",
+                )
+                bgm_level_map = {
+                    "Cinema Balanced (-13.5 dB — Clearly Audible, Default)": -13.5,
+                    "Rich Dramatic Score (-10.5 dB — Bold Film Presence)": -10.5,
+                    "Subtle Documentary (-17.5 dB — Soft Under Voice)": -17.5,
+                }
+                selected_bgm_duck_db = bgm_level_map[bgm_level_label]
+                enable_foley_sfx = st.checkbox(
+                    "🔊 Frame-Synced Cinematic Foley SFX (Zero Cartoon Cuts)",
+                    value=True,
+                    help="Preserves Omni 1.2 Flash & Veo 3.1 frame-synced sound effects (arrow releases, spinning chakra, thunder, fire, rain) with realistic cinema Foley fallback.",
+                    key="opt_enable_foley_sfx",
+                )
                 force_ai_cinema = st.checkbox(
                     "🎬 100% AI Cinema (No Flat Python Charts)",
                     value=True,
@@ -878,6 +913,8 @@ elif step == 3:
                     "render_quality": render_quality,
                     "force_ai_cinema": force_ai_cinema,
                     "cinema_preset": cinema_preset_s3,
+                    "bgm_duck_db": selected_bgm_duck_db,
+                    "enable_foley_sfx": enable_foley_sfx,
                     "include_avatar_in_thumbnail": include_avatar_thumb,
                     "avatar_thumbnail_mode": avatar_thumb_mode,
                     "include_avatar_in_video": include_avatar_video,
