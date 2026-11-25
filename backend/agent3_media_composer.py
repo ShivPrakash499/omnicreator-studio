@@ -609,7 +609,7 @@ def _mux_continuous_audio_and_burn_ass(
                 "-i", str(continuous_master_wav),
                 "-map", "0:v:0", "-map", "1:a:0",
                 "-vf", vf_str,
-                "-vsync", "cfr", "-r", str(fps),
+                "-r", str(fps),
                 "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
                 "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
                 "-movflags", "+faststart",
@@ -622,28 +622,33 @@ def _mux_continuous_audio_and_burn_ass(
         )
         if output_mp4.exists() and output_mp4.stat().st_size > 4096:
             return output_mp4
+    except subprocess.CalledProcessError as exc:
+        err_tail = (exc.stderr or b"").decode("utf-8", errors="ignore")[-320:]
+        logger.warning("FFmpeg ASS burn pass failed (%s); stitching clean CFR video + stereo audio without ASS.", err_tail)
     except Exception as exc:
         logger.warning("FFmpeg ASS burn pass failed (%s); stitching clean CFR video + stereo audio without ASS.", exc)
 
-    # Guaranteed fallback WITH clean CFR re-encode & full 44.1kHz stereo audio (never uses broken -c:v copy!)
-    subprocess.run(
+    # Guaranteed FFmpeg 4.x-9.x compatible fallback WITH clean CFR re-encode & full 44.1kHz stereo audio
+    res = subprocess.run(
         [
             ffmpeg_exe, "-y",
             *vid_in_args,
             "-i", str(continuous_master_wav),
             "-map", "0:v:0", "-map", "1:a:0",
             "-vf", f"fps={fps},format=yuv420p",
-            "-vsync", "cfr", "-r", str(fps),
+            "-r", str(fps),
             "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
             "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
             "-movflags", "+faststart",
             "-shortest",
             str(output_mp4),
         ],
-        check=True,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
     )
+    if res.returncode != 0:
+        err_msg = (res.stderr or b"").decode("utf-8", errors="ignore")[-450:]
+        raise RuntimeError(f"FFmpeg final stitch failed (exit {res.returncode}): {err_msg}")
     return output_mp4
 
 
@@ -659,6 +664,7 @@ def run_agent3_media_pipeline(
     custom_bgm_path: Optional[str] = None,
     bgm_duck_db: Optional[float] = None,
     enable_foley_sfx: bool = True,
+    reuse_existing_clips: bool = False,
     include_avatar_in_thumbnail: bool = False,
     avatar_thumbnail_mode: str = "real_photo",
     include_avatar_in_video: bool = False,
@@ -682,12 +688,16 @@ def run_agent3_media_pipeline(
     for d in (audio_dir, clips_16_dir, clips_9_dir, renders_dir):
         d.mkdir(parents=True, exist_ok=True)
 
-    # Clean stale per-scene intermediate renders/Foley so previous runs can NEVER bleed or overlap!
-    for stale_pat in ("scene_*_foley_*.wav", "scene_*_master.wav"):
-        for fp in audio_dir.glob(stale_pat):
+    # Clean stale per-scene intermediate renders/Foley on fresh renders; keep them when resuming a stitch!
+    if not reuse_existing_clips:
+        for stale_pat in ("scene_*_foley_*.wav", "scene_*_master.wav"):
+            for fp in audio_dir.glob(stale_pat):
+                fp.unlink(missing_ok=True)
+        for fp in clips_16_dir.glob("scene_*_vis*.mp4"):
             fp.unlink(missing_ok=True)
-    for fp in clips_16_dir.glob("scene_*_vis*.mp4"):
-        fp.unlink(missing_ok=True)
+    else:
+        for fp in audio_dir.glob("scene_*_master.wav"):
+            fp.unlink(missing_ok=True)
     for fp in clips_9_dir.glob("short_vid_*.mp4"):
         fp.unlink(missing_ok=True)
 
@@ -800,19 +810,22 @@ def run_agent3_media_pipeline(
         message="Generating High-CTR Thumbnail preserving @jwalashiva likeness (image_12..14.png)...",
     )
     thumb_path = renders_dir / "thumbnail_16x9.png"
-    thumb_path, thumb_engine = generate_high_ctr_thumbnail(
-        thumb_path,
-        topic=agent1.topic,
-        niche=agent1.niche,
-        headline=agent1.thumbnail_hook_headline,
-        badge_label=agent1.thumbnail_badge_label,
-        graphic_concept=agent1.thumbnail_graphic_concept,
-        include_creator_avatar=include_avatar_in_thumbnail,
-        avatar_mode=avatar_thumbnail_mode,
-        creator_side=creator_side,
-        config=cfg,
-        use_ai_image_api=use_ai_thumbnail,
-    )
+    if reuse_existing_clips and thumb_path.exists() and thumb_path.stat().st_size > 16384:
+        thumb_engine = "cached_thumbnail"
+    else:
+        thumb_path, thumb_engine = generate_high_ctr_thumbnail(
+            thumb_path,
+            topic=agent1.topic,
+            niche=agent1.niche,
+            headline=agent1.thumbnail_hook_headline,
+            badge_label=agent1.thumbnail_badge_label,
+            graphic_concept=agent1.thumbnail_graphic_concept,
+            include_creator_avatar=include_avatar_in_thumbnail,
+            avatar_mode=avatar_thumbnail_mode,
+            creator_side=creator_side,
+            config=cfg,
+            use_ai_image_api=use_ai_thumbnail,
+        )
     database.upsert_job(
         job_id=f"{project_id}_thumbnail",
         project_id=project_id,
@@ -860,20 +873,30 @@ def run_agent3_media_pipeline(
         n_frames = scene_frame_counts[sc.scene_index]
         out_mp4 = clips_16_dir / f"scene_{sc.scene_index:03d}_vis.mp4"
         foley_wav = (audio_dir / f"scene_{sc.scene_index:03d}_foley_native.wav") if enable_foley_sfx else None
-        p, src = _generate_ai_scene_visual(
-            sc,
-            out_mp4,
-            topic=agent1.topic,
-            niche=agent1.niche,
-            duration_sec=dur,
-            exact_frames=n_frames,
-            aspect_ratio="16:9",
-            render_quality=render_quality,
-            force_ai_cinema=force_ai_cinema,
-            cinema_preset=cinema_preset,
-            foley_out_wav=foley_wav,
-            config=cfg,
-        )
+        if reuse_existing_clips and out_mp4.exists() and out_mp4.stat().st_size > 16384:
+            cached_dur = _probe_video_duration_sec(out_mp4)
+            if abs(cached_dur - dur) > 0.08:
+                resync_tmp = out_mp4.with_suffix(".resync_tmp.mp4")
+                _normalize_video_clip_exact(out_mp4, resync_tmp, w=1920, h=1080, fps=cfg.fps, exact_frames=n_frames)
+                resync_tmp.replace(out_mp4)
+                p, src = out_mp4, "cached_ai_cinema(resynced)"
+            else:
+                p, src = out_mp4, "cached_ai_cinema"
+        else:
+            p, src = _generate_ai_scene_visual(
+                sc,
+                out_mp4,
+                topic=agent1.topic,
+                niche=agent1.niche,
+                duration_sec=dur,
+                exact_frames=n_frames,
+                aspect_ratio="16:9",
+                render_quality=render_quality,
+                force_ai_cinema=force_ai_cinema,
+                cinema_preset=cinema_preset,
+                foley_out_wav=foley_wav,
+                config=cfg,
+            )
         # Apply optional presenter PIP badge cleanly on Opening Hook (Scene 1) & Final Outro scene
         if host_pip_png and sc.scene_index in (1, total_scenes):
             pip_mp4 = clips_16_dir / f"scene_{sc.scene_index:03d}_vis_pip.mp4"

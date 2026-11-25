@@ -1297,11 +1297,32 @@ elif step == 3:
                         st.success("Updated `assets/likeness/image_13.png` ✅")
 
         is_rendering = worker.is_running(render_task_key)
+        proj_clips_dir = cfg.projects_dir / f"{pid}_{sanitize_slug(a1.topic)}" / "clips_16x9"
+        cached_vis_count = (
+            len([fp for fp in proj_clips_dir.glob("scene_*_vis.mp4") if fp.stat().st_size > 16384])
+            if proj_clips_dir.exists()
+            else 0
+        )
+
+        resume_stitch = False
+        if cached_vis_count > 0:
+            st.info(
+                f"🎞️ **{cached_vis_count}/{len(a2.scenes)} rendered scene clips are already saved on disk!** "
+                f"Click below to stitch them into 1080p + Shorts immediately without re-generating AI videos."
+            )
+            resume_stitch = st.button(
+                f"⚡ Stitch Existing {cached_vis_count}/{len(a2.scenes)} Rendered Clips Now (Fast Resume — Skip AI Re-Render)",
+                type="primary",
+                use_container_width=True,
+                disabled=is_rendering,
+                key="btn_resume_stitch_only",
+            )
+
         btn_r1, btn_r2 = st.columns([2.0, 1.0])
         with btn_r1:
             start_render = st.button(
-                "🚀 Launch Async Media Generation & 1080p + Shorts Assembly",
-                type="primary",
+                "🚀 Launch Fresh Media Generation & 1080p + Shorts Assembly" if cached_vis_count > 0 else "🚀 Launch Async Media Generation & 1080p + Shorts Assembly",
+                type="secondary" if cached_vis_count > 0 else "primary",
                 use_container_width=True,
                 disabled=is_rendering,
             )
@@ -1312,13 +1333,13 @@ elif step == 3:
                 disabled=is_rendering,
             )
 
-        if start_render:
+        if start_render or resume_stitch:
             st.session_state["agent3_output"] = None
             launched = worker.submit_task(
                 task_key=render_task_key,
                 project_id=pid,
                 job_type="master_render",
-                label=f"Render 1080p + Shorts: {a1.topic[:34]}",
+                label=f"{'Resume Stitch' if resume_stitch else 'Render'} 1080p + Shorts: {a1.topic[:32]}",
                 fn=run_agent3_media_pipeline,
                 kwargs={
                     "project_id": pid,
@@ -1331,6 +1352,7 @@ elif step == 3:
                     "custom_bgm_path": custom_bgm_file_path,
                     "bgm_duck_db": selected_bgm_duck_db,
                     "enable_foley_sfx": enable_foley_sfx,
+                    "reuse_existing_clips": bool(resume_stitch),
                     "include_avatar_in_thumbnail": include_avatar_thumb,
                     "avatar_thumbnail_mode": avatar_thumb_mode,
                     "include_avatar_in_video": include_avatar_video,
