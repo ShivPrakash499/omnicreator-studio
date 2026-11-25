@@ -34,6 +34,7 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 
 from backend.config import (
+    DEFAULT_CINEMA_PRESET,
     IMAGE_CONTINUITY_MODEL,
     IMAGE_PRO_MODEL,
     STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE,
@@ -41,6 +42,7 @@ from backend.config import (
     VERTEX_VEO_MODEL,
     VIDEO_OMNI_MODEL,
     OmniStudioConfig,
+    build_cinematic_video_prompt,
     call_interaction_with_fallback,
     format_timestamp,
     get_genai_client,
@@ -171,10 +173,11 @@ def _generate_ai_scene_visual(
     aspect_ratio: str,
     render_quality: str,
     force_ai_cinema: bool = True,
+    cinema_preset: str = DEFAULT_CINEMA_PRESET,
     config: OmniStudioConfig,
 ) -> Tuple[Path, str]:
     """
-    Produces a single scene's visual MP4 clip with ZERO unwanted Python fallbacks & ZERO Chinese/foreign glyphs:
+    Produces a single scene's visual MP4 clip with Hollywood cinematography, ZERO unwanted Python fallbacks & ZERO Chinese/foreign glyphs:
     - `custom_upload`: normalizes user's uploaded MP4/image directly.
     - `motion_graphics`: ONLY used if `force_ai_cinema=False` AND user explicitly set `asset_mode='motion_graphics'`.
     - `full_omni_video` (Dual Full-Motion AI Video Stack):
@@ -192,12 +195,16 @@ def _generate_ai_scene_visual(
     dur = max(2.5, float(duration_sec))
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
 
-    # Always sanitize prompt with strict English-only / zero-Chinese guard
-    base_prompt = scene.visual_prompt_veo_omni.strip()
-    if "never render any chinese" not in base_prompt.lower():
-        safe_prompt = f"{base_prompt} {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
-    else:
-        safe_prompt = base_prompt
+    # Always elevate scene prompt through the Hollywood DP cinematography & zero-foreign-text enhancer
+    safe_prompt = build_cinematic_video_prompt(
+        scene.visual_prompt_veo_omni,
+        niche=niche,
+        cinema_preset=cinema_preset,
+        camera_cue=scene.camera_and_lighting_cue,
+        aspect_ratio=aspect_ratio,
+        duration_sec=dur,
+        scene_index=scene.scene_index,
+    )
 
     # 1. Custom User Asset Override
     if scene.custom_asset_path and Path(scene.custom_asset_path).exists():
@@ -266,10 +273,7 @@ def _generate_ai_scene_visual(
         for attempt in range(1, 3):
             try:
                 client = get_genai_client(config.gemini_api_key, location="global")
-                omni_text_prompt = (
-                    f"{safe_prompt} Single unbroken continuous {omni_dur}-second {aspect_phrase} "
-                    f"24fps cinematic shot. No dialogue, no garbled text, strictly zero Chinese or foreign letters."
-                )
+                omni_text_prompt = safe_prompt
                 if v_creds is not None and v_proj:
                     # Vertex AI global accepts clean plain-text prompt on `gemini-omni-1.2-flash`
                     interaction = client.interactions.create(model=omni_model, input=omni_text_prompt)
@@ -324,9 +328,7 @@ def _generate_ai_scene_visual(
                     veo_dur = 8 if dur >= 7.0 else 6
                     op = v_us.models.generate_videos(
                         model=VERTEX_VEO_MODEL,
-                        source=genai_types.GenerateVideosSource(
-                            prompt=f"{safe_prompt} Single continuous 24fps shot, clean visuals, proper English only."
-                        ),
+                        source=genai_types.GenerateVideosSource(prompt=safe_prompt),
                         config=genai_types.GenerateVideosConfig(
                             aspect_ratio=aspect_ratio,
                             duration_seconds=veo_dur,
@@ -583,6 +585,7 @@ def run_agent3_media_pipeline(
     *,
     render_quality: str = "full_omni_video",
     force_ai_cinema: bool = True,
+    cinema_preset: str = DEFAULT_CINEMA_PRESET,
     include_avatar_in_thumbnail: bool = False,
     avatar_thumbnail_mode: str = "real_photo",
     include_avatar_in_video: bool = False,
@@ -774,6 +777,7 @@ def run_agent3_media_pipeline(
             aspect_ratio="16:9",
             render_quality=render_quality,
             force_ai_cinema=force_ai_cinema,
+            cinema_preset=cinema_preset,
             config=cfg,
         )
         # Apply optional presenter PIP badge cleanly on Opening Hook (Scene 1) & Final Outro scene

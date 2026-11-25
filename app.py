@@ -19,7 +19,7 @@ from typing import Any, Dict, List, Optional
 import streamlit as st
 
 from backend.agent1_seo_storyboard import run_agent1_seo_and_storyboard
-from backend.agent2_scene_scripter import run_agent2_scene_scripting
+from backend.agent2_scene_scripter import enhance_all_scenes_to_cinema, run_agent2_scene_scripting
 from backend.agent3_media_composer import run_agent3_media_pipeline
 from backend.agent4_youtube_publisher import (
     build_youtube_oauth_url,
@@ -29,6 +29,8 @@ from backend.agent4_youtube_publisher import (
     run_agent4_youtube_publish,
 )
 from backend.config import (
+    CINEMA_STYLE_PRESETS,
+    DEFAULT_CINEMA_PRESET,
     SUPPORTED_LANGUAGES,
     SUPPORTED_NICHES,
     OmniStudioConfig,
@@ -163,6 +165,7 @@ def _init_session_state() -> None:
         "omni_topic": "",
         "omni_niche": SUPPORTED_NICHES[2],  # AI & Future Tech default
         "omni_language": SUPPORTED_LANGUAGES[0],
+        "omni_cinema_preset": DEFAULT_CINEMA_PRESET,
         "omni_target_minutes": 6.0,
         "agent1_output": None,      # Dict matching Agent1Output
         "agent2_output": None,      # Dict matching Agent2Output
@@ -475,6 +478,17 @@ if step == 1:
                     b_dict["narrative_summary"] = bs
                     updated_beats.append(b_dict)
 
+        cinema_presets = list(CINEMA_STYLE_PRESETS.keys())
+        cur_preset = st.session_state.get("omni_cinema_preset", DEFAULT_CINEMA_PRESET)
+        chosen_preset_s1 = st.selectbox(
+            "🎬 Cinema Look & Camera Preset (Applies to All Video Scenes):",
+            options=cinema_presets,
+            index=cinema_presets.index(cur_preset) if cur_preset in cinema_presets else 0,
+            help="Infuses ARRI Alexa / IMAX / 35mm film lens, lighting, and color-grade grammar into every scene prompt.",
+            key="input_cinema_preset_s1",
+        )
+        st.session_state["omni_cinema_preset"] = chosen_preset_s1
+
         st.markdown("")
         proceed_s2 = st.button("Proceed to Scene Scripting ➡️", type="primary", use_container_width=True)
         if proceed_s2:
@@ -494,8 +508,12 @@ if step == 1:
             committed_a1 = Agent1Output.model_validate(edited_a1_dict)
             st.session_state["agent1_output"] = committed_a1.model_dump()
 
-            with st.spinner("Agent 2 breaking storyboard into granular 8–12s scenes with Veo/Omni visual prompts & vocal cues..."):
-                a2_obj = run_agent2_scene_scripting(committed_a1, config=cfg)
+            with st.spinner("Agent 2 directing Hollywood-grade 8–12s scenes with Veo/Omni cinematography & vocal cues..."):
+                a2_obj = run_agent2_scene_scripting(
+                    committed_a1,
+                    cinema_preset=st.session_state.get("omni_cinema_preset", DEFAULT_CINEMA_PRESET),
+                    config=cfg,
+                )
                 st.session_state["agent2_output"] = a2_obj.model_dump()
                 st.session_state["omni_step"] = 2
                 st.session_state["scene_page"] = 1
@@ -538,6 +556,33 @@ elif step == 2:
         m3.metric("Est. Runtime", format_timestamp(a2.total_estimated_duration_sec))
         m4.metric("Motion Graphics", mg_count)
 
+        # Cinema Look selector + 1-click prompt boost for new or existing projects
+        cinema_presets_s2 = list(CINEMA_STYLE_PRESETS.keys())
+        cur_p_s2 = st.session_state.get("omni_cinema_preset", DEFAULT_CINEMA_PRESET)
+        cp_c1, cp_c2 = st.columns([1.4, 1.0])
+        with cp_c1:
+            sel_preset_s2 = st.selectbox(
+                "🎬 Cinema Look & Lens Preset:",
+                options=cinema_presets_s2,
+                index=cinema_presets_s2.index(cur_p_s2) if cur_p_s2 in cinema_presets_s2 else 0,
+                key="cinema_preset_s2",
+            )
+            st.session_state["omni_cinema_preset"] = sel_preset_s2
+        with cp_c2:
+            st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+            if st.button("✨ Upgrade All Prompts to Cinema Grade", use_container_width=True):
+                with st.spinner("Rewriting all scene prompts into Hollywood 5-layer cinematography..."):
+                    boosted_a2 = enhance_all_scenes_to_cinema(a2, cinema_preset=sel_preset_s2, config=cfg)
+                    st.session_state["agent2_output"] = boosted_a2.model_dump()
+                    db.update_project_stage(pid, agent2_data=boosted_a2.model_dump())
+                    # Clear stale per-scene widget keys so updated cinema prompts render immediately
+                    for s_i in range(1, len(boosted_a2.scenes) + 1):
+                        st.session_state.pop(f"sc_vprompt_{s_i}", None)
+                        st.session_state.pop(f"sc_mode_{s_i}", None)
+                        st.session_state.pop(f"sc_mg_{s_i}", None)
+                st.success("✅ Upgraded all scenes to Hollywood Cinema Grade!")
+                st.rerun()
+
         # Mobile-friendly pagination so 30-50 scene cards remain super responsive
         per_page = 8
         total_pages = max(1, (len(a2.scenes) + per_page - 1) // per_page)
@@ -554,10 +599,18 @@ elif step == 2:
             st.session_state["scene_page"] = int(current_page)
         with pg_c2:
             if st.button("🔄 Regenerate Scenes from Step 1", use_container_width=True):
-                with st.spinner("Re-scripting granular scenes with Agent 2..."):
-                    fresh_a2 = run_agent2_scene_scripting(Agent1Output.model_validate(a1_data), config=cfg)
+                with st.spinner("Re-scripting granular cinematic scenes with Agent 2..."):
+                    fresh_a2 = run_agent2_scene_scripting(
+                        Agent1Output.model_validate(a1_data),
+                        cinema_preset=sel_preset_s2,
+                        config=cfg,
+                    )
                     st.session_state["agent2_output"] = fresh_a2.model_dump()
                     db.update_project_stage(pid, agent2_data=fresh_a2.model_dump())
+                    for s_i in range(1, len(fresh_a2.scenes) + 1):
+                        st.session_state.pop(f"sc_vprompt_{s_i}", None)
+                        st.session_state.pop(f"sc_mode_{s_i}", None)
+                        st.session_state.pop(f"sc_mg_{s_i}", None)
                 st.rerun()
 
         start_idx = (int(current_page) - 1) * per_page
@@ -714,6 +767,15 @@ elif step == 3:
                     "Fast Studio Preview (Local Plates — Offline Test Only)": "fast_studio_preview",
                 }
                 render_quality = quality_map[quality_label]
+                cinema_presets_s3 = list(CINEMA_STYLE_PRESETS.keys())
+                cur_p_s3 = st.session_state.get("omni_cinema_preset", DEFAULT_CINEMA_PRESET)
+                cinema_preset_s3 = st.selectbox(
+                    "🎥 Cinema Look & Color Grade:",
+                    options=cinema_presets_s3,
+                    index=cinema_presets_s3.index(cur_p_s3) if cur_p_s3 in cinema_presets_s3 else 0,
+                    key="render_cinema_preset_sel",
+                )
+                st.session_state["omni_cinema_preset"] = cinema_preset_s3
             with rc2:
                 force_ai_cinema = st.checkbox(
                     "🎬 100% AI Cinema (No Flat Python Charts)",
@@ -815,6 +877,7 @@ elif step == 3:
                     "agent2": a2,
                     "render_quality": render_quality,
                     "force_ai_cinema": force_ai_cinema,
+                    "cinema_preset": cinema_preset_s3,
                     "include_avatar_in_thumbnail": include_avatar_thumb,
                     "avatar_thumbnail_mode": avatar_thumb_mode,
                     "include_avatar_in_video": include_avatar_video,

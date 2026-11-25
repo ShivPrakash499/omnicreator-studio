@@ -358,8 +358,12 @@ def _call_ai_image_generation(
     if not config.has_valid_gemini_key:
         return None, ""
 
-    # Enforce zero Chinese/Japanese/Korean/foreign glyphs on every generated thumbnail artwork
-    guarded_prompt = f"{prompt} NEVER render Chinese, Mandarin, Japanese, Korean, or gibberish symbols anywhere."
+    # Enforce zero Chinese/Japanese/Korean/foreign glyphs & Hollywood photography polish on every thumbnail
+    guarded_prompt = (
+        f"{prompt} Shot on ARRI Alexa 65 theatrical poster photography, sculpted volumetric rim lighting, "
+        f"rich shallow depth of field, zero flat 2D clipart or wireframe grids. "
+        f"NEVER render Chinese, Mandarin, Japanese, Korean, or gibberish symbols anywhere."
+    )
     prompt = guarded_prompt
 
     # Always prioritize `gemini-3-pro-image` first for top photographic fidelity & native text accuracy

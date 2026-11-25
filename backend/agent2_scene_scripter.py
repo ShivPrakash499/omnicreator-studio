@@ -20,13 +20,17 @@ import math
 from typing import Any, Dict, List, Optional
 
 from backend.config import (
+    CINEMATIC_SHOT_CHOREOGRAPHY,
+    DEFAULT_CINEMA_PRESET,
     FAST_AGENT_MODEL,
     REASONING_FALLBACK_MODEL,
     SCRIPT_FRONTIER_MODEL,
     STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE,
     OmniStudioConfig,
+    build_cinematic_video_prompt,
     call_interaction_with_fallback,
     format_timestamp,
+    get_cinema_preset,
     get_genai_client,
     get_niche_profile,
     resolve_current_model,
@@ -50,15 +54,20 @@ def _compute_chapters_markdown(scenes: List[SceneClipSpec]) -> str:
     return "\n".join(lines)
 
 
-def _expand_deterministic_scenes(agent1: Agent1Output, desired_scene_count: int) -> Agent2Output:
+def _expand_deterministic_scenes(
+    agent1: Agent1Output,
+    desired_scene_count: int,
+    *,
+    cinema_preset: str = DEFAULT_CINEMA_PRESET,
+) -> Agent2Output:
     """
-    Deterministic multi-niche expander guaranteeing 8-12s scene pacing (30-50 scenes for 5-8 min)
-    and automatic motion-graphics routing for data/timeline/comparison beats.
+    Deterministic multi-niche cinematography expander guaranteeing 8-12s scene pacing
+    (30-50 scenes for 5-8 min) with rotating 8-shot Hollywood framing choreography.
     """
     prof = get_niche_profile(agent1.niche)
+    preset = get_cinema_preset(cinema_preset)
     total_target_sec = max(60.0, float(agent1.target_duration_minutes) * 60.0)
     num_scenes = max(8, min(55, int(desired_scene_count)))
-    avg_dur = round(max(7.5, min(12.0, total_target_sec / float(num_scenes))), 1)
 
     beats = agent1.storyboard_beats
     total_beat_dur = sum(b.duration_sec for b in beats) or total_target_sec
@@ -80,14 +89,6 @@ def _expand_deterministic_scenes(agent1: Agent1Output, desired_scene_count: int)
             q = min(q, max(1, num_scenes - assigned - (len(beats) - 1 - idx)))
         beat_quotas.append(q)
         assigned += q
-
-    camera_moves = [
-        "Slow cinematic macro push-in, crisp edge rim lighting, shallow depth of field",
-        "Dynamic orbital tracking sweep, clean volumetric depth, dramatic contrast",
-        "Crisp overhead crane pull-back revealing full conceptual layout",
-        "Tight punch-in detail shot with kinetic light accents, smooth 24fps stabilization",
-        "Parallax slide transition moving cleanly across high-contrast focal elements",
-    ]
 
     for b, q in zip(beats, beat_quotas):
         for sub_i in range(q):
@@ -127,13 +128,22 @@ def _expand_deterministic_scenes(agent1: Agent1Output, desired_scene_count: int)
                 f"<break time=\"0.4s\"/> {'. '.join(vo.split('.')[1:]).strip() or 'Keep watching closely!'}"
             )
 
-            cam = camera_moves[(scene_idx - 1) % len(camera_moves)]
-            visual_prompt = (
-                f"Single unbroken 24fps cinematic shot representing '{b.beat_title}' ({sub_ratio}) "
-                f"for the topic '{agent1.topic}' in the {agent1.niche} niche. "
-                f"Visual direction: {b.visual_direction}. "
-                f"Style lock: {prof['visual_style']}. Camera: {cam}. "
-                f"{STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
+            choreo = CINEMATIC_SHOT_CHOREOGRAPHY[(scene_idx - 1) % len(CINEMATIC_SHOT_CHOREOGRAPHY)]
+            cam = f"{choreo['shot_type']}: {choreo['camera_move']}. {choreo['lighting']}."
+            raw_shot = (
+                f"{choreo['shot_type']} bringing '{b.beat_title}' ({sub_ratio}) to life for '{agent1.topic}'. "
+                f"Scene action: {b.visual_direction}. "
+                f"Camera choreography: {choreo['camera_move']}. "
+                f"Lighting & atmosphere: {choreo['lighting']}; {preset['lighting_signature']}. "
+                f"Film aesthetic: {preset['camera_rig']}; {preset['color_grade']}; {prof['visual_style']}."
+            )
+            visual_prompt = build_cinematic_video_prompt(
+                raw_shot,
+                niche=agent1.niche,
+                cinema_preset=cinema_preset,
+                camera_cue=cam,
+                duration_sec=dur,
+                scene_index=scene_idx,
             )
 
             mg_payload: Dict[str, Any] = {}
@@ -175,11 +185,12 @@ def run_agent2_scene_scripting(
     agent1: Agent1Output,
     *,
     target_scene_count: Optional[int] = None,
+    cinema_preset: str = DEFAULT_CINEMA_PRESET,
     config: Optional[OmniStudioConfig] = None,
 ) -> Agent2Output:
     """
     Executes Agent 2 (Multi-Model Visual & Vocal Scripting Agent).
-    Produces 30–50 granular 8–12s scenes for 5–8 minute videos (scaled cleanly if target duration differs).
+    Produces 30–50 granular 8–12s Hollywood-grade cinematic scenes for 5–8 minute videos.
     """
     cfg = config or OmniStudioConfig()
     total_sec = max(60.0, float(agent1.target_duration_minutes) * 60.0)
@@ -187,7 +198,7 @@ def run_agent2_scene_scripting(
     computed_scenes = int(round(total_sec / 10.0))
     desired_count = target_scene_count or max(12, min(50, computed_scenes))
 
-    baseline = _expand_deterministic_scenes(agent1, desired_count)
+    baseline = _expand_deterministic_scenes(agent1, desired_count, cinema_preset=cinema_preset)
 
     if not cfg.has_valid_gemini_key:
         return baseline
@@ -195,6 +206,7 @@ def run_agent2_scene_scripting(
     try:
         client = get_genai_client(cfg.gemini_api_key)
         prof = get_niche_profile(agent1.niche)
+        preset = get_cinema_preset(cinema_preset)
 
         # Generate in clean batches of up to 18 scenes per call to preserve high prompt quality & prevent truncation
         batch_size = 18
@@ -208,19 +220,31 @@ def run_agent2_scene_scripting(
         for b_start in range(0, len(baseline.scenes), batch_size):
             slice_scenes = baseline.scenes[b_start : b_start + batch_size]
             prompt = (
-                f"You are Agent 2 (Multi-Model Visual & Vocal Scriptwriter) in OMNI STUDIO.\n"
+                f"You are Agent 2 — an Award-Winning Film Director of Photography & Vocal Scriptwriter inside OMNI STUDIO.\n"
                 f"Topic: {agent1.topic} | Niche: {agent1.niche} | Language & Tone: {agent1.language_tone}\n"
-                f"Niche Visual Grammar (STRICT): {prof['visual_style']}\n"
+                f"Cinema Look Preset: {cinema_preset}\n"
+                f"  - Camera Rig & Lens: {preset['camera_rig']}\n"
+                f"  - Lighting Signature: {preset['lighting_signature']}\n"
+                f"  - Color Grade: {preset['color_grade']}\n"
+                f"  - Camera Motion Style: {preset['motion_feel']}\n"
+                f"Niche Visual Aesthetic: {prof['visual_style']}\n"
                 f"Selected Title: {agent1.selected_title}\n"
                 f"Opening Hook Direction: {agent1.hook_script_0_45s}\n"
                 f"Climax Misconception Reveal: {agent1.climax_misconception_aha}\n\n"
                 f"Rewrite and elevate these {len(slice_scenes)} consecutive scenes (indices {slice_scenes[0].scene_index} to {slice_scenes[-1].scene_index}) "
-                f"into razor-sharp, non-repetitive, high-retention scenes (8-12 seconds each):\n"
-                f"1. `voiceover_text`: Natural, punchy, non-repetitive narration strictly in {agent1.language_tone} (~18-26 spoken words per 10s scene so it matches the 8-12s cut length cleanly!).\n"
-                f"2. `ssml_voice_cues`: Same narration enhanced with emotion hints and `<break time=\"0.4s\"/>` dramatic pauses before twists.\n"
-                f"3. `visual_prompt_veo_omni`: Concrete, filmable single-shot prompt optimized for Vertex Veo 3.1 / Gemini Omni 1.2 Flash / Gemini 3 Pro Image in the {agent1.niche} aesthetic. {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}\n"
-                f"4. Keep `asset_mode='ai_video'` and `motion_graphic_type='none'` for EVERY scene so the entire video maintains cohesive cinema quality (visualize data, comparisons, and concepts as dramatic 3D visual metaphors, holograms, or real-world cinema rather than flat Python charts).\n"
-                f"5. Provide a crisp 3-6 word `on_screen_callout` in proper English for each scene.\n\n"
+                f"into breathtaking, filmable, high-retention cinema (8-12 seconds each):\n"
+                f"1. `voiceover_text`: Natural, punchy, non-repetitive narration strictly in {agent1.language_tone} (~18-26 spoken words per 10s scene so it aligns tightly with 8-12s cuts).\n"
+                f"2. `ssml_voice_cues`: Same narration enhanced with expressive Indian creator emotion cues and `<break time=\"0.4s\"/>` dramatic pauses before reveals.\n"
+                f"3. `visual_prompt_veo_omni` (CRITICAL — HOLLYWOOD 5-LAYER CINEMA FORMULA FOR GEMINI OMNI 1.2 FLASH & VEO 3.1):\n"
+                f"   Every single scene prompt MUST be 55-95 words of vivid, concrete, physically filmable cinematography containing ALL FIVE layers:\n"
+                f"   (a) SHOT SCALE & LENS (strictly alternate consecutive scenes: Wide Aerial Establishing -> Low-Angle Tracking -> 100mm Macro Detail -> Orbital Steadicam Arc -> Overhead Crane Reveal -> 120fps Slow-Mo Physics -> Foreground Parallax -> Horizon Pull-Back).\n"
+                f"   (b) CONCRETE TANGIBLE SUBJECT & CONTINUOUS MOTION: Describe real physical subjects, environments, vehicles, hands, optics, architecture, nature, or light phenomena IN CONTINUOUS ACTION that visually illustrate the voiceover. NEVER describe abstract concepts, flat bar charts, PowerPoint slides, wireframe grids, neon grid floors, UI dashboard overlays, or floating text.\n"
+                f"   (c) LIVED-IN ATMOSPHERE & MICRO-DETAILS: Foreground/midground/background depth layers, wet pavement specular reflections, drifting dust motes, steam, rain droplets, atmospheric haze, or natural background life.\n"
+                f"   (d) MOTIVATED LIGHTING & FILM GRADE: Practical key lights, dramatic rim backlighting, volumetric shafts, shallow f/1.4 depth of field, cohesive with '{cinema_preset}'.\n"
+                f"   (e) SINGLE UNBROKEN TAKE: Explicitly end with single unbroken continuous shot, no scene cuts, no dialogue, and {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}\n"
+                f"4. `camera_and_lighting_cue`: Concise 1-line DP note matching the scene's exact lens, movement, and lighting.\n"
+                f"5. Keep `asset_mode='ai_video'` and `motion_graphic_type='none'` for EVERY scene (zero flat Python charts).\n"
+                f"6. Provide a crisp 3-6 word `on_screen_callout` in proper English for each scene.\n\n"
                 f"Baseline scaffold JSON:\n{json.dumps([s.model_dump() for s in slice_scenes], ensure_ascii=False)}"
             )
 
@@ -248,13 +272,19 @@ def run_agent2_scene_scripting(
                     continue
             enriched_scenes.extend(slice_scenes)
 
-        # Normalize sequential indices, enforce ai_video default & English-only visual rule
+        # Normalize sequential indices, lock ai_video & polish every prompt through the cinema guard
         for idx, sc in enumerate(enriched_scenes, start=1):
             sc.scene_index = idx
             sc.asset_mode = "ai_video"
             sc.motion_graphic_type = "none"
-            if "never render any chinese" not in sc.visual_prompt_veo_omni.lower():
-                sc.visual_prompt_veo_omni = f"{sc.visual_prompt_veo_omni.strip()} {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
+            sc.visual_prompt_veo_omni = build_cinematic_video_prompt(
+                sc.visual_prompt_veo_omni,
+                niche=agent1.niche,
+                cinema_preset=cinema_preset,
+                camera_cue=sc.camera_and_lighting_cue,
+                duration_sec=sc.duration_sec,
+                scene_index=idx,
+            )
         chapters_md = _compute_chapters_markdown(enriched_scenes)
         return Agent2Output(
             topic=agent1.topic,
@@ -268,3 +298,112 @@ def run_agent2_scene_scripting(
     except Exception as exc:
         logger.info("Agent 2 LLM scripting fell back to structured baseline scenes: %s", exc)
         return baseline
+
+
+def enhance_all_scenes_to_cinema(
+    agent2: Agent2Output,
+    *,
+    cinema_preset: str = DEFAULT_CINEMA_PRESET,
+    config: Optional[OmniStudioConfig] = None,
+) -> Agent2Output:
+    """
+    Upgrades ALL scene visual prompts in an existing `Agent2Output` in-place to Hollywood-grade
+    cinematography while strictly preserving the user's edited voiceovers, SSML cues, durations,
+    and custom uploads. Uses Gemini when available, with deterministic DP polish fallback.
+    """
+    cfg = config or OmniStudioConfig()
+    prof = get_niche_profile(agent2.niche)
+    preset = get_cinema_preset(cinema_preset)
+    upgraded_scenes = [SceneClipSpec.model_validate(s.model_dump()) for s in agent2.scenes]
+
+    if cfg.has_valid_gemini_key:
+        try:
+            client = get_genai_client(cfg.gemini_api_key)
+            models_chain = [
+                resolve_current_model(FAST_AGENT_MODEL, "gemini-3.8-flash"),
+                resolve_current_model(REASONING_FALLBACK_MODEL, "gemini-4-argon"),
+            ]
+            from pydantic import BaseModel as _PydBase
+
+            class _CinemaRewriteItem(_PydBase):
+                scene_index: int
+                visual_prompt_veo_omni: str
+                camera_and_lighting_cue: str
+
+            class _CinemaRewriteBatch(_PydBase):
+                items: List[_CinemaRewriteItem]
+
+            batch_size = 18
+            for b_start in range(0, len(upgraded_scenes), batch_size):
+                chunk = upgraded_scenes[b_start : b_start + batch_size]
+                compact_in = [
+                    {
+                        "scene_index": s.scene_index,
+                        "chapter_label": s.chapter_label,
+                        "duration_sec": s.duration_sec,
+                        "voiceover_text": s.voiceover_text,
+                        "current_visual_prompt": s.visual_prompt_veo_omni,
+                    }
+                    for s in chunk
+                ]
+                prompt = (
+                    f"You are an Academy-Award Director of Photography upgrading video generation prompts for "
+                    f"Gemini Omni 1.2 Flash & Veo 3.1.\n"
+                    f"Topic: {agent2.topic} | Niche: {agent2.niche} | Cinema Look: {cinema_preset}\n"
+                    f"Rig & Grade: {preset['camera_rig']}; {preset['lighting_signature']}; {preset['color_grade']}\n"
+                    f"Niche Visual Grammar: {prof['visual_style']}\n\n"
+                    f"Rewrite ONLY `visual_prompt_veo_omni` and `camera_and_lighting_cue` for each scene below into "
+                    f"jaw-dropping 55-90 word photorealistic single-take cinema prompts:\n"
+                    f"- Alternate shot scales across consecutive scenes (Wide Establishing, Low-Angle Tracking, 100mm Macro, "
+                    f"Orbital Steadicam, Aerial Top-Down, 120fps Slow-Mo, Foreground Parallax, Horizon Pull-Back).\n"
+                    f"- Replace any chart, slide, text card, infographic, or wireframe grid imagery with vivid physical "
+                    f"real-world environments, tactile materials, atmospheric depth (rain/mist/dust/reflections), and natural motion.\n"
+                    f"- Strictly single unbroken shot, no scene cuts, no dialogue, zero Chinese/foreign letters.\n\n"
+                    f"Scenes:\n{json.dumps(compact_in, ensure_ascii=False)}"
+                )
+                interaction = call_interaction_with_fallback(
+                    client,
+                    models=models_chain,
+                    max_retries=2,
+                    input=prompt,
+                    response_format={
+                        "type": "text",
+                        "mime_type": "application/json",
+                        "schema": _CinemaRewriteBatch.model_json_schema(),
+                    },
+                )
+                raw = (getattr(interaction, "output_text", None) or "").strip()
+                if raw:
+                    parsed = _CinemaRewriteBatch.model_validate_json(raw)
+                    by_idx = {it.scene_index: it for it in parsed.items}
+                    for s in chunk:
+                        if s.scene_index in by_idx:
+                            s.visual_prompt_veo_omni = by_idx[s.scene_index].visual_prompt_veo_omni
+                            s.camera_and_lighting_cue = by_idx[s.scene_index].camera_and_lighting_cue
+        except Exception as exc:
+            logger.info("LLM batch cinema prompt enhancer fell back to deterministic DP polish: %s", exc)
+
+    # Guarantee every scene is normalized to ai_video (unless user attached custom upload) + cinema-polished
+    for idx, sc in enumerate(upgraded_scenes, start=1):
+        sc.scene_index = idx
+        if sc.asset_mode != "custom_upload":
+            sc.asset_mode = "ai_video"
+            sc.motion_graphic_type = "none"
+        sc.visual_prompt_veo_omni = build_cinematic_video_prompt(
+            sc.visual_prompt_veo_omni,
+            niche=agent2.niche,
+            cinema_preset=cinema_preset,
+            camera_cue=sc.camera_and_lighting_cue,
+            duration_sec=sc.duration_sec,
+            scene_index=idx,
+        )
+
+    return Agent2Output(
+        topic=agent2.topic,
+        niche=agent2.niche,
+        language_tone=agent2.language_tone,
+        total_scenes=len(upgraded_scenes),
+        total_estimated_duration_sec=round(sum(s.duration_sec for s in upgraded_scenes), 1),
+        chapters_markdown=_compute_chapters_markdown(upgraded_scenes),
+        scenes=upgraded_scenes,
+    )

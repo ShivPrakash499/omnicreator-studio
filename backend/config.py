@@ -117,7 +117,11 @@ SUPPORTED_LANGUAGES: List[str] = [
 
 NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
     "Education": {
-        "visual_style": "Clean modern 3D studio motion graphics, crisp volumetric diagrams, glowing conceptual callouts, dark-slate & neon-cyan educational cinema (Veritasium / 3Blue1Brown caliber), zero visual hallucination",
+        "visual_style": (
+            "IMAX prestige science documentary cinematography (Veritasium & BBC Earth caliber), shot on ARRI Alexa 65 "
+            "with 35mm anamorphic lenses, tangible real-world experiments, atmospheric volumetric light beams, "
+            "deep obsidian and electric cyan rim lighting, rich shallow f/1.4 depth of field, photorealistic cinema"
+        ),
         "music_vibe": "Upbeat inquisitive electronic documentary pulse with warm arpeggio and crisp percussive drive, strictly instrumental",
         "accent_hex": "#00E5FF",
         "secondary_hex": "#FFD600",
@@ -125,7 +129,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "manim_or_diagram",
     },
     "Finance & Investing": {
-        "visual_style": "Sleek editorial motion animation, glassmorphic 3D financial dashboards, dark emerald & gold architectural lighting, cinematic macro currency/market metaphors, clean typography",
+        "visual_style": (
+            "Prestige financial thriller cinematography (Succession & The Big Short caliber), sweeping twilight metropolitan "
+            "skylines, gleaming glass-and-marble architectural interiors, macro brushed gold and currency textures, "
+            "dramatic chiaroscuro emerald and warm tungsten lighting, Kodak Vision3 500T film grade, shallow DOF"
+        ),
         "music_vibe": "High-stakes modern financial documentary score, sleek sub-bass pulse, rhythmic muted synth, energetic and authoritative, strictly instrumental",
         "accent_hex": "#00E676",
         "secondary_hex": "#FFB300",
@@ -133,7 +141,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "data_chart",
     },
     "AI & Future Tech": {
-        "visual_style": "Ultra-sharp futuristic 3D UI animations, glowing neural network topologies, obsidian glass laboratories, volumetric cyan and violet rim lighting, clean macro silicon shots",
+        "visual_style": (
+            "Blade Runner 2049 & Ex Machina theatrical sci-fi cinema, shot on 65mm anamorphic glass, sleek obsidian "
+            "research laboratories, hyper-real macro silicon wafers and fiber-optic light trails, wet rain-slicked "
+            "modern highways and volumetric cyan-and-amber practical lighting, tactile physical materials and deep realism"
+        ),
         "music_vibe": "Futuristic cyber-documentary synthwave with forward-driving arpeggio and subtle bass groove, strictly instrumental",
         "accent_hex": "#38BDF8",
         "secondary_hex": "#C084FC",
@@ -141,7 +153,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "data_chart",
     },
     "Gadgets & Reviews": {
-        "visual_style": "Commercial studio product macro cinematography (MKBHD caliber), matte black tabletops, dramatic edge-lit hardware silhouettes, crisp 3D internal teardown callouts, shallow f/1.4 DOF",
+        "visual_style": (
+            "Ultra-premium commercial product cinema (Apple Keynote & MKBHD RED V-Raptor 8K caliber), motorized macro "
+            "slider dolly shots, brushed titanium, anodized aluminum, and sapphire glass specular reflections on matte "
+            "slate surfaces, dramatic edge rim lights, creamy f/1.4 bokeh, crisp micro-surface detail"
+        ),
         "music_vibe": "Crisp modern lo-fi tech-beat with punchy percussive rhythm and clean bassline, energetic review pace, strictly instrumental",
         "accent_hex": "#FF3D5A",
         "secondary_hex": "#00E5FF",
@@ -149,7 +165,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "comparison_chart",
     },
     "Business & Startups": {
-        "visual_style": "High-contrast executive documentary cinematography, sleek boardroom & skyline b-roll blended with clean isometric 3D strategy diagrams, bold crimson and gold highlights",
+        "visual_style": (
+            "Netflix executive documentary cinematography, sweeping golden-hour skyscraper silhouettes, warm tungsten "
+            "engineering labs and modern glass studios, dynamic Steadicam tracking shots, crisp anamorphic lens flares, "
+            "high-contrast cinematic tungsten-and-teal color grade"
+        ),
         "music_vibe": "Driven corporate-thriller documentary pulse, crisp percussion, motivating string/synth ostinato, strictly instrumental",
         "accent_hex": "#F59E0B",
         "secondary_hex": "#10B981",
@@ -157,7 +177,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "data_chart",
     },
     "History & Geopolitics": {
-        "visual_style": "Epic 35mm cinema documentary aesthetics, atmospheric volumetric dust and golden-hour backlighting, animated 3D topographic maps, archival-grade dramatic lighting",
+        "visual_style": (
+            "Epic Christopher Nolan & Ridley Scott 35mm historical film cinematography, sweeping mist-covered landscapes, "
+            "golden-hour volumetric dust shafts, authentic weathered stone, brass, and archival textures, dramatic "
+            "natural torchlight and stormy twilight skies, rich celluloid film grain and monumental scale"
+        ),
         "music_vibe": "Cinematic orchestral hybrid documentary score with deep cello pulse, subtle war-drum tension, and dramatic swells, strictly instrumental",
         "accent_hex": "#F97316",
         "secondary_hex": "#FACC15",
@@ -165,7 +189,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "timeline_chart",
     },
     "Stories & Mysteries": {
-        "visual_style": "Neo-noir dramatic storytelling cinematography, moody chiaroscuro lighting, rich anamorphic lens flares, atmospheric rain/fog environments, suspenseful slow push-ins",
+        "visual_style": (
+            "David Fincher neo-noir thriller cinematography, moody chiaroscuro shadow play, rain-streaked glass "
+            "reflections, sodium-vapor streetlights piercing misty midnight streets, slow hypnotic dolly push-ins, "
+            "subtle anamorphic amber flares, palpable cinematic atmosphere and tension"
+        ),
         "music_vibe": "Suspenseful investigative mystery score with ticking percussive motifs, deep ambient pads, and high-retention build-ups, strictly instrumental",
         "accent_hex": "#EF4444",
         "secondary_hex": "#FDE047",
@@ -173,7 +201,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "timeline_chart",
     },
     "Entertainment & Pop Culture": {
-        "visual_style": "Vibrant high-energy editorial video essay aesthetic, kinetic typography panels, neon studio rim-lighting, bold magenta/cyan color grading, rapid punch-in framing",
+        "visual_style": (
+            "A24 & Denis Villeneuve vibrant theatrical cinema, lush neon practical rim-lighting, fluid Steadicam "
+            "tracking through atmospheric stages, rain-lit boulevards, and glowing studios, rich magenta-and-cyan "
+            "color grading, dreamy anamorphic bokeh, pure visual storytelling"
+        ),
         "music_vibe": "High-energy modern pop-electronic instrumental groove with bouncy bassline and snappy percussion",
         "accent_hex": "#EC4899",
         "secondary_hex": "#22D3EE",
@@ -181,7 +213,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "comparison_chart",
     },
     "Science & Space": {
-        "visual_style": "Photorealistic Unreal Engine 5 / Octane cosmic & laboratory cinema, macro optical physics, glowing planetary & subatomic cross-sections, deep obsidian studio aesthetics",
+        "visual_style": (
+            "Interstellar & IMAX cosmic cinematography, photorealistic orbital planetary vistas, dramatic solar "
+            "eclipses, razor-sharp laboratory laser optics, high-speed macro physical phenomena, deep obsidian "
+            "space shadows with radiant amber and sapphire light bloom"
+        ),
         "music_vibe": "Awe-inspiring cosmic ambient synth inspired by Christopher Nolan and Veritasium, deep sub-bass and crystalline harmonics, strictly instrumental",
         "accent_hex": "#06B6D4",
         "secondary_hex": "#FBBF24",
@@ -189,7 +225,11 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "preferred_graphics": "manim_or_diagram",
     },
     "Health & Psychology": {
-        "visual_style": "Warm cinematic human-centric storytelling paired with crystal-clear 3D anatomical/neural light visualizations, soft teal and amber studio lighting, clean minimalist overlays",
+        "visual_style": (
+            "Intimate prestige documentary cinematography, warm golden-hour natural sunlight streaming through "
+            "windows, poetic shallow-DOF human silhouettes and tranquil lived-in environments, luminous microscopic "
+            "organic textures, serene teal and warm honey film color grade"
+        ),
         "music_vibe": "Uplifting warm minimalist pulse with organic marimba/synth textures and steady engaging rhythm, strictly instrumental",
         "accent_hex": "#14B8A6",
         "secondary_hex": "#F59E0B",
@@ -199,6 +239,86 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
 }
 
 DEFAULT_NICHE_PROFILE: Dict[str, Any] = NICHE_VISUAL_PROFILES["AI & Future Tech"]
+
+# Curated Hollywood Director-of-Photography Look Presets selectable across the pipeline
+CINEMA_STYLE_PRESETS: Dict[str, Dict[str, str]] = {
+    "🎬 Hollywood IMAX Documentary (Default)": {
+        "camera_rig": "Shot on ARRI Alexa 65 with Panavision 35mm anamorphic prime glass, natural film grain, 24fps",
+        "lighting_signature": "Motivated volumetric key light, crisp rim backlighting, specular wet/metallic reflections, atmospheric depth haze",
+        "color_grade": "Rich theatrical IMAX teal-and-amber dynamic range, deep velvety shadows, luminous highlights",
+        "motion_feel": "Silky stabilized cinema dolly, crane, and aerial gimbal choreography with natural physical physics",
+    },
+    "🚀 Sci-Fi Cyberpunk Feature (Blade Runner)": {
+        "camera_rig": "Shot on 65mm anamorphic cinema lens with subtle horizontal optical flares, shallow f/1.4 DOF, 24fps",
+        "lighting_signature": "Rain-soaked neon cyan and sodium-amber street reflections, dense volumetric fog beams, high-contrast silhouette lighting",
+        "color_grade": "Moody neo-futuristic obsidian, electric cyan, and molten amber theatrical color grade",
+        "motion_feel": "Gliding low-angle tracking shots and sweeping nocturnal drone reveals through mist",
+    },
+    "🎞️ 35mm Prestige Drama (Christopher Nolan)": {
+        "camera_rig": "Shot on 35mm Kodak Vision3 500T film stock, organic celluloid texture, crisp prime lenses, 24fps",
+        "lighting_signature": "Natural golden-hour shafts, dramatic overcast skies, authentic practical tungsten lamps, chiaroscuro contrast",
+        "color_grade": "Timeless theatrical celluloid grade with warm skin tones, earthy highlights, and deep ink shadows",
+        "motion_feel": "Deliberate grounded Steadicam push-ins, sweeping crane arcs, and monumental wide establishing frames",
+    },
+    "💎 Commercial Studio Luxury (Apple Keynote)": {
+        "camera_rig": "Shot on RED V-Raptor 8K with robotic Bolt motion-control macro lens, razor-sharp focus rack, 24fps",
+        "lighting_signature": "Sculpted softbox rim lights, flawless specular highlights across glass, carbon fiber, and anodized metal",
+        "color_grade": "Ultra-clean obsidian matte blacks, crisp neutral whites, and surgical jewel-tone accent light",
+        "motion_feel": "Precision motorized micro-dolly glides, smooth orbital product reveals, zero camera shake",
+    },
+    "🌌 Epic Cosmic & Nature (Interstellar / BBC)": {
+        "camera_rig": "Shot on IMAX 70mm large-format lens with breathtaking scale, crisp foreground-to-horizon depth, 24fps",
+        "lighting_signature": "Radiant cosmic rim eclipses, atmospheric golden god-rays, shimmering particulate dust and light refraction",
+        "color_grade": "Awe-inspiring deep indigo shadows, luminous solar gold highlights, expansive theatrical contrast",
+        "motion_feel": "Majestic weightless orbital drift, soaring aerial sweeps, and hypnotic slow-motion 120fps physics",
+    },
+}
+
+DEFAULT_CINEMA_PRESET: str = "🎬 Hollywood IMAX Documentary (Default)"
+
+# Rotating 8-shot theatrical editing grammar enforcing authentic visual resets every 8-12 seconds
+CINEMATIC_SHOT_CHOREOGRAPHY: List[Dict[str, str]] = [
+    {
+        "shot_type": "Sweeping Wide Establishing",
+        "camera_move": "Smooth elevated crane descent gliding forward into the scene, 24mm anamorphic wide lens, layered foreground-to-horizon atmospheric depth",
+        "lighting": "Dramatic golden-hour / twilight volumetric light rays cutting through fine mist with crisp rim highlights",
+    },
+    {
+        "shot_type": "Low-Angle Hero Tracking",
+        "camera_move": "Dynamic low-angle gimbal tracking shot gliding alongside the main subject, 35mm prime lens, subtle speed-blur on background elements",
+        "lighting": "High-contrast motivated side lighting with gleaming wet-surface reflections and rich theatrical shadows",
+    },
+    {
+        "shot_type": "Intimate 100mm Macro Detail",
+        "camera_move": "Ultra-smooth motorized macro push-in with shallow f/1.4 focus rack revealing intricate mechanical, optical, or physical textures",
+        "lighting": "Sculpted precision rim backlighting catching micro-particles, specular edges, and subtle light bloom",
+    },
+    {
+        "shot_type": "Orbital 180° Steadicam Arc",
+        "camera_move": "Fluid 50mm anamorphic Steadicam orbiting smoothly around the central subject, creating rich parallax across background depth layers",
+        "lighting": "Atmospheric chiaroscuro key light with luminous practical accents and creamy out-of-focus bokeh orbs",
+    },
+    {
+        "shot_type": "Overhead Aerial God's-Eye Reveal",
+        "camera_move": "Majestic stabilized overhead top-down drone pull-back gradually revealing grand architectural, geographic, or systemic scale",
+        "lighting": "Crisp directional raking light casting long dramatic shadows and glowing ambient movement trails",
+    },
+    {
+        "shot_type": "Slow-Motion 120fps Physical Drama",
+        "camera_move": "Silky 85mm telephoto medium close-up capturing hyper-real slow-motion physics (sparks, light pulses, droplets, dust motes, or motion dynamics)",
+        "lighting": "Dramatic split-tone amber-and-cyan rim illumination carving crisp silhouettes out of dark atmospheric haze",
+    },
+    {
+        "shot_type": "Over-the-Shoulder Foreground Parallax",
+        "camera_move": "Subtle handheld-stabilized dolly slide passing softly blurred foreground glass or architecture to unveil the focal revelation cleanly",
+        "lighting": "Warm interior practical lamps contrasting cool blue exterior twilight through glass and mist",
+    },
+    {
+        "shot_type": "Monumental Pull-Back Horizon Finale",
+        "camera_move": "Expansive reverse aerial crane rise smoothly pulling away from the subject toward a glowing cinematic horizon, serene dramatic closure",
+        "lighting": "Radiant horizon backlight, atmospheric lens bloom, deep theatrical contrast, timeless filmic finish",
+    },
+]
 
 # Global strict language & anti-hallucination guard applied to EVERY video & image generation call
 STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE: str = (
@@ -210,8 +330,89 @@ STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE: str = (
 
 VEO_STRICT_NEGATIVE_PROMPT: str = (
     "Chinese text, Mandarin characters, Hanzi, Kanji, Japanese text, Korean Hangul, Cyrillic text, "
-    "gibberish letters, garbled text, distorted license plates, watermarks, low quality, flat 2D clipart"
+    "gibberish letters, garbled text, distorted license plates, watermarks, floating subtitles, text overlays, "
+    "PowerPoint slides, flat 2D clipart, infographic bar charts, wireframe grid floor, neon grid clipart, "
+    "cheesy plastic CGI, UI dashboard panels, split screen collage, abrupt jump cuts, blurry low resolution"
 )
+
+
+def get_cinema_preset(preset_name: Optional[str] = None) -> Dict[str, str]:
+    if preset_name and preset_name in CINEMA_STYLE_PRESETS:
+        return CINEMA_STYLE_PRESETS[preset_name]
+    return CINEMA_STYLE_PRESETS[DEFAULT_CINEMA_PRESET]
+
+
+def build_cinematic_video_prompt(
+    raw_prompt: str,
+    *,
+    niche: str,
+    cinema_preset: Optional[str] = None,
+    camera_cue: str = "",
+    aspect_ratio: str = "16:9",
+    duration_sec: float = 8.0,
+    scene_index: int = 1,
+) -> str:
+    """
+    Elevates ANY scene prompt (new, user-edited, or legacy) into Hollywood-grade cinematography
+    optimized for Gemini Omni 1.2 Flash & Vertex Veo 3.1:
+    - Strips anti-cinema chart/UI clichés (`wireframe grid`, `summary card`, `analytical chart`, etc.)
+    - Injects concrete lens/rig, motivated lighting, film color grade, and smooth continuous motion
+    - Enforces Omni's single-unbroken-shot rule (zero jump cuts, zero dialogue) + zero foreign glyphs.
+    """
+    prof = get_niche_profile(niche)
+    preset = get_cinema_preset(cinema_preset)
+    choreo = CINEMATIC_SHOT_CHOREOGRAPHY[(max(1, scene_index) - 1) % len(CINEMATIC_SHOT_CHOREOGRAPHY)]
+
+    cleaned = (raw_prompt or "").strip()
+    # Idempotently strip prior appended boilerplate so re-enhancing (Agent 2 -> Agent 3) never duplicates clauses
+    for marker in ("Execution:", "STRICT VISUAL LANGUAGE RULE:"):
+        if marker in cleaned:
+            cleaned = cleaned.split(marker)[0].strip()
+
+    # Replace chart/slide/grid clichés with photorealistic physical cinema language
+    anti_cinema_replacements = [
+        (r"\banalytical data chart\b", "photorealistic physical visual metaphor in real-world light"),
+        (r"\bmotion graphic[s]?\b", "photorealistic live-action and IMAX CGI cinematography"),
+        (r"\bkinetic summary card\b", "sweeping twilight architectural vista"),
+        (r"\benergetic outro motion backdrop\b", "expansive golden-hour horizon pull-back"),
+        (r"\bwireframe grid\b", "rain-slicked asphalt and sleek architectural reflections"),
+        (r"\btypography panels?\b", "clean atmospheric practical lighting"),
+        (r"\bcomparison scorecard\b", "dramatic real-world side-by-side physical contrast"),
+        (r"\bannotated diagram reveal\b", "intimate macro physical cutaway in dramatic studio lighting"),
+        (r"\binfographic\b", "tangible physical 3D real-world scene"),
+    ]
+    for pat, repl in anti_cinema_replacements:
+        cleaned = re.sub(pat, repl, cleaned, flags=re.IGNORECASE)
+
+    low = cleaned.lower()
+    parts: List[str] = [cleaned.rstrip(".") + "."]
+
+    # Inject camera choreography if missing concrete lens/movement guidance
+    has_lens_or_cam = any(
+        tok in low for tok in ("35mm", "50mm", "65mm", "85mm", "100mm", "anamorphic", "dolly", "steadicam", "crane", "drone", "tracking", "macro")
+    )
+    if not has_lens_or_cam:
+        cam_desc = camera_cue.strip() if camera_cue and len(camera_cue.strip()) > 20 else choreo["camera_move"]
+        parts.append(f"Cinematography: {cam_desc}.")
+
+    # Inject theatrical lighting, film rig & color grade if not already specified
+    has_lighting_grade = any(
+        tok in low for tok in ("arri", "kodak", "red v-raptor", "imax", "chiaroscuro", "volumetric", "color grade", "anamorphic")
+    )
+    if not has_lighting_grade:
+        parts.append(
+            f"Look & Lighting: {preset['camera_rig']}; {preset['lighting_signature']}; "
+            f"{preset['color_grade']}. Visual tone anchored to {prof['visual_style']}."
+        )
+
+    dur_int = max(4, min(12, int(round(duration_sec))))
+    aspect_phrase = "16:9 widescreen theatrical" if aspect_ratio == "16:9" else "9:16 vertical cinematic"
+    parts.append(
+        f"Execution: Single unbroken continuous {dur_int}-second {aspect_phrase} shot with lived-in natural micro-motion "
+        f"(drifting atmospheric haze, realistic reflections, fluid physics). No scene cuts, no split screens, "
+        f"no UI overlays, no dialogue. {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
+    )
+    return " ".join(parts)
 
 
 def get_niche_profile(niche: str) -> Dict[str, Any]:

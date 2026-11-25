@@ -177,7 +177,7 @@ def _build_dynamic_baseline_storyboard(
             hook_dur,
             f"Open mid-action on the most counter-intuitive real-world consequence of {topic}. Establish immediate high stakes and promise a clear visual breakdown without any slow intro.",
             "Cold-open visual paradox + pattern-interrupt question in first 8 seconds",
-            f"Rapid 8s cinematic cuts introducing {topic} in action; {prof['visual_style']}",
+            f"Sweeping low-angle 35mm anamorphic tracking shot throwing the viewer directly into {topic} in vivid real-world motion, volumetric rim light cutting through atmospheric mist; {prof['visual_style']}",
         ),
         (
             2,
@@ -185,17 +185,17 @@ def _build_dynamic_baseline_storyboard(
             f"How {topic} Actually Works Under the Hood",
             round(rem * 0.22, 1),
             f"Break down the foundational mechanism and origin story of {topic} using concrete visual metaphors and zero jargon.",
-            "8-second visual angle reset + annotated diagram reveal",
-            f"Layered cutaway visualization & clean motion diagram explaining {topic}",
+            "8-second visual angle reset + tactile macro reveal",
+            f"Intimate 100mm macro dolly push-in revealing the intricate physical heart and inner mechanics of {topic} bathed in dramatic directional studio light and fine floating dust motes",
         ),
         (
             3,
             "Micro_Retention_Loop",
             f"The Hidden Turning Point Nobody Talks About",
             round(rem * 0.20, 1),
-            f"Introduce an unexpected twist or key inflection point in {topic}, supported by real data trends and side-by-side comparison.",
-            "60-90s retention loop: pose an unresolved puzzle before revealing data chart",
-            f"Analytical data chart / timeline shift contrasting old assumptions vs reality of {topic}",
+            f"Introduce an unexpected twist or key inflection point in {topic}, supported by dramatic visual contrast and real-world scale.",
+            "60-90s retention loop: pose an unresolved puzzle with a dramatic lighting & perspective shift",
+            f"Moody chiaroscuro Steadicam arc shifting from shadow into radiant amber/cyan light to dramatize the hidden turning point behind {topic}, rich shallow depth of field",
         ),
         (
             4,
@@ -203,8 +203,8 @@ def _build_dynamic_baseline_storyboard(
             f"Real-World Impact & Case Studies of {topic}",
             round(rem * 0.22, 1),
             f"Walk through 2 vivid real-world scenarios showing how {topic} reshapes everyday decisions, industry economics, or future outcomes.",
-            "B-roll energy shift + interactive comparison scorecard",
-            f"High-contrast real-world scenarios + dynamic comparison graphics tailored to {niche}",
+            "High-energy aerial-to-street scale shift showcasing tangible real-world impact",
+            f"Soaring aerial twilight drone descent transitioning into bustling lived-in real-world scenes showing {topic} transforming everyday life in {niche} cinematography",
         ),
         (
             5,
@@ -212,8 +212,8 @@ def _build_dynamic_baseline_storyboard(
             f"The Biggest Misconception & 'Aha!' Reveal",
             round(rem * 0.22, 1),
             f"Expose the #1 myth or costly mistake people make about {topic}, resolving the opening hook with a memorable framework.",
-            "Climax pattern interrupt: red-vs-green misconception debunker + core takeaway",
-            f"Dramatic split-screen visual debunking the myth and locking the 'Aha!' insight",
+            "Climax pattern interrupt: dramatic slow-motion 120fps visual metaphor unlocking the 'Aha!' insight",
+            f"Breathtaking slow-motion 120fps theatrical shot with dramatic backlit silhouette and luminous volumetric beam resolving the central mystery of {topic}",
         ),
         (
             6,
@@ -221,8 +221,8 @@ def _build_dynamic_baseline_storyboard(
             f"What Happens Next & Your Take",
             round(rem * 0.14, 1),
             f"Deliver a crisp 1-sentence future takeaway on {topic} and launch a thought-provoking question driving comments and subscriptions.",
-            "Comment debate prompt + seamless subscribe CTA",
-            f"Clean kinetic summary card + energetic outro motion backdrop",
+            "Comment debate prompt + expansive cinematic horizon finale",
+            f"Majestic reverse crane pull-back at golden hour overlooking a vast glowing horizon symbolizing the future of {topic}, timeless IMAX dynamic range",
         ),
     ]
 
@@ -363,8 +363,8 @@ def _build_dynamic_baseline_storyboard(
             f"What practical takeaway or framework can viewers apply immediately?",
         ],
         extracted_visual_hooks=[
-            "Cold-open visual contrast inside the first 5 seconds with zero logo intro",
-            "8-to-12-second visual reset cadence alternating cinematic b-roll & crisp data graphics",
+            "Cold-open IMAX visual paradox inside the first 5 seconds with zero logo intro",
+            "8-to-12-second theatrical shot-scale resets alternating wide aerials, macro details & dynamic tracking",
             "Mid-video curiosity loop teasing the Climax 'Aha!' revelation at 60-90s intervals",
         ],
         bgm_style_reference=top_comp_vibe,
@@ -379,8 +379,8 @@ def _build_dynamic_baseline_storyboard(
         thumbnail_hook_headline=thumb_headline[:26],
         thumbnail_badge_label=prof["badge_prefix"],
         thumbnail_graphic_concept=(
-            f"Bright glowing 3D conceptual graphics, clean infographic diagrams, and iconic glowing symbols "
-            f"representing '{topic}' in {niche} style ({prof['visual_style']})"
+            f"Dramatic photorealistic centerpiece subject bathed in volumetric rim lighting, cinematic depth of field, "
+            f"and glowing atmospheric accents representing '{topic}' ({prof['visual_style']})"
         ),
     )
 
@@ -431,9 +431,10 @@ def run_agent1_seo_and_storyboard(
             f"   - Include `Micro_Retention_Loop` beats every 60-90 seconds.\n"
             f"   - Include a `Climax_Aha` beat exposing the #1 misconception/mistake.\n"
             f"   - End with an `Outro_CTA` beat driving comments & subscriptions.\n"
+            f"   - CRITICAL FOR `visual_direction`: Write like a Hollywood Director of Photography! Describe concrete, filmable real-world locations, physical subjects in motion, lighting atmosphere, and camera framing (e.g., rain-soaked twilight streets, glowing macro hardware, sweeping aerial landscapes). NEVER ask for flat charts, PowerPoint slides, summary cards, wireframe grids, or text panels.\n"
             f"5. Write `hook_script_0_45s`, `climax_misconception_aha`, and `outro_cta_script` authentically in {language_tone}.\n"
             f"6. Craft `thumbnail_hook_headline` (2-4 punchy words — use clean Roman English/Hinglish if language is English or Hinglish, or clean crisp Hindi Devanagari ONLY if language is Hindi), `thumbnail_badge_label` (1-2 crisp words in the same script), and "
-            f"`thumbnail_graphic_concept` (specific glowing 3D objects/scenes symbolizing '{topic}' on the thumbnail).\n"
+            f"`thumbnail_graphic_concept` (dramatic, photorealistic, high-contrast theatrical subject/scene symbolizing '{topic}' with glowing volumetric rim light — zero flat clipart or garbled text).\n"
             f"Return STRICT JSON matching the Agent1Output schema."
         )
 
