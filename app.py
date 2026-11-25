@@ -31,6 +31,7 @@ from backend.agent3_media_composer import (
     select_hybrid_hero_scene_indices,
 )
 from backend.agent4_youtube_publisher import (
+    build_short_funnel_description,
     build_youtube_oauth_url,
     create_youtube_playlist,
     exchange_oauth_code_and_store,
@@ -1206,6 +1207,14 @@ elif step == 1:
             edited_hook = st.text_area("⚡ Opening Hook (First 45 Seconds):", value=a1.hook_script_0_45s, height=90, key="a1_hook_edit")
             edited_climax = st.text_area("💡 Big Reveal / Climax:", value=a1.climax_misconception_aha, height=85, key="a1_climax_edit")
             edited_cta = st.text_area("📣 Closing Call-to-Action:", value=a1.outro_cta_script, height=80, key="a1_cta_edit")
+            edited_short_hook = st.text_area(
+                "📱 Shorts Cliffhanger Hook (10–20s Teaser to Drive Viewers to Full Video):",
+                value=a1.short_hook_script,
+                height=78,
+                placeholder="Leave blank to auto-generate a punchy 10–20s curiosity/fear hook when building your Short.",
+                help="26–38 spoken words (~12–18 seconds) opening with a shocking question/fear and pointing viewers to the full video link in the description.",
+                key="a1_short_hook_edit",
+            )
 
             st.markdown("**Chapter Breakdown:**")
             updated_beats = []
@@ -1254,6 +1263,7 @@ elif step == 1:
             edited_a1_dict["hook_script_0_45s"] = edited_hook.strip() or a1.hook_script_0_45s
             edited_a1_dict["climax_misconception_aha"] = edited_climax.strip() or a1.climax_misconception_aha
             edited_a1_dict["outro_cta_script"] = edited_cta.strip() or a1.outro_cta_script
+            edited_a1_dict["short_hook_script"] = edited_short_hook.strip()
             edited_a1_dict["thumbnail_hook_headline"] = edited_thumb_hl.strip() or a1.thumbnail_hook_headline
             edited_a1_dict["thumbnail_badge_label"] = edited_thumb_badge.strip() or a1.thumbnail_badge_label
             edited_a1_dict["thumbnail_graphic_concept"] = edited_thumb_concept.strip() or a1.thumbnail_graphic_concept
@@ -2315,11 +2325,45 @@ elif step == 4:
     else:
         a1 = Agent1Output.model_validate(a1_data)
         a3 = Agent3Output.model_validate(a3_data)
-        publish_task_key = f"publish_{pid}"
+        long_pub_task_key = f"publish_long_{pid}"
+        short_pub_task_key = f"publish_short_{pid}"
 
         fresh_proj = db.get_project(pid)
         if fresh_proj and fresh_proj.get("agent4_data"):
             st.session_state["agent4_output"] = fresh_proj["agent4_data"]
+
+        # Resolve latest published Long Video & Short Video records cleanly from SQLite
+        pub_logs = db.get_publish_records(project_id=pid, limit=12)
+        long_pub_rec = next(
+            (
+                r for r in pub_logs
+                if r.get("video_id")
+                and "short" not in str(r.get("status") or "").lower()
+                and "/shorts/" not in str(r.get("watch_url") or "").lower()
+                and "#shorts" not in str(r.get("title") or "").lower()
+            ),
+            None,
+        )
+        short_pub_rec = next(
+            (
+                r for r in pub_logs
+                if r.get("video_id")
+                and (
+                    "short" in str(r.get("status") or "").lower()
+                    or "/shorts/" in str(r.get("watch_url") or "").lower()
+                    or "#shorts" in str(r.get("title") or "").lower()
+                )
+            ),
+            None,
+        )
+        resolved_long_url = ""
+        resolved_long_studio = ""
+        if long_pub_rec and long_pub_rec.get("video_id"):
+            resolved_long_url = f"https://www.youtube.com/watch?v={long_pub_rec['video_id']}"
+            resolved_long_studio = long_pub_rec.get("studio_url") or f"https://studio.youtube.com/video/{long_pub_rec['video_id']}/edit"
+        elif fresh_proj and fresh_proj.get("youtube_video_id"):
+            resolved_long_url = f"https://www.youtube.com/watch?v={fresh_proj['youtube_video_id']}"
+            resolved_long_studio = f"https://studio.youtube.com/video/{fresh_proj['youtube_video_id']}/edit"
 
         connected_chs_s4 = list_connected_youtube_channels(cfg, db)
         active_ch_id_s4 = st.session_state.get("omni_channel_id", "")
@@ -2362,136 +2406,293 @@ elif step == 4:
             with st.expander("➕ Connect or Manage YouTube Channels", expanded=(creds is None)):
                 _render_connect_channel_drawer("step4", connected_chs_s4)
 
-        with st.container(border=True):
-            pub_format = st.radio(
-                "📦 Video to Upload:",
-                options=["Full HD Video (16:9)", "Vertical Short (9:16)"],
-                horizontal=True,
-                key="pub_format_radio",
-            )
-            is_long_fmt = pub_format.startswith("Full HD")
-            default_title = a1.selected_title if is_long_fmt else f"{a1.selected_title[:85]} #Shorts"
-            pub_title = st.text_input("YouTube Video Title:", value=default_title, max_chars=100, key="pub_title_in")
+        playlists = list_user_youtube_playlists(cfg, db, channel_id=active_ch_id_s4) if creds else []
+        pl_map = {"(No Playlist)": "NONE"}
+        for pl in playlists:
+            pl_map[pl["title"]] = pl["id"]
+        pl_keys_s4 = list(pl_map.keys())
+        pre_pl_id = st.session_state.get("omni_playlist_id", "NONE")
+        pl_s4_idx = 0
+        for pi, pk in enumerate(pl_keys_s4):
+            if pl_map[pk] == pre_pl_id:
+                pl_s4_idx = pi
+                break
 
-            base_desc = a1.seo_description
-            if a3.exact_chapters_text and "00:00" not in base_desc:
-                base_desc = f"{base_desc}\n\n⏱️ CHAPTERS:\n{a3.exact_chapters_text}"
-            pub_desc = st.text_area("YouTube Description:", value=base_desc, height=160, key="pub_desc_in")
+        is_uploading_long = worker.is_running(long_pub_task_key)
+        is_uploading_short = worker.is_running(short_pub_task_key)
+        any_uploading = is_uploading_long or is_uploading_short
+        target_ch_display = st.session_state.get("omni_channel_title") or "YouTube"
+
+        # ======================================================================
+        # PUBLISH STEP 1 OF 2 — FULL-LENGTH VIDEO (16:9)
+        # ======================================================================
+        with st.container(border=True):
+            if resolved_long_url:
+                st.markdown("#### ✅ Step 1 of 2: Full-Length Video (16:9) — Published")
+                st.success(
+                    f"📺 **Full-Length Video Live:** [{resolved_long_url}]({resolved_long_url})  ·  "
+                    f"[Open in Studio]({resolved_long_studio})"
+                )
+            else:
+                st.markdown("#### 📺 Step 1 of 2: Publish Full-Length Video (16:9) First")
+                st.caption("Upload your main video first so its YouTube URL is automatically inserted into your Hook Short's description in Step 2 below.")
+
+            long_title = st.text_input(
+                "Full Video Title:",
+                value=a1.selected_title,
+                max_chars=100,
+                key=f"pub_long_title_{pid}",
+            )
+            base_long_desc = a1.seo_description
+            if a3.exact_chapters_text and "00:00" not in base_long_desc:
+                base_long_desc = f"{base_long_desc}\n\n⏱️ CHAPTERS:\n{a3.exact_chapters_text}"
+            long_desc = st.text_area(
+                "Full Video Description (includes Chapters):",
+                value=base_long_desc,
+                height=145,
+                key=f"pub_long_desc_{pid}",
+            )
 
             pc1, pc2, pc3 = st.columns(3)
             with pc1:
-                privacy_opt = st.selectbox("🔒 Visibility:", options=["private", "unlisted", "public"], index=0, key="pub_privacy")
+                long_privacy = st.selectbox("🔒 Visibility:", options=["private", "unlisted", "public"], index=0, key=f"pub_long_priv_{pid}")
             with pc2:
-                use_schedule = st.checkbox("📅 Schedule Publish Time", value=False, key="pub_use_sched")
-                sched_date = st.date_input("Publish Date (IST):", value=datetime.date.today() + datetime.timedelta(days=1), disabled=not use_schedule)
-                sched_time = st.time_input("Publish Time (IST):", value=datetime.time(18, 30), disabled=not use_schedule)
+                long_use_sched = st.checkbox("📅 Schedule Publish Time", value=False, key=f"pub_long_sched_{pid}")
+                long_sched_date = st.date_input("Publish Date (IST):", value=datetime.date.today() + datetime.timedelta(days=1), disabled=not long_use_sched, key=f"pub_long_sdate_{pid}")
+                long_sched_time = st.time_input("Publish Time (IST):", value=datetime.time(18, 30), disabled=not long_use_sched, key=f"pub_long_stime_{pid}")
             with pc3:
-                playlists = list_user_youtube_playlists(cfg, db, channel_id=active_ch_id_s4) if creds else []
-                pl_map = {"(No Playlist)": "NONE"}
-                for pl in playlists:
-                    pl_map[pl["title"]] = pl["id"]
-                pl_keys_s4 = list(pl_map.keys())
-                pre_pl_id = st.session_state.get("omni_playlist_id", "NONE")
-                pl_s4_idx = 0
-                for pi, pk in enumerate(pl_keys_s4):
-                    if pl_map[pk] == pre_pl_id:
-                        pl_s4_idx = pi
-                        break
-                sel_pl_label = st.selectbox(
+                sel_long_pl_lbl = st.selectbox(
                     "📂 Add to Playlist:",
                     options=pl_keys_s4,
                     index=pl_s4_idx,
-                    key=f"pub_playlist_{active_ch_id_s4}",
+                    key=f"pub_long_pl_{active_ch_id_s4}_{pid}",
                 )
-                sel_pl_id = pl_map[sel_pl_label]
-                st.session_state["omni_playlist_id"] = sel_pl_id
-                st.session_state["omni_playlist_title"] = sel_pl_label
+                sel_long_pl_id = pl_map[sel_long_pl_lbl]
+                st.session_state["omni_playlist_id"] = sel_long_pl_id
+                st.session_state["omni_playlist_title"] = sel_long_pl_lbl
 
-        is_uploading = worker.is_running(publish_task_key)
-        submit_pub = st.button(
-            f"🚀 Publish to {st.session_state.get('omni_channel_title') or 'YouTube'}",
-            type="primary",
-            use_container_width=True,
-            disabled=(is_uploading or creds is None),
-        )
-
-        if submit_pub:
-            st.session_state["agent4_output"] = None
-            st.session_state["publish_balloons_shown"] = False
-
-            sched_iso: Optional[str] = None
-            if use_schedule:
-                ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
-                dt_ist = datetime.datetime.combine(sched_date, sched_time, tzinfo=ist_tz)
-                sched_iso = dt_ist.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-
-            target_video = Path(a3.video_16x9_path if is_long_fmt else a3.video_9x16_shorts_path)
-            target_thumb = Path(a3.thumbnail_16x9_path) if is_long_fmt else None
-
-            worker.submit_task(
-                task_key=publish_task_key,
-                project_id=pid,
-                job_type="youtube_upload",
-                label=f"Uploading to {st.session_state.get('omni_channel_title') or 'YouTube'}",
-                fn=run_agent4_youtube_publish,
-                kwargs={
-                    "project_id": pid,
-                    "video_path": target_video,
-                    "thumbnail_path": target_thumb,
-                    "title": pub_title,
-                    "description": pub_desc,
-                    "exact_chapters_text": a3.exact_chapters_text,
-                    "tags": a1.tags,
-                    "privacy_status": privacy_opt,
-                    "scheduled_publish_at_iso": sched_iso,
-                    "playlist_id": None if sel_pl_id == "NONE" else sel_pl_id,
-                    "channel_id": active_ch_id_s4 or None,
-                    "config": cfg,
-                    "db": db,
-                },
+            submit_long_pub = st.button(
+                f"🚀 Step 1: {'Re-Upload' if resolved_long_url else 'Publish'} Full-Length Video to {target_ch_display}",
+                type="secondary" if resolved_long_url else "primary",
+                use_container_width=True,
+                disabled=(any_uploading or creds is None),
+                key=f"btn_pub_long_{pid}",
             )
-            st.session_state["publish_task_key"] = publish_task_key
-            st.rerun()
 
-        up_jobs = db.get_project_jobs(pid, job_type="youtube_upload")
-        if up_jobs or is_uploading:
-            latest_up = up_jobs[-1] if up_jobs else {"progress_pct": 5, "message": "Preparing upload..."}
-            up_dot = '<span class="omni-live-dot"></span>' if is_uploading else '<span class="omni-done-dot"></span>'
-            up_hdr = "Uploading to YouTube..." if is_uploading else "Upload Status"
-            st.markdown(
-                f"""
-                <div class="omni-process-deck">
-                    <div class="omni-process-hdr">
-                        <span class="omni-process-title">{up_dot} {up_hdr}</span>
-                        <span class="omni-badge omni-badge-run">{latest_up['progress_pct']}%</span>
-                    </div>
-                    <div class="omni-stage-row omni-stage-row-active">
-                        <span class="omni-stage-name">YouTube Transfer</span>
-                        <span class="omni-stage-detail">{latest_up['message']}</span>
-                    </div>
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
-            st.progress(latest_up["progress_pct"] / 100.0)
-            up_err = worker.get_task_error(publish_task_key)
-            if up_err:
-                st.error(f"Upload paused: {up_err}")
-            if is_uploading:
-                time.sleep(1.5)
+            if submit_long_pub:
+                st.session_state["publish_balloons_shown"] = False
+                sched_iso_long: Optional[str] = None
+                if long_use_sched:
+                    ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+                    dt_ist = datetime.datetime.combine(long_sched_date, long_sched_time, tzinfo=ist_tz)
+                    sched_iso_long = dt_ist.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                worker.submit_task(
+                    task_key=long_pub_task_key,
+                    project_id=pid,
+                    job_type="youtube_upload_long",
+                    label=f"Uploading Full Video to {target_ch_display}",
+                    fn=run_agent4_youtube_publish,
+                    kwargs={
+                        "project_id": pid,
+                        "video_path": Path(a3.video_16x9_path),
+                        "thumbnail_path": Path(a3.thumbnail_16x9_path),
+                        "title": long_title,
+                        "description": long_desc,
+                        "exact_chapters_text": a3.exact_chapters_text,
+                        "tags": a1.tags,
+                        "privacy_status": long_privacy,
+                        "scheduled_publish_at_iso": sched_iso_long,
+                        "playlist_id": None if sel_long_pl_id == "NONE" else sel_long_pl_id,
+                        "channel_id": active_ch_id_s4 or None,
+                        "is_short": False,
+                        "config": cfg,
+                        "db": db,
+                    },
+                )
                 st.rerun()
 
-        a4_data = st.session_state.get("agent4_output")
-        if a4_data and not is_uploading:
-            a4 = Agent4Output.model_validate(a4_data)
-            if not st.session_state.get("publish_balloons_shown"):
-                st.balloons()
-                st.session_state["publish_balloons_shown"] = True
-            st.success(f"🎉 **Published to YouTube!** Visibility: `{a4.status}`")
-            st.markdown(f"- **🎬 Open in YouTube Studio:** [{a4.studio_url}]({a4.studio_url})")
-            st.markdown(f"- **📺 Watch on YouTube:** [{a4.watch_url}]({a4.watch_url})")
+            long_jobs = db.get_project_jobs(pid, job_type="youtube_upload_long")
+            if long_jobs or is_uploading_long:
+                latest_lu = long_jobs[-1] if long_jobs else {"progress_pct": 5, "message": "Preparing Full Video upload..."}
+                lu_dot = '<span class="omni-live-dot"></span>' if is_uploading_long else '<span class="omni-done-dot"></span>'
+                lu_hdr = "Uploading Full-Length Video..." if is_uploading_long else "Step 1 Upload Status"
+                st.markdown(
+                    f"""
+                    <div class="omni-process-deck">
+                        <div class="omni-process-hdr">
+                            <span class="omni-process-title">{lu_dot} {lu_hdr}</span>
+                            <span class="omni-badge omni-badge-run">{latest_lu['progress_pct']}%</span>
+                        </div>
+                        <div class="omni-stage-row omni-stage-row-active">
+                            <span class="omni-stage-name">Full HD Video (16:9)</span>
+                            <span class="omni-stage-detail">{latest_lu['message']}</span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.progress(latest_lu["progress_pct"] / 100.0)
+                lu_err = worker.get_task_error(long_pub_task_key)
+                if lu_err:
+                    st.error(f"Step 1 upload paused: {lu_err}")
 
-        pub_logs = db.get_publish_records(project_id=pid, limit=5)
+        # ======================================================================
+        # PUBLISH STEP 2 OF 2 — HOOK SHORT (9:16 · 10–20s) LINKING TO FULL VIDEO
+        # ======================================================================
+        with st.container(border=True):
+            short_dur_str = f"{a3.shorts_duration_sec:.1f}s"
+            if short_pub_rec and short_pub_rec.get("watch_url"):
+                st.markdown(f"#### ✅ Step 2 of 2: Hook Short (9:16 · {short_dur_str}) — Published")
+                st.success(
+                    f"📱 **Hook Short Live:** [{short_pub_rec['watch_url']}]({short_pub_rec['watch_url']})  ·  "
+                    f"[Open in Studio]({short_pub_rec.get('studio_url') or ''})"
+                )
+            else:
+                st.markdown(f"#### 📱 Step 2 of 2: Publish Hook Short (9:16 · {short_dur_str}) Linking to Full Video")
+
+            # Auto-sync the Full Video URL into the Short's URL input & Description whenever Step 1 completes!
+            url_sync_key = f"pub_short_synced_url_{pid}"
+            short_url_widget_key = f"pub_short_long_url_{pid}"
+            short_desc_widget_key = f"pub_short_desc_{pid}"
+            effective_hook_txt = (a3.short_hook_script or a1.short_hook_script or "").strip()
+
+            if resolved_long_url and st.session_state.get(url_sync_key) != resolved_long_url:
+                st.session_state[url_sync_key] = resolved_long_url
+                st.session_state[short_url_widget_key] = resolved_long_url
+                st.session_state[short_desc_widget_key] = build_short_funnel_description(
+                    topic=a1.topic,
+                    language_tone=a1.language_tone,
+                    short_hook_script=effective_hook_txt,
+                    long_video_url=resolved_long_url,
+                    tags=a1.tags,
+                )
+            elif short_desc_widget_key not in st.session_state:
+                st.session_state[short_url_widget_key] = resolved_long_url
+                st.session_state[short_desc_widget_key] = build_short_funnel_description(
+                    topic=a1.topic,
+                    language_tone=a1.language_tone,
+                    short_hook_script=effective_hook_txt,
+                    long_video_url=resolved_long_url,
+                    tags=a1.tags,
+                )
+
+            if not resolved_long_url:
+                st.info("⬆️ Publish your Full-Length Video in **Step 1** above first so its YouTube URL auto-fills below (or paste any existing YouTube video URL manually).")
+
+            short_linked_url = st.text_input(
+                "🔗 Full-Length Video YouTube URL (Auto-Embedded in Short Description):",
+                placeholder="https://www.youtube.com/watch?v=... (auto-filled after Step 1)",
+                key=short_url_widget_key,
+            )
+            # If user manually typed/pasted a URL, auto-sync it into the Short description!
+            if short_linked_url.strip() and short_linked_url.strip() not in st.session_state.get(short_desc_widget_key, ""):
+                st.session_state[short_desc_widget_key] = build_short_funnel_description(
+                    topic=a1.topic,
+                    language_tone=a1.language_tone,
+                    short_hook_script=effective_hook_txt,
+                    long_video_url=short_linked_url.strip(),
+                    tags=a1.tags,
+                )
+
+            short_title = st.text_input(
+                "Hook Short Title (includes #Shorts):",
+                value=f"{a1.selected_title[:84]} #Shorts",
+                max_chars=100,
+                key=f"pub_short_title_{pid}",
+            )
+            short_desc = st.text_area(
+                "Hook Short Description (Full Video URL Embedded at Top):",
+                height=135,
+                key=short_desc_widget_key,
+            )
+
+            sc1, sc2, sc3 = st.columns(3)
+            with sc1:
+                short_privacy = st.selectbox("🔒 Short Visibility:", options=["private", "unlisted", "public"], index=0, key=f"pub_short_priv_{pid}")
+            with sc2:
+                short_use_sched = st.checkbox("📅 Schedule Short", value=False, key=f"pub_short_sched_{pid}")
+                short_sched_date = st.date_input("Short Date (IST):", value=datetime.date.today() + datetime.timedelta(days=1), disabled=not short_use_sched, key=f"pub_short_sdate_{pid}")
+                short_sched_time = st.time_input("Short Time (IST):", value=datetime.time(19, 0), disabled=not short_use_sched, key=f"pub_short_stime_{pid}")
+            with sc3:
+                sel_short_pl_lbl = st.selectbox(
+                    "📂 Short Playlist:",
+                    options=pl_keys_s4,
+                    index=pl_s4_idx,
+                    key=f"pub_short_pl_{active_ch_id_s4}_{pid}",
+                )
+                sel_short_pl_id = pl_map[sel_short_pl_lbl]
+
+            submit_short_pub = st.button(
+                f"🚀 Step 2: Publish Hook Short ({short_dur_str}) with Full Video Link",
+                type="primary" if resolved_long_url else "secondary",
+                use_container_width=True,
+                disabled=(any_uploading or creds is None),
+                key=f"btn_pub_short_{pid}",
+            )
+
+            if submit_short_pub:
+                st.session_state["publish_balloons_shown"] = False
+                sched_iso_short: Optional[str] = None
+                if short_use_sched:
+                    ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
+                    dt_ist = datetime.datetime.combine(short_sched_date, short_sched_time, tzinfo=ist_tz)
+                    sched_iso_short = dt_ist.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+                worker.submit_task(
+                    task_key=short_pub_task_key,
+                    project_id=pid,
+                    job_type="youtube_upload_short",
+                    label=f"Uploading Hook Short to {target_ch_display}",
+                    fn=run_agent4_youtube_publish,
+                    kwargs={
+                        "project_id": pid,
+                        "video_path": Path(a3.video_9x16_shorts_path),
+                        "thumbnail_path": None,
+                        "title": short_title,
+                        "description": short_desc,
+                        "exact_chapters_text": "",
+                        "tags": a1.tags + ["Shorts"],
+                        "privacy_status": short_privacy,
+                        "scheduled_publish_at_iso": sched_iso_short,
+                        "playlist_id": None if sel_short_pl_id == "NONE" else sel_short_pl_id,
+                        "channel_id": active_ch_id_s4 or None,
+                        "is_short": True,
+                        "linked_long_video_url": short_linked_url.strip() or resolved_long_url,
+                        "config": cfg,
+                        "db": db,
+                    },
+                )
+                st.rerun()
+
+            short_jobs = db.get_project_jobs(pid, job_type="youtube_upload_short")
+            if short_jobs or is_uploading_short:
+                latest_su = short_jobs[-1] if short_jobs else {"progress_pct": 5, "message": "Preparing Hook Short upload..."}
+                su_dot = '<span class="omni-live-dot"></span>' if is_uploading_short else '<span class="omni-done-dot"></span>'
+                su_hdr = "Uploading Hook Short..." if is_uploading_short else "Step 2 Upload Status"
+                st.markdown(
+                    f"""
+                    <div class="omni-process-deck">
+                        <div class="omni-process-hdr">
+                            <span class="omni-process-title">{su_dot} {su_hdr}</span>
+                            <span class="omni-badge omni-badge-run">{latest_su['progress_pct']}%</span>
+                        </div>
+                        <div class="omni-stage-row omni-stage-row-active">
+                            <span class="omni-stage-name">Hook Short (9:16)</span>
+                            <span class="omni-stage-detail">{latest_su['message']}</span>
+                        </div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                st.progress(latest_su["progress_pct"] / 100.0)
+                su_err = worker.get_task_error(short_pub_task_key)
+                if su_err:
+                    st.error(f"Step 2 upload paused: {su_err}")
+
+        if any_uploading:
+            st.caption("Uploading in the background — updating live every 1.5 seconds...")
+            time.sleep(1.5)
+            st.rerun()
+
         if pub_logs:
             with st.expander("📋 Recent Uploads", expanded=False):
                 st.dataframe(pub_logs, use_container_width=True, hide_index=True)

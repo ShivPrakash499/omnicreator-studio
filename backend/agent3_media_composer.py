@@ -1418,6 +1418,101 @@ def estimate_render_cost_usd(
     }
 
 
+def _resolve_short_hook_script(
+    agent1: Agent1Output,
+    agent2: Agent2Output,
+    config: OmniStudioConfig,
+) -> str:
+    """
+    Produces a high-retention 26–38 word (11–18s) curiosity/fear/shock cliffhanger hook script
+    tailored to the video's topic and language to drive Shorts viewers directly to the full video!
+    """
+    existing = (agent1.short_hook_script or "").strip()
+    if len(existing.split()) >= 14:
+        return existing
+
+    lang_low = (agent1.language_tone or "").lower()
+    is_hinglish = "hinglish" in lang_low
+    is_hindi = "hindi" in lang_low and not is_hinglish
+
+    if config.has_valid_gemini_key:
+        try:
+            client = get_genai_client(config.gemini_api_key, location="global")
+            prompt = (
+                f"Write ONE razor-sharp, scroll-stopping YouTube Shorts narration hook (strictly 26 to 36 words, "
+                f"~12 to 17 seconds spoken aloud) in {agent1.language_tone} for the video '{agent1.topic}'.\n"
+                f"Story hook context: {agent1.hook_script_0_45s[:220]}\n"
+                f"Climax twist context: {agent1.climax_misconception_aha[:220]}\n\n"
+                f"RULES:\n"
+                f"- Open immediately with a provocative question, hidden fear, shocking warning, or intense mystery.\n"
+                f"- Do NOT reveal the final answer — create a powerful cliffhanger.\n"
+                f"- End with a crisp 1-line CTA telling viewers to tap the full video link in the description right now.\n"
+                f"- Return ONLY the plain spoken narration text (no quotes, no labels, no stage directions, no markdown)."
+            )
+            inter = call_interaction_with_fallback(
+                client,
+                models=[resolve_current_model(FAST_AGENT_MODEL, "gemini-3.8-flash")],
+                max_retries=1,
+                input=prompt,
+            )
+            raw = (getattr(inter, "output_text", None) or "").strip().strip('"').strip("'")
+            if 14 <= len(raw.split()) <= 52:
+                return raw
+        except Exception as exc:
+            logger.info("Auto Short hook generation fell back to template: %s", exc)
+
+    if is_hinglish:
+        return (
+            f"Ek second ruko! Kya aapko pata hai ki {agent1.topic} ke peeche ek aisa shocking sach chhupa hai "
+            f"jo 99% log miss kar dete hain? Asli raaz jaankar aap chaunk jaoge — "
+            f"poora video dekhne ke liye abhi description wale link par click karo!"
+        )
+    if is_hindi:
+        return (
+            f"एक सेकंड रुकिए! क्या आप जानते हैं कि {agent1.topic} के पीछे एक ऐसा चौंकाने वाला रहस्य छिपा है "
+            f"जिसे 99% लोग आज तक नहीं जानते? सच्चाई जानकर आपके होश उड़ जाएंगे — "
+            f"पूरा वीडियो देखने के लिए अभी डिस्क्रिप्शन में दिए लिंक पर क्लिक करें!"
+        )
+    return (
+        f"Stop scrolling! Almost everyone misses the shocking hidden truth behind {agent1.topic} — "
+        f"and what really happened will give you chills. Don't stay in the dark: "
+        f"tap the full video link in the description right now!"
+    )
+
+
+def _fit_wav_to_max_duration(src_wav: Path, dst_wav: Path, *, max_sec: float = 19.2) -> Tuple[Path, float]:
+    """
+    If a synthesized Shorts hook voiceover slightly exceeds `max_sec` (e.g. 21s–25s), gently accelerates
+    tempo (<=1.4x, pitch-preserving FFmpeg `atempo`) and caps strictly below 20s so the Short ALWAYS stays
+    inside the crisp 10s–20s window!
+    """
+    import wave as _wave
+
+    with _wave.open(str(src_wav), "rb") as wf:
+        raw_dur = wf.getnframes() / float(wf.getframerate() or 24000)
+
+    if raw_dur <= max_sec:
+        return src_wav, raw_dur
+
+    tempo = min(1.42, max(1.02, raw_dur / (max_sec - 0.35)))
+    ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
+    subprocess.run(
+        [
+            ffmpeg_exe, "-y",
+            "-i", str(src_wav),
+            "-af", f"atempo={tempo:.4f},atrim=0:{max_sec:.3f}",
+            "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le",
+            str(dst_wav),
+        ],
+        check=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+    with _wave.open(str(dst_wav), "rb") as wf:
+        new_dur = wf.getnframes() / float(wf.getframerate() or 24000)
+    return dst_wav, new_dur
+
+
 def run_agent3_media_pipeline(
     project_id: str,
     agent1: Agent1Output,
@@ -1944,7 +2039,7 @@ def run_agent3_media_pipeline(
     )
 
     # ------------------------------------------------------------------
-    # STAGE 6: 9:16 Vertical Shorts Cutdown (Continuous Stereo Audio + Active Captions <= 58s)
+    # STAGE 6: 9:16 Viral Hook Short (Strict 10s–20s Curiosity/Fear Teaser -> Full Video Funnel!)
     # ------------------------------------------------------------------
     database.upsert_job(
         job_id=f"{project_id}_assemble_9x16",
@@ -1953,63 +2048,97 @@ def run_agent3_media_pipeline(
         scene_index=6,
         label=stage_defs[5][1],
         status="running",
-        progress_pct=35,
-        message="Creating vertical Shorts highlight cut...",
+        progress_pct=30,
+        message="Crafting 10–20s viral curiosity hook Short...",
     )
-    short_scenes: List[SceneClipSpec] = []
-    short_dur_acc = 0.0
-    prioritized = (
-        [s for s in scenes if s.beat_phase == "Visual_Hook_0_45s"][:3]
+    short_hook_text = _resolve_short_hook_script(agent1, agent2, cfg)
+    raw_short_vo_wav = audio_dir / "shorts_hook_voice_raw.wav"
+    short_vo_wav, raw_short_vo_dur, _ = synthesize_scene_voiceover(
+        short_hook_text,
+        short_hook_text,
+        raw_short_vo_wav,
+        language_tone=agent1.language_tone,
+        target_duration_sec=15.0,
+        config=cfg,
+        prefer_fast_local_tts=prefer_fast_local_tts,
+    )
+    # Strictly enforce 10.0s <= Short Duration <= 20.0s!
+    fitted_short_vo_wav = audio_dir / "shorts_hook_voice_fit.wav"
+    short_vo_wav, fitted_vo_dur = _fit_wav_to_max_duration(short_vo_wav, fitted_short_vo_wav, max_sec=19.2)
+    min_short_frames = int(round(10.5 * cfg.fps))
+    max_short_frames = int(round(19.8 * cfg.fps))
+    short_total_frames = max(
+        min_short_frames,
+        min(max_short_frames, int(math.ceil((fitted_vo_dur + 0.45) * cfg.fps))),
+    )
+    short_cursor = short_total_frames / float(cfg.fps)
+
+    # Select 3 highest-impact rapid-cut scenes (Opening Hook + Climax Reveal + Hero Twist) — ₹0 extra video spend!
+    short_candidates: List[SceneClipSpec] = []
+    seen_sids: set = set()
+    for sc_c in (
+        [s for s in scenes if s.beat_phase == "Visual_Hook_0_45s"][:2]
         + [s for s in scenes if s.beat_phase == "Climax_Aha"][:2]
-        + [s for s in scenes if s.beat_phase == "Outro_CTA"][-1:]
-    )
-    if not prioritized:
-        prioritized = scenes[:5]
-    seen_sids = set()
-    for sc in prioritized:
-        if sc.scene_index in seen_sids:
-            continue
-        sdur = voice_results[sc.scene_index][1]
-        if short_dur_acc + sdur <= 58.0 or not short_scenes:
-            short_scenes.append(sc)
-            seen_sids.add(sc.scene_index)
-            short_dur_acc += sdur
+        + scenes[:3]
+    ):
+        if sc_c.scene_index not in seen_sids:
+            seen_sids.add(sc_c.scene_index)
+            short_candidates.append(sc_c)
+        if len(short_candidates) >= 3:
+            break
+    if not short_candidates:
+        short_candidates = scenes[:1]
+
+    # Split total frames cleanly across the 3 rapid-fire visual cuts (exact frame sum == short_total_frames!)
+    num_cuts = len(short_candidates)
+    base_cut_frames = short_total_frames // num_cuts
+    cut_frame_allocs = [base_cut_frames] * num_cuts
+    cut_frame_allocs[-1] += short_total_frames - sum(cut_frame_allocs)
 
     vid_9_list: List[Path] = []
-    aud_9_list: List[Path] = []
-    short_words: List[TimedWord] = []
-    short_frames_acc = 0
-    for sc in short_scenes:
-        n_frames = scene_frame_counts[sc.scene_index]
-        dur = n_frames / float(cfg.fps)
-        short_cursor = short_frames_acc / float(cfg.fps)
-        vis_16 = visual_results[sc.scene_index][0]
-        seg_9 = clips_9_dir / f"short_vid_{sc.scene_index:03d}.mp4"
-        _normalize_video_clip_exact(vis_16, seg_9, w=1080, h=1920, fps=cfg.fps, exact_frames=n_frames)
-        vid_9_list.append(seg_9)
-        aud_9_list.append(master_audio_paths[sc.scene_index])
-        short_words.extend(
-            extract_scene_word_timestamps(
-                voice_results[sc.scene_index][0],
-                sc.voiceover_text,
-                scene_start_offset_sec=short_cursor,
-                scene_duration_sec=dur,
-                scene_id=sc.scene_index,
-                config=cfg,
-                use_cloud_transcribe=False,
-            )
-        )
-        short_frames_acc += n_frames
-    short_cursor = short_frames_acc / float(cfg.fps)
-
-    full_master_9_wav = renders_dir / "master_audio_9x16.wav"
-    concat_wav_segments(aud_9_list, full_master_9_wav)
-
     concat_9_lines: List[str] = []
-    for sc, vp in zip(short_scenes, vid_9_list):
-        exact_d = scene_frame_counts[sc.scene_index] / float(cfg.fps)
-        concat_9_lines.append(f"file '{vp.resolve().as_posix()}'")
-        concat_9_lines.append(f"duration {exact_d:.6f}")
+    for cut_idx, (sc, cut_frames) in enumerate(zip(short_candidates, cut_frame_allocs), start=1):
+        vis_16 = visual_results[sc.scene_index][0]
+        seg_9 = clips_9_dir / f"short_vid_{cut_idx:02d}_s{sc.scene_index:03d}.mp4"
+        cut_dur_sec = cut_frames / float(cfg.fps)
+        _normalize_video_clip_exact(
+            vis_16,
+            seg_9,
+            w=1080,
+            h=1920,
+            fps=cfg.fps,
+            exact_frames=cut_frames,
+            trim_source_sec=cut_dur_sec,
+        )
+        vid_9_list.append(seg_9)
+        concat_9_lines.append(f"file '{seg_9.resolve().as_posix()}'")
+        concat_9_lines.append(f"duration {cut_dur_sec:.6f}")
+
+    # Mix punchy hook narration + topic-matched film score to exact sample lock
+    full_master_9_wav = renders_dir / "master_audio_9x16.wav"
+    exact_short_samples = int(round(short_total_frames * (24000.0 / float(cfg.fps))))
+    mix_scene_master_audio(
+        short_vo_wav,
+        bgm_stem_path,
+        full_master_9_wav,
+        bgm_offset_sec=0.0,
+        target_duration_sec=short_cursor,
+        exact_samples=exact_short_samples,
+        duck_db=effective_duck_db,
+        foley_wav_path=None,
+        add_cut_sfx=False,
+    )
+
+    short_words = extract_scene_word_timestamps(
+        short_vo_wav,
+        short_hook_text,
+        scene_start_offset_sec=0.0,
+        scene_duration_sec=min(short_cursor, fitted_vo_dur + 0.15),
+        scene_id=1,
+        config=cfg,
+        use_cloud_transcribe=False,
+    )
+
     concat_9_txt = renders_dir / "concat_9x16.txt"
     concat_9_txt.write_text("\n".join(concat_9_lines) + "\n", encoding="utf-8")
 
@@ -2033,7 +2162,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[5][1],
         status="completed",
         progress_pct=100,
-        message=f"Shorts ready ({format_timestamp(short_cursor)})",
+        message=f"Hook Short ready ({short_cursor:.1f}s)",
         output_path=str(final_9x16_mp4),
     )
 
@@ -2047,6 +2176,7 @@ def run_agent3_media_pipeline(
         bgm_stem_path=str(bgm_stem_path),
         final_duration_sec=total_actual_duration,
         shorts_duration_sec=round(short_cursor, 2),
+        short_hook_script=short_hook_text,
         scene_count_rendered=total_scenes,
         exact_chapters_text=exact_chapters_text,
         generation_mode=render_quality,

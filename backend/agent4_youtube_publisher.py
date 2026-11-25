@@ -918,6 +918,60 @@ def _sanitize_youtube_text(text: str, max_len: int) -> str:
     return cleaned[:max_len].strip()
 
 
+def build_short_funnel_description(
+    *,
+    topic: str,
+    language_tone: str,
+    short_hook_script: str = "",
+    long_video_url: str = "",
+    tags: Optional[List[str]] = None,
+) -> str:
+    """
+    Builds a high-conversion YouTube Shorts description that prominently embeds the Full-Length
+    YouTube Video URL at the very top to funnel Shorts viewers directly into the full video!
+    """
+    url_clean = (long_video_url or "").strip()
+    lang_low = (language_tone or "").lower()
+    is_hinglish = "hinglish" in lang_low
+    is_hindi = "hindi" in lang_low and not is_hinglish
+
+    lines: List[str] = []
+    if url_clean:
+        if is_hindi:
+            lines.append(f"🎬 पूरा वीडियो यहाँ देखें (Watch Full Video): {url_clean}")
+        elif is_hinglish:
+            lines.append(f"🎬 Poora Video Yahan Dekho (Watch Full Video): {url_clean}")
+        else:
+            lines.append(f"🎬 Watch the Full Video Here: {url_clean}")
+        lines.append("")
+
+    if (short_hook_script or "").strip():
+        lines.append(short_hook_script.strip())
+        lines.append("")
+
+    if url_clean:
+        if is_hindi:
+            lines.append("👉 पूरी सच्चाई और पूरा रहस्य जानने के लिए ऊपर दिए गए लिंक पर अभी क्लिक करें!")
+        elif is_hinglish:
+            lines.append("👉 Asli sach aur poori kahani jaanne ke liye upar diye gaye link par abhi click karo!")
+        else:
+            lines.append("👉 Tap the link above to watch the full story right now!")
+        lines.append("")
+
+    # Add compact relevant hashtags (#Shorts always first!)
+    hashtags: List[str] = ["#Shorts"]
+    seen_h = {"shorts"}
+    for t in (tags or [])[:6]:
+        tok = "".join(ch for ch in t if ch.isalnum())
+        if len(tok) >= 3 and tok.lower() not in seen_h:
+            seen_h.add(tok.lower())
+            hashtags.append(f"#{tok}")
+            if len(hashtags) >= 5:
+                break
+    lines.append(" ".join(hashtags))
+    return "\n".join(lines).strip()
+
+
 def run_agent4_youtube_publish(
     project_id: str,
     *,
@@ -932,15 +986,19 @@ def run_agent4_youtube_publish(
     playlist_id: Optional[str] = None,
     channel_id: Optional[str] = None,
     category_id: str = "27",
+    is_short: bool = False,
+    linked_long_video_url: Optional[str] = None,
     config: Optional[OmniStudioConfig] = None,
     db: Optional[OmniDatabase] = None,
 ) -> Agent4Output:
     """
     Executes Agent 4 (Direct YouTube Publisher Agent) targeting the exact selected `channel_id`:
+    - Supports sequential 2-step Long Video -> Short Video publishing where the Short embeds
+      the published Long Video's YouTube URL directly in its description!
     - Sanitizes title, description & tags strictly for YouTube Data API v3 (zero `invalidTags` 400 errors!).
     - Uploads video using resumable chunked upload with automatic retry & fallback.
     - Attaches thumbnail & adds to playlist on that channel.
-    - Updates SQLite `publish_records` and marks project `"Published"`.
+    - Updates SQLite `publish_records` and preserves the canonical Long Video URL in `projects`.
     """
     cfg = config or OmniStudioConfig()
     database = db or get_db()
@@ -956,10 +1014,18 @@ def run_agent4_youtube_publish(
         )
     target_ch_name = (ch_rec or {}).get("channel_title") or "Connected YouTube Channel"
 
-    # Ensure exact scene-based chapters are embedded in the description
     final_desc = description.strip()
-    if exact_chapters_text.strip() and "00:00" not in final_desc:
-        final_desc = f"{final_desc}\n\n⏱️ CHAPTERS:\n{exact_chapters_text.strip()}"
+    if is_short:
+        # Ensure the linked Full-Length YouTube URL is ALWAYS embedded in the Short's description!
+        linked_clean = (linked_long_video_url or "").strip()
+        if linked_clean and linked_clean not in final_desc:
+            final_desc = f"🎬 Watch Full Video: {linked_clean}\n\n{final_desc}".strip()
+        if "#shorts" not in final_desc.lower():
+            final_desc = f"{final_desc}\n\n#Shorts".strip()
+    else:
+        # Ensure exact scene-based chapters are embedded in the Long Video description
+        if exact_chapters_text.strip() and "00:00" not in final_desc:
+            final_desc = f"{final_desc}\n\n⏱️ CHAPTERS:\n{exact_chapters_text.strip()}"
 
     safe_title = _sanitize_youtube_text(title, 100) or "Untitled Video"
     safe_desc = _sanitize_youtube_text(final_desc, 4950)
@@ -984,6 +1050,10 @@ def run_agent4_youtube_publish(
         "status": status_block,
     }
 
+    job_key = f"{project_id}_yt_upload_short" if is_short else f"{project_id}_yt_upload_long"
+    job_type_key = "youtube_upload_short" if is_short else "youtube_upload_long"
+    upload_kind_lbl = "Hook Short (9:16)" if is_short else "Full-Length Video (16:9)"
+
     def _on_progress(pct: int, msg: str) -> None:
         database.upsert_publish_record(
             record_id=record_id,
@@ -996,10 +1066,10 @@ def run_agent4_youtube_publish(
             status="uploading",
         )
         database.upsert_job(
-            job_id=f"{project_id}_yt_upload",
+            job_id=job_key,
             project_id=project_id,
-            job_type="youtube_upload",
-            label=f"Uploading to {target_ch_name}",
+            job_type=job_type_key,
+            label=f"Uploading {upload_kind_lbl} to {target_ch_name}",
             status="running",
             progress_pct=pct,
             message=msg,
@@ -1011,7 +1081,7 @@ def run_agent4_youtube_publish(
             vid = _resumable_upload_via_rest_chunks(creds, video_path, upload_body, _on_progress)
         return vid
 
-    _on_progress(2, "Starting upload to YouTube...")
+    _on_progress(2, f"Starting {upload_kind_lbl} upload to YouTube...")
     try:
         video_id = _do_upload(body)
     except Exception as exc:
@@ -1034,7 +1104,7 @@ def run_agent4_youtube_publish(
             raise
 
     thumb_ok = False
-    if thumbnail_path and thumbnail_path.exists():
+    if (not is_short) and thumbnail_path and thumbnail_path.exists():
         _on_progress(97, "Attaching video thumbnail...")
         thumb_ok = _attach_thumbnail(creds, video_id, thumbnail_path)
 
@@ -1042,7 +1112,7 @@ def run_agent4_youtube_publish(
         _on_progress(99, "Adding video to playlist...")
         _add_video_to_playlist(creds, video_id, playlist_id)
 
-    watch_url = f"https://www.youtube.com/watch?v={video_id}"
+    watch_url = f"https://www.youtube.com/shorts/{video_id}" if is_short else f"https://www.youtube.com/watch?v={video_id}"
     studio_url = f"https://studio.youtube.com/video/{video_id}/edit"
 
     database.upsert_publish_record(
@@ -1056,17 +1126,17 @@ def run_agent4_youtube_publish(
         studio_url=studio_url,
         watch_url=watch_url,
         upload_progress_pct=100,
-        status="Published",
+        status="Published (Short)" if is_short else "Published (Full Video)",
     )
     database.upsert_job(
-        job_id=f"{project_id}_yt_upload",
+        job_id=job_key,
         project_id=project_id,
-        job_type="youtube_upload",
-        label=f"Uploading to {target_ch_name}",
+        job_type=job_type_key,
+        label=f"Uploading {upload_kind_lbl} to {target_ch_name}",
         status="completed",
         progress_pct=100,
-        message="Published to YouTube!",
-        output_path=studio_url,
+        message=f"{upload_kind_lbl} published to YouTube!",
+        output_path=watch_url,
     )
 
     out = Agent4Output(
@@ -1079,19 +1149,34 @@ def run_agent4_youtube_publish(
         scheduled_publish_at=scheduled_publish_at_iso,
         playlist_id=playlist_id,
         thumbnail_attached=thumb_ok,
+        is_short=is_short,
+        linked_long_video_url=(linked_long_video_url or "").strip() or None,
         status="Published",
         note=(
-            f"Published to '{target_ch_name}' with chapters & custom thumbnail."
-            if thumb_ok
-            else f"Published to '{target_ch_name}' with chapters (custom thumbnail requires a verified YouTube channel)."
+            f"Hook Short published to '{target_ch_name}' with Full Video URL embedded in description."
+            if is_short
+            else (
+                f"Full-Length Video published to '{target_ch_name}' with chapters & custom thumbnail."
+                if thumb_ok
+                else f"Full-Length Video published to '{target_ch_name}' with chapters."
+            )
         ),
     )
-    database.update_project_stage(
-        project_id,
-        current_step=4,
-        status="Published",
-        agent4_data=out.model_dump(),
-        youtube_video_id=video_id,
-        youtube_url=studio_url,
-    )
+    # Preserve the Long Video's canonical youtube_video_id & watch_url when publishing the Short in Step 2!
+    if is_short:
+        database.update_project_stage(
+            project_id,
+            current_step=4,
+            status="Published",
+            agent4_data=out.model_dump(),
+        )
+    else:
+        database.update_project_stage(
+            project_id,
+            current_step=4,
+            status="Published",
+            agent4_data=out.model_dump(),
+            youtube_video_id=video_id,
+            youtube_url=watch_url,
+        )
     return out

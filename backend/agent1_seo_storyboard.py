@@ -257,6 +257,11 @@ def _build_dynamic_baseline_storyboard(
             f"Ab aapki baari! Aapke hisaab se {topic} ka sabse bada turning point aane wale 5 saal mein kya hoga? "
             f"Niche comment mein apna point likho — best insight ko main pin karunga! Video pasand aaya toh subscribe aur bell icon zaroor dabana."
         )
+        short_hook = (
+            f"Ek second ruko! Kya aapko pata hai ki {topic} ke peeche ek aisa shocking raaz chhupa hai "
+            f"jise 99% log aaj tak nahi jaante? Asli sach jaankar aap chaunk jaoge — "
+            f"poora video dekhne ke liye abhi description wale link par click karo!"
+        )
     elif is_hindi:
         hook_script = (
             f"एक पल रुकिए! क्या आपने कभी सोचा है कि {topic} वास्तव में पूरी तस्वीर कैसे बदल रहा है? "
@@ -267,6 +272,11 @@ def _build_dynamic_baseline_storyboard(
         )
         outro_cta = (
             f"आपकी राय क्या है? कमेंट बॉक्स में ज़रूर बताइए और ऐसे ही गहरे विश्लेषण के लिए चैनल को सब्सक्राइब करें!"
+        )
+        short_hook = (
+            f"एक सेकंड रुकिए! क्या आप जानते हैं कि {topic} के पीछे एक ऐसा चौंकाने वाला रहस्य छिपा है "
+            f"जिसे 99% लोग आज तक नहीं जानते? सच्चाई जानकर आपके होश उड़ जाएंगे — "
+            f"पूरा वीडियो देखने के लिए अभी डिस्क्रिप्शन में दिए लिंक पर क्लिक करें!"
         )
     else:
         hook_script = (
@@ -281,6 +291,11 @@ def _build_dynamic_baseline_storyboard(
         outro_cta = (
             f"Now I want to hear your take — what do you think is the biggest shift coming next for {topic}? "
             f"Drop your answer in the comments below, and hit subscribe for deep visual breakdowns every week!"
+        )
+        short_hook = (
+            f"Stop scrolling! Almost everyone misses the shocking hidden truth behind {topic} — "
+            f"and what really happened will give you chills. Don't miss the full story: "
+            f"tap the full video link in the description right now!"
         )
 
     niche_short = niche.split("&")[0].strip()
@@ -376,6 +391,7 @@ def _build_dynamic_baseline_storyboard(
         hook_script_0_45s=hook_script,
         climax_misconception_aha=climax_aha,
         outro_cta_script=outro_cta,
+        short_hook_script=short_hook,
         thumbnail_hook_headline=thumb_headline[:26],
         thumbnail_badge_label=prof["badge_prefix"],
         thumbnail_graphic_concept=(
@@ -441,6 +457,10 @@ def run_agent1_seo_and_storyboard(
             f"     (a) `character_bible`: A hyper-specific, immutable 45-70 word visual lock naming the main character (and secondary character if any) with EXACT age, facial bone structure, skin tone, eye shape, distinct forehead mark/tilak (if cultural/devotional), exact hair length & style, clean-shaven or exact beard style, exact costume colors/fabric/armor/jewelry, and signature props — so NO scene ever morphs their face or outfit!\n"
             f"     (b) `character_anchor_prompt`: A crisp 45-65 word photorealistic 35mm cinema studio reference portrait prompt of the PRIMARY protagonist from waist-up in sharp three-quarter view against a neutral softly lit backdrop, capturing their exact face, tilak/markings, hairstyle, and iconic attire clearly (zero text, zero watermarks).\n"
             f"   - If '{topic}' is purely abstract/technical with NO recurring character protagonist (e.g., Cryptocurrency, Quantum Computing), leave both `character_bible` and `character_anchor_prompt` as empty strings \"\".\n"
+            f"9. CRITICAL — VIRAL 10–20 SECOND SHORTS CLIFFHANGER HOOK (`short_hook_script`):\n"
+            f"   - Write a razor-sharp 26 to 38 word spoken script (strictly 11–18 seconds when spoken aloud) in {language_tone}.\n"
+            f"   - Open in the FIRST 2 seconds with an irresistible curiosity question, hidden fear, warning, or shocking mystery specific to '{topic}' that stops viewers from scrolling.\n"
+            f"   - NEVER spoil the full answer — leave an intense cliffhanger and end with an urgent 1-sentence CTA telling viewers to click the full video link in the description right now!\n"
             f"Return STRICT JSON matching the Agent1Output schema."
         )
 

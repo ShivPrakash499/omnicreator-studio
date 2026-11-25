@@ -66,6 +66,10 @@ class Agent1Output(BaseModel):
     hook_script_0_45s: str
     climax_misconception_aha: str
     outro_cta_script: str
+    short_hook_script: str = Field(
+        default="",
+        description="Punchy 26-38 word (10-18s) curiosity/fear/shock cliffhanger hook for the 9:16 YouTube Short directing viewers to the full video link in the description.",
+    )
     thumbnail_hook_headline: str = Field(
         default="THE HIDDEN TRUTH!",
         description="Bold 2-4 word high-CTR thumbnail headline matching the topic.",
@@ -157,6 +161,7 @@ class Agent3Output(BaseModel):
     bgm_stem_path: str
     final_duration_sec: float
     shorts_duration_sec: float
+    short_hook_script: str = ""
     scene_count_rendered: int
     exact_chapters_text: str
     generation_mode: str = "hybrid_ai_and_procedural"
@@ -178,5 +183,7 @@ class Agent4Output(BaseModel):
     scheduled_publish_at: Optional[str] = None
     playlist_id: Optional[str] = None
     thumbnail_attached: bool = False
+    is_short: bool = False
+    linked_long_video_url: Optional[str] = None
     status: str = "Published"
     note: str = ""
