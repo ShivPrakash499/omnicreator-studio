@@ -447,9 +447,10 @@ def build_youtube_oauth_url(
 
 
 def format_channel_streamlit_secret_toml(channel_record: Dict[str, Any]) -> str:
-    """Formats a ready-to-paste Streamlit Cloud Secrets TOML block to persist a newly connected channel forever."""
+    """Formats a strictly valid ASCII-key Streamlit Cloud Secrets TOML block to persist a channel forever."""
+    import re as _re
     title = (channel_record.get("channel_title") or "NEW_CHANNEL").upper()
-    slug = "".join(ch if ch.isalnum() else "_" for ch in title).strip("_")[:20] or "CHANNEL"
+    slug = _re.sub(r"[^A-Z0-9]+", "_", title).strip("_")[:24] or "CHANNEL"
     secret_key = f"YOUTUBE_OAUTH_TOKEN_{slug}"
     tok_json = json.dumps(channel_record.get("token_dict") or {}, indent=2, ensure_ascii=False)
     return f"{secret_key} = '''\n{tok_json}\n'''"
