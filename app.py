@@ -11,7 +11,10 @@ with heavy rendering & resumable YouTube uploads executed asynchronously via `wo
 from __future__ import annotations
 
 import datetime
+import hashlib
+import hmac
 import json
+import os
 import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -143,7 +146,8 @@ st.markdown(
 
     /* High-Contrast Tactile 3D Primary Buttons (Pure White on Deep Royal Blue -> WCAG AAA!) */
     div.stButton > button[kind="primary"],
-    div.stButton > button[data-testid="stBaseButton-primary"] {
+    div.stButton > button[data-testid="stBaseButton-primary"],
+    div[data-testid="stFormSubmitButton"] > button {
         background: linear-gradient(180deg, #3B82F6 0%, #2563EB 58%, #1D4ED8 100%) !important;
         color: #FFFFFF !important;
         border: 1px solid #60A5FA !important;
@@ -156,13 +160,15 @@ st.markdown(
         transition: transform 0.10s ease, box-shadow 0.10s ease, filter 0.15s ease !important;
     }
     div.stButton > button[kind="primary"]:hover:not(:disabled),
-    div.stButton > button[data-testid="stBaseButton-primary"]:hover:not(:disabled) {
+    div.stButton > button[data-testid="stBaseButton-primary"]:hover:not(:disabled),
+    div[data-testid="stFormSubmitButton"] > button:hover:not(:disabled) {
         filter: brightness(1.09) !important;
         transform: translateY(-1px) !important;
         box-shadow: 0 5px 0 #1E3A8A, 0 10px 22px rgba(59, 130, 246, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
     }
     div.stButton > button[kind="primary"]:active:not(:disabled),
-    div.stButton > button[data-testid="stBaseButton-primary"]:active:not(:disabled) {
+    div.stButton > button[data-testid="stBaseButton-primary"]:active:not(:disabled),
+    div[data-testid="stFormSubmitButton"] > button:active:not(:disabled) {
         transform: translateY(3px) !important;
         box-shadow: 0 1px 0 #1E3A8A, 0 2px 6px rgba(37, 99, 235, 0.30) !important;
     }
@@ -328,6 +334,50 @@ st.markdown(
         border-radius: 14px !important;
         background: rgba(15, 23, 42, 0.58) !important;
     }
+
+    /* Matching 3D Studio Lock Screen Card */
+    .omni-lock-hero {
+        text-align: center;
+        padding: 26px 24px 18px 24px;
+        background: linear-gradient(155deg, #121e38 0%, #0f172a 60%, #0b1324 100%);
+        border: 1px solid rgba(96, 165, 250, 0.38);
+        border-radius: 20px 20px 6px 6px;
+        box-shadow: 0 14px 36px rgba(0, 0, 0, 0.52), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+        margin-bottom: -10px;
+    }
+    .omni-lock-emblem {
+        width: 68px;
+        height: 68px;
+        margin: 0 auto 14px auto;
+        border-radius: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 2rem;
+        background: linear-gradient(180deg, #3B82F6 0%, #1D4ED8 100%);
+        border: 1px solid #60A5FA;
+        box-shadow: 0 5px 0 #1E3A8A, 0 12px 26px rgba(37, 99, 235, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+    }
+    .omni-lock-hero h2 {
+        margin: 0;
+        color: #FFFFFF;
+        font-size: 1.55rem;
+        font-weight: 800;
+        letter-spacing: 0.4px;
+    }
+    .omni-lock-hero p {
+        margin: 6px 0 0 0;
+        color: #94A3B8;
+        font-size: 0.92rem;
+    }
+    div[data-testid="stForm"] {
+        background: linear-gradient(180deg, #0f172a 0%, #0b1222 100%) !important;
+        border: 1px solid rgba(96, 165, 250, 0.32) !important;
+        border-top: none !important;
+        border-radius: 0 0 20px 20px !important;
+        padding: 18px 24px 24px 24px !important;
+        box-shadow: 0 18px 38px rgba(0, 0, 0, 0.50) !important;
+    }
     @media (max-width: 768px) {
         .block-container {
             padding-left: 0.75rem !important;
@@ -432,7 +482,90 @@ def _load_project_into_session(project_id: str) -> None:
         ensure_project_renders_local(project_id, proj["agent3_data"])
 
 
+# ==============================================================================
+# STUDIO PIN LOCK SCREEN (HIGH-CONTRAST 3D THEME GATE)
+# ==============================================================================
+_PIN_SALT = "omni_studio_pin_v1:"
+_DEFAULT_PIN_SHA256 = "f03dabdfb92e77221be8899d6488b0ea8bd80f4110e2a41fff46dc297dac854e"
+
+
+def _verify_studio_pin(entered_pin: str) -> bool:
+    candidate = (entered_pin or "").strip()
+    if not candidate:
+        return False
+    override_pin = os.getenv("STUDIO_LOCK_PIN", "").strip()
+    if override_pin:
+        return hmac.compare_digest(candidate, override_pin)
+    digest = hashlib.sha256(f"{_PIN_SALT}{candidate}".encode("utf-8")).hexdigest()
+    return hmac.compare_digest(digest, _DEFAULT_PIN_SHA256)
+
+
+def _enforce_studio_pin_lock() -> None:
+    if st.session_state.get("omni_studio_unlocked", False):
+        return
+
+    # Hide sidebar completely while locked so private projects & channels stay invisible
+    st.markdown(
+        """
+        <style>
+        [data-testid="stSidebar"], [data-testid="collapsedControl"] {
+            display: none !important;
+        }
+        div[data-testid="stTextInput"] input {
+            text-align: center !important;
+            font-size: 1.45rem !important;
+            letter-spacing: 0.55rem !important;
+            font-weight: 700 !important;
+            padding: 0.65rem 1rem !important;
+            background: #090F1E !important;
+            border: 1px solid #334155 !important;
+            border-radius: 12px !important;
+            color: #FFFFFF !important;
+        }
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown("<div style='height: 6vh;'></div>", unsafe_allow_html=True)
+    _, lock_col, _ = st.columns([1.0, 1.35, 1.0])
+    with lock_col:
+        st.markdown(
+            """
+            <div class="omni-lock-hero">
+                <div class="omni-lock-emblem">🔐</div>
+                <h2>OMNI STUDIO</h2>
+                <p>Private Creator Workspace · Enter your PIN to unlock</p>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        with st.form("omni_pin_lock_form", clear_on_submit=False):
+            pin_val = st.text_input(
+                "Studio PIN",
+                type="password",
+                max_chars=8,
+                placeholder="• • • •",
+                label_visibility="collapsed",
+                key="omni_pin_input",
+            )
+            submitted = st.form_submit_button("🔓 Unlock Studio", use_container_width=True)
+            if submitted:
+                if _verify_studio_pin(pin_val):
+                    st.session_state["omni_studio_unlocked"] = True
+                    st.session_state.pop("omni_pin_error", None)
+                    st.rerun()
+                else:
+                    st.session_state["omni_pin_error"] = True
+
+        if st.session_state.get("omni_pin_error"):
+            st.error("❌ Incorrect PIN. Please try again.")
+
+    st.stop()
+
+
 sync_streamlit_secrets_to_env()
+_enforce_studio_pin_lock()
 _init_session_state()
 cfg = OmniStudioConfig()
 db = get_db()
@@ -629,6 +762,12 @@ with st.sidebar:
     else:
         st.caption("💾 Local Workspace Mode")
 
+    st.markdown("")
+    if st.button("🔒 Lock Studio", use_container_width=True, key="btn_lock_studio"):
+        st.session_state["omni_studio_unlocked"] = False
+        st.session_state.pop("omni_pin_error", None)
+        st.rerun()
+
 
 # ==============================================================================
 # TOP HEADER & UNIFIED 3D STUDIO NAVIGATION DOCK
@@ -660,9 +799,9 @@ st.markdown(
 step = int(st.session_state["omni_step"])
 steps_meta = [
     (0, "📺 Channel"),
-    (1, "✨ Topic & Plan"),
+    (1, "✨ Plan"),
     (2, "🎬 Scenes"),
-    (3, "🎞️ Video Studio"),
+    (3, "🎞️ Studio"),
     (4, "🚀 Publish"),
 ]
 
