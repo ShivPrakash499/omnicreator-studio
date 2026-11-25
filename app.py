@@ -46,14 +46,19 @@ from backend.config import (
 )
 from backend.schemas import Agent1Output, Agent2Output, Agent3Output, Agent4Output, SceneClipSpec
 from render_engine.thumbnail_studio import generate_high_ctr_thumbnail
+from storage.cloud_sync import (
+    ensure_project_renders_local,
+    is_cloud_sync_enabled,
+    restore_projects_from_gcs_once,
+)
 from storage.db import get_db
 from worker import get_worker_manager
 
 # ==============================================================================
-# PAGE CONFIG & MOBILE-FIRST RESPONSIVE STYLING
+# PAGE CONFIG & MODERN HIGH-CONTRAST 3D STUDIO STYLING
 # ==============================================================================
 st.set_page_config(
-    page_title="OMNI STUDIO — Multi-Agent AI Video Engine",
+    page_title="OMNI STUDIO — AI Video Studio",
     page_icon="🎬",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -62,84 +67,266 @@ st.set_page_config(
 st.markdown(
     """
     <style>
-    /* Clean, spacious, uncluttered dark studio theme optimized for Mobile, Tablet & Desktop */
+    /* Modern high-contrast dark studio theme with tactile 3D buttons & solid status panels */
+    .stApp {
+        background: radial-gradient(circle at 18% 0%, #111c36 0%, #090d16 55%, #070a12 100%);
+    }
     .block-container {
-        padding-top: 1.1rem !important;
+        padding-top: 1.05rem !important;
         padding-bottom: 2.8rem !important;
         max-width: 1120px !important;
     }
+
+    /* Elevated Studio Header */
     .omni-header {
-        background: linear-gradient(135deg, #0b1324 0%, #121f38 60%, #0d2b3e 100%);
-        border: 1px solid rgba(0, 229, 255, 0.32);
-        border-radius: 16px;
-        padding: 16px 20px;
+        background: linear-gradient(135deg, #111b33 0%, #172542 52%, #0f2744 100%);
+        border: 1px solid rgba(96, 165, 250, 0.34);
+        border-radius: 18px;
+        padding: 18px 22px;
         margin-bottom: 14px;
+        box-shadow: 0 10px 28px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.10);
     }
-    .omni-header h1 {
-        margin: 0;
-        font-size: 1.55rem;
-        letter-spacing: 0.3px;
-        color: #f8fafc;
-    }
-    .omni-header p {
-        margin: 4px 0 0 0;
-        color: #94a3b8;
-        font-size: 0.9rem;
-    }
-    .omni-stepper {
-        display: flex;
-        flex-wrap: nowrap;
-        overflow-x: auto;
-        gap: 8px;
-        padding: 10px 12px;
-        background: #0f172a;
-        border: 1px solid #1e293b;
-        border-radius: 14px;
-        margin-bottom: 18px;
-        -webkit-overflow-scrolling: touch;
-    }
-    .omni-step-pill {
-        flex: 1 1 auto;
-        min-width: 128px;
-        text-align: center;
-        padding: 8px 10px;
-        border-radius: 10px;
-        font-size: 0.84rem;
-        font-weight: 700;
-        white-space: nowrap;
-        border: 1px solid #334155;
-        color: #94a3b8;
-        background: #111827;
-    }
-    .omni-step-active {
-        background: linear-gradient(90deg, #00c853 0%, #00e5ff 100%);
-        color: #04101d !important;
-        border-color: transparent !important;
-        box-shadow: 0 0 14px rgba(0, 229, 255, 0.35);
-    }
-    .omni-step-done {
-        background: rgba(16, 185, 129, 0.16);
-        color: #6ee7b7 !important;
-        border-color: rgba(16, 185, 129, 0.45) !important;
-    }
-    .omni-card {
-        background: #101828;
-        border: 1px solid #1f2937;
-        border-radius: 14px;
-        padding: 14px 16px;
-        margin-bottom: 12px;
-    }
-    .omni-status-row {
+    .omni-header-top {
         display: flex;
         justify-content: space-between;
         align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+    }
+    .omni-header h1 {
+        margin: 0;
+        font-size: 1.62rem;
+        font-weight: 800;
+        letter-spacing: 0.35px;
+        color: #FFFFFF;
+    }
+    .omni-meta-chips {
+        display: flex;
+        flex-wrap: wrap;
         gap: 8px;
-        padding: 8px 12px;
-        border-radius: 10px;
-        background: #0f172a;
-        border: 1px solid #1e293b;
-        margin-bottom: 6px;
-        font-size: 0.88rem;
+        margin-top: 10px;
+    }
+    .omni-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 12px;
+        border-radius: 999px;
+        background: rgba(15, 23, 42, 0.82);
+        border: 1px solid rgba(148, 163, 184, 0.28);
+        color: #E2E8F0;
+        font-size: 0.84rem;
+        font-weight: 600;
+    }
+    .omni-chip-cloud {
+        background: rgba(14, 116, 144, 0.28);
+        border-color: rgba(56, 189, 248, 0.45);
+        color: #BAE6FD;
+    }
+
+    /* Sleek Thin Step Progress Track */
+    .omni-step-track {
+        height: 6px;
+        width: 100%;
+        background: #162033;
+        border-radius: 999px;
+        overflow: hidden;
+        margin: 4px 0 12px 0;
+        box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.65);
+    }
+    .omni-step-fill {
+        height: 100%;
+        border-radius: 999px;
+        background: linear-gradient(90deg, #2563EB 0%, #0EA5E9 55%, #14B8A6 100%);
+        transition: width 0.35s ease;
+    }
+
+    /* High-Contrast Tactile 3D Primary Buttons (Pure White on Deep Royal Blue -> WCAG AAA!) */
+    div.stButton > button[kind="primary"],
+    div.stButton > button[data-testid="stBaseButton-primary"] {
+        background: linear-gradient(180deg, #3B82F6 0%, #2563EB 58%, #1D4ED8 100%) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #60A5FA !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        letter-spacing: 0.2px !important;
+        padding: 0.58rem 1.05rem !important;
+        text-shadow: 0 1px 2px rgba(15, 23, 42, 0.55) !important;
+        box-shadow: 0 4px 0 #1E3A8A, 0 8px 18px rgba(37, 99, 235, 0.38), inset 0 1px 0 rgba(255, 255, 255, 0.30) !important;
+        transition: transform 0.10s ease, box-shadow 0.10s ease, filter 0.15s ease !important;
+    }
+    div.stButton > button[kind="primary"]:hover:not(:disabled),
+    div.stButton > button[data-testid="stBaseButton-primary"]:hover:not(:disabled) {
+        filter: brightness(1.09) !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 5px 0 #1E3A8A, 0 10px 22px rgba(59, 130, 246, 0.48), inset 0 1px 0 rgba(255, 255, 255, 0.35) !important;
+    }
+    div.stButton > button[kind="primary"]:active:not(:disabled),
+    div.stButton > button[data-testid="stBaseButton-primary"]:active:not(:disabled) {
+        transform: translateY(3px) !important;
+        box-shadow: 0 1px 0 #1E3A8A, 0 2px 6px rgba(37, 99, 235, 0.30) !important;
+    }
+
+    /* High-Contrast Tactile 3D Secondary Buttons (Crisp White-Slate on Elevated Dark Navy) */
+    div.stButton > button[kind="secondary"],
+    div.stButton > button[data-testid="stBaseButton-secondary"] {
+        background: linear-gradient(180deg, #243247 0%, #172133 100%) !important;
+        color: #F8FAFC !important;
+        border: 1px solid #3B4E6B !important;
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        padding: 0.55rem 0.95rem !important;
+        box-shadow: 0 3px 0 #0B1120, 0 5px 12px rgba(0, 0, 0, 0.42), inset 0 1px 0 rgba(255, 255, 255, 0.12) !important;
+        transition: transform 0.10s ease, box-shadow 0.10s ease, border-color 0.15s ease !important;
+    }
+    div.stButton > button[kind="secondary"]:hover:not(:disabled),
+    div.stButton > button[data-testid="stBaseButton-secondary"]:hover:not(:disabled) {
+        background: linear-gradient(180deg, #2D3F59 0%, #1C2940 100%) !important;
+        border-color: #60A5FA !important;
+        color: #FFFFFF !important;
+        transform: translateY(-1px) !important;
+        box-shadow: 0 4px 0 #0B1120, 0 7px 16px rgba(15, 23, 42, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.18) !important;
+    }
+    div.stButton > button[kind="secondary"]:active:not(:disabled),
+    div.stButton > button[data-testid="stBaseButton-secondary"]:active:not(:disabled) {
+        transform: translateY(2px) !important;
+        box-shadow: 0 1px 0 #0B1120 !important;
+    }
+
+    /* Tactile 3D Download Buttons (Pure White on Deep Emerald-Teal) */
+    div.stDownloadButton > button {
+        background: linear-gradient(180deg, #0D9488 0%, #0F766E 100%) !important;
+        color: #FFFFFF !important;
+        border: 1px solid #2DD4BF !important;
+        border-radius: 12px !important;
+        font-weight: 700 !important;
+        text-shadow: 0 1px 2px rgba(4, 47, 46, 0.55) !important;
+        box-shadow: 0 4px 0 #115E59, 0 7px 16px rgba(13, 148, 136, 0.32), inset 0 1px 0 rgba(255, 255, 255, 0.25) !important;
+        transition: transform 0.10s ease, box-shadow 0.10s ease !important;
+    }
+    div.stDownloadButton > button:hover {
+        filter: brightness(1.08) !important;
+        transform: translateY(-1px) !important;
+    }
+    div.stDownloadButton > button:active {
+        transform: translateY(3px) !important;
+        box-shadow: 0 1px 0 #115E59 !important;
+    }
+
+    /* Disabled Buttons: Cleanly Muted & Unmistakably Distinct */
+    div.stButton > button:disabled {
+        background: #111827 !important;
+        color: #64748B !important;
+        border: 1px solid #1E293B !important;
+        box-shadow: none !important;
+        transform: none !important;
+        opacity: 0.72 !important;
+    }
+    div.stButton > button p, div.stDownloadButton > button p {
+        color: inherit !important;
+        font-weight: inherit !important;
+    }
+
+    /* Solid Structured Processing Deck & Stage Cards */
+    .omni-process-deck {
+        background: linear-gradient(180deg, #111b31 0%, #0d1526 100%);
+        border: 1px solid rgba(96, 165, 250, 0.38);
+        border-radius: 16px;
+        padding: 18px 20px;
+        margin: 14px 0 18px 0;
+        box-shadow: 0 10px 26px rgba(0, 0, 0, 0.45), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+    }
+    .omni-process-hdr {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 12px;
+        flex-wrap: wrap;
+        gap: 8px;
+    }
+    .omni-process-title {
+        font-size: 1.08rem;
+        font-weight: 800;
+        color: #FFFFFF;
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+    }
+    .omni-live-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #38BDF8;
+        box-shadow: 0 0 10px #38BDF8;
+        display: inline-block;
+        animation: omniPulse 1.4s ease-in-out infinite;
+    }
+    .omni-done-dot {
+        width: 10px;
+        height: 10px;
+        border-radius: 50%;
+        background: #10B981;
+        display: inline-block;
+    }
+    @keyframes omniPulse {
+        0%, 100% { opacity: 1; transform: scale(1); }
+        50% { opacity: 0.45; transform: scale(1.25); }
+    }
+    .omni-stage-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 10px 14px;
+        border-radius: 12px;
+        background: #0F172A;
+        border: 1px solid #1E293B;
+        margin-bottom: 8px;
+        font-size: 0.90rem;
+    }
+    .omni-stage-row-active {
+        background: linear-gradient(90deg, rgba(37, 99, 235, 0.22) 0%, rgba(15, 23, 42, 0.95) 100%);
+        border-color: rgba(59, 130, 246, 0.55);
+    }
+    .omni-stage-row-done {
+        border-color: rgba(16, 185, 129, 0.35);
+    }
+    .omni-stage-name {
+        color: #F8FAFC;
+        font-weight: 700;
+    }
+    .omni-stage-detail {
+        color: #CBD5E1;
+        font-size: 0.85rem;
+        text-align: right;
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+    }
+    .omni-badge {
+        padding: 2px 10px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 700;
+        white-space: nowrap;
+    }
+    .omni-badge-done { background: #065F46; color: #ECFDF5; border: 1px solid #10B981; }
+    .omni-badge-run  { background: #1D4ED8; color: #EFF6FF; border: 1px solid #60A5FA; }
+    .omni-badge-wait { background: #1E293B; color: #94A3B8; border: 1px solid #334155; }
+    .omni-badge-err  { background: #991B1B; color: #FEF2F2; border: 1px solid #F87171; }
+
+    /* Elevated Metric Tiles & Section Headings */
+    div[data-testid="stMetric"] {
+        background: linear-gradient(180deg, #141E33 0%, #0E1627 100%);
+        border: 1px solid #24334D;
+        border-radius: 14px;
+        padding: 12px 16px;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    }
+    div[data-testid="stExpander"] {
+        border: 1px solid #22304A !important;
+        border-radius: 14px !important;
+        background: rgba(15, 23, 42, 0.58) !important;
     }
     @media (max-width: 768px) {
         .block-container {
@@ -147,12 +334,7 @@ st.markdown(
             padding-right: 0.75rem !important;
         }
         .omni-header h1 {
-            font-size: 1.25rem;
-        }
-        .omni-step-pill {
-            min-width: 112px;
-            font-size: 0.78rem;
-            padding: 7px 8px;
+            font-size: 1.28rem;
         }
     }
     </style>
@@ -245,6 +427,9 @@ def _load_project_into_session(project_id: str) -> None:
     st.session_state["agent4_output"] = proj.get("agent4_data")
     st.session_state["omni_step"] = max(0, min(4, int(proj.get("current_step") or 1)))
     st.session_state["publish_balloons_shown"] = False
+    # Restore finished video/thumbnail from Google Cloud Storage on-demand if missing locally
+    if proj.get("agent3_data"):
+        ensure_project_renders_local(project_id, proj["agent3_data"])
 
 
 sync_streamlit_secrets_to_env()
@@ -252,6 +437,10 @@ _init_session_state()
 cfg = OmniStudioConfig()
 db = get_db()
 worker = get_worker_manager()
+
+# Automatically restore any cloud-backed projects on fresh container startup
+restore_projects_from_gcs_once(db)
+cloud_sync_active = is_cloud_sync_enabled()
 
 # Hydrate all connected YouTube channels from SQLite / Streamlit Secrets / local files
 all_connected_channels = list_connected_youtube_channels(cfg, db)
@@ -307,26 +496,11 @@ def _format_channel_label(ch: Dict[str, Any], *, with_icon: bool = True) -> str:
 
 
 def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[str, Any]]) -> None:
-    """Reusable multi-channel OAuth & Token Import panel used in BOTH Step 0 and Step 4."""
+    """Clean multi-channel YouTube sign-in & management drawer."""
     st.caption(
-        "Connect as many YouTube channels as you want (TopperLab 3D, Religious Stories, or any future channel). "
-        "Each channel is stored independently and never overwrites existing connected channels."
+        "Connect as many YouTube channels as you want. Each channel is saved independently."
     )
-    redir_opts = [
-        "https://onebillionviews.streamlit.app",
-        "http://localhost:8501",
-        "http://localhost:8080",
-        "http://localhost",
-    ]
-    if cfg.youtube_redirect_uri and cfg.youtube_redirect_uri not in redir_opts:
-        redir_opts.append(cfg.youtube_redirect_uri)
-    sel_redir = st.selectbox(
-        "🔗 OAuth Redirect URI:",
-        options=redir_opts,
-        index=0,
-        help="Add `https://onebillionviews.streamlit.app` (and `http://localhost:8501`) under Google Cloud → Google Auth Platform → Clients → Authorized redirect URIs for 1-click automatic login!",
-        key=f"{prefix}_redir_uri",
-    )
+    sel_redir = "https://onebillionviews.streamlit.app"
     st.session_state["omni_oauth_redirect_uri"] = sel_redir
 
     auth_url, auth_msg = build_youtube_oauth_url(
@@ -337,88 +511,68 @@ def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[st
     )
     if auth_url:
         st.markdown(
-            f"1. **[🌐 Click Here to Sign In & Pick Your New YouTube Channel (Google OAuth 2.0) ↗]({auth_url})**\n"
-            f"2. Choose your Google Account and select your target channel (e.g., your **Religious Stories** channel) and click **Allow**.\n"
-            f"3. After redirect, copy the **entire URL** from your browser address bar (`http://localhost:8501/?code=4/0A...`) or just the `code` and paste it below:"
+            f"1. **[🌐 Sign In with Google & Select Your YouTube Channel ↗]({auth_url})**\n"
+            f"2. Pick your channel and click **Allow** — you will return here automatically."
         )
-        code_in = st.text_input(
-            "Paste Redirected Browser URL or Authorization Code:",
-            placeholder="http://localhost:8501/?code=4/0A...&scope=...  (or just 4/0A...)",
-            key=f"{prefix}_oauth_code_in",
-        )
-        if st.button("✅ Verify & Connect This YouTube Channel", type="primary", use_container_width=True, key=f"{prefix}_btn_exch"):
-            ok_ex, msg_ex, saved_ch = exchange_oauth_code_and_store(
-                code_in,
-                cfg.youtube_client_secrets,
-                redirect_uri=sel_redir,
-                db=db,
-                config=cfg,
+        with st.expander("⚙️ Manual Sign-In & Cloud Backup Keys", expanded=bool(st.session_state.get("newly_connected_secret_toml"))):
+            code_in = st.text_input(
+                "Paste Redirected URL or Code (only needed if auto-return didn't run):",
+                placeholder="Paste URL or authorization code...",
+                key=f"{prefix}_oauth_code_in",
             )
-            if ok_ex and saved_ch:
-                st.session_state["omni_channel_id"] = saved_ch.get("channel_id") or ""
-                st.session_state["omni_channel_title"] = saved_ch.get("channel_title") or ""
-                st.session_state["omni_playlist_id"] = "NONE"
-                st.session_state["omni_playlist_title"] = "(No Playlist)"
-                st.session_state["newly_connected_secret_toml"] = format_channel_streamlit_secret_toml(saved_ch)
-                st.success(msg_ex)
-                st.rerun()
-            else:
-                st.error(msg_ex)
+            if st.button("✅ Connect Channel", type="primary", use_container_width=True, key=f"{prefix}_btn_exch"):
+                ok_ex, msg_ex, saved_ch = exchange_oauth_code_and_store(
+                    code_in,
+                    cfg.youtube_client_secrets,
+                    redirect_uri=sel_redir,
+                    db=db,
+                    config=cfg,
+                )
+                if ok_ex and saved_ch:
+                    st.session_state["omni_channel_id"] = saved_ch.get("channel_id") or ""
+                    st.session_state["omni_channel_title"] = saved_ch.get("channel_title") or ""
+                    st.session_state["omni_playlist_id"] = "NONE"
+                    st.session_state["omni_playlist_title"] = "(No Playlist)"
+                    st.session_state["newly_connected_secret_toml"] = format_channel_streamlit_secret_toml(saved_ch)
+                    st.success(msg_ex)
+                    st.rerun()
+                else:
+                    st.error(msg_ex)
+            if connected_channels:
+                all_toml_blocks = "\n\n".join(format_channel_streamlit_secret_toml(c) for c in connected_channels)
+                st.caption(
+                    f"Copy & paste into **Streamlit Cloud → Manage app → Settings → Secrets** to keep all "
+                    f"{len(connected_channels)} channel(s) permanently signed in:"
+                )
+                st.code(all_toml_blocks, language="toml")
+                st.download_button(
+                    "⬇️ Download Channel Backup (.toml)",
+                    data=lambda s=all_toml_blocks: s.encode("utf-8"),
+                    file_name="omni_studio_youtube_secrets.toml",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key=f"{prefix}_dl_all_secrets_toml",
+                )
     else:
-        st.info(f"OAuth Client note: {auth_msg} You can also import a channel token JSON below.")
+        st.info("YouTube sign-in is not configured yet.")
 
     if connected_channels:
-        all_toml_blocks = "\n\n".join(format_channel_streamlit_secret_toml(c) for c in connected_channels)
-        with st.expander(
-            f"☁️ Copy Streamlit Cloud Secrets for ALL {len(connected_channels)} Connected Channel(s) (1-Time Paste)",
-            expanded=bool(st.session_state.get("newly_connected_secret_toml")),
-        ):
-            st.caption(
-                "Click the copy icon on the top-right of the box below and paste it into "
-                "**Streamlit Cloud → Manage app → Settings → Secrets** (replace any old `YOUTUBE_OAUTH_TOKEN_JSON` block, "
-                "keeping your `VERTEX_PROJECT_ID` and `VERTEX_ADC_JSON` untouched) so ALL connected channels persist permanently across reboots:"
-            )
-            st.code(all_toml_blocks, language="toml")
-            st.download_button(
-                "⬇️ Download All Channel Secrets (.toml)",
-                data=all_toml_blocks.encode("utf-8"),
-                file_name="omni_studio_youtube_secrets.toml",
-                mime="text/plain",
-                use_container_width=True,
-                key=f"{prefix}_dl_all_secrets_toml",
-            )
-
-    st.markdown("---")
-    imp_c1, imp_c2 = st.columns(2)
-    with imp_c1:
-        up_tok = st.file_uploader(
-            "📄 Or Import Channel Token JSON File:",
-            type=["json"],
-            key=f"{prefix}_upload_yt_tok",
-        )
-        if up_tok is not None:
-            ok_imp, msg_imp, saved_imp = import_youtube_token_json(up_tok.getvalue().decode("utf-8"), db=db)
-            if ok_imp and saved_imp:
-                st.session_state["omni_channel_id"] = saved_imp.get("channel_id") or ""
-                st.session_state["omni_channel_title"] = saved_imp.get("channel_title") or ""
-                st.session_state["newly_connected_secret_toml"] = format_channel_streamlit_secret_toml(saved_imp)
-                st.success(msg_imp)
-                st.rerun()
-            else:
-                st.error(msg_imp)
-    with imp_c2:
-        if connected_channels:
-            rem_opts: Dict[str, str] = {}
-            for c in connected_channels:
-                base_lbl = _format_channel_label(c, with_icon=False)
-                lbl_u = base_lbl
-                n_dup = 2
-                while lbl_u in rem_opts:
-                    lbl_u = f"{base_lbl} #{n_dup}"
-                    n_dup += 1
-                rem_opts[lbl_u] = str(c.get("channel_id") or c.get("provider") or "")
+        st.markdown("---")
+        rem_opts: Dict[str, str] = {}
+        for c in connected_channels:
+            base_lbl = _format_channel_label(c, with_icon=False)
+            lbl_u = base_lbl
+            n_dup = 2
+            while lbl_u in rem_opts:
+                lbl_u = f"{base_lbl} #{n_dup}"
+                n_dup += 1
+            rem_opts[lbl_u] = str(c.get("channel_id") or c.get("provider") or "")
+        rc1, rc2 = st.columns([1.6, 1.0])
+        with rc1:
             rem_pick = st.selectbox("🗑️ Disconnect a Channel:", options=list(rem_opts.keys()), key=f"{prefix}_rem_sel")
-            if st.button("Disconnect Selected Channel", use_container_width=True, key=f"{prefix}_rem_btn"):
+        with rc2:
+            st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+            if st.button("Disconnect", use_container_width=True, key=f"{prefix}_rem_btn"):
                 target_rm = rem_opts[rem_pick]
                 db.delete_youtube_channel(str(target_rm))
                 if st.session_state.get("omni_channel_id") == target_rm:
@@ -429,42 +583,75 @@ def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[st
                 st.rerun()
 
 
+def _friendly_project_status(status: str) -> str:
+    s = (status or "").lower()
+    if "publish" in s:
+        return "Published"
+    if "rendered" in s:
+        return "Video Ready"
+    if "step3" in s or "step2" in s:
+        return "Script Ready"
+    if "step1_ready" in s:
+        return "Plan Ready"
+    return "Draft"
+
+
 # ==============================================================================
-# COMPACT SIDEBAR: RECENT PROJECTS & WORKSPACE CONTROLS (COLLAPSED BY DEFAULT)
+# COMPACT SIDEBAR: SAVED PROJECTS & CLOUD SYNC
 # ==============================================================================
 with st.sidebar:
-    st.markdown("### 🗂️ OMNI STUDIO Projects")
-    if st.button("➕ New Fresh Video Project", use_container_width=True, type="primary"):
+    st.markdown("### 🗂️ My Projects")
+    if st.button("➕ New Video Project", use_container_width=True, type="primary"):
         _reset_workspace()
         st.rerun()
 
-    recent_projects = db.list_projects(limit=12)
+    recent_projects = db.list_projects(limit=15)
     if recent_projects:
-        st.caption("Resume a saved SQLite workspace:")
+        st.caption("Open a saved project:")
         for rp in recent_projects:
-            lbl = f"S{rp['current_step']} • {rp['topic'][:26]} ({rp['status']})"
+            status_lbl = _friendly_project_status(rp.get("status", ""))
+            lbl = f"🎬 {rp['topic'][:26]} · {status_lbl}"
             if st.button(lbl, key=f"load_proj_{rp['id']}", use_container_width=True):
-                _load_project_into_session(rp["id"])
+                with st.status(f"Opening '{rp['topic'][:30]}'...", expanded=False):
+                    _load_project_into_session(rp["id"])
                 st.rerun()
     else:
-        st.caption("No saved projects yet. Start in Step 1!")
+        st.caption("No saved projects yet. Start your first video in Step 1!")
 
     st.markdown("---")
-    st.caption(f"Creator Likeness: `{cfg.creator_handle}` ({len(cfg.likeness_reference_paths)}/3 portraits loaded)")
-    st.caption(f"AI Auth: `{cfg.active_auth_summary}`")
-    st.caption(f"BGM Ducking: `{cfg.bgm_duck_db} dB` • `{cfg.resolution}`")
+    if cloud_sync_active:
+        if st.button("☁️ Refresh Cloud Projects", use_container_width=True):
+            with st.status("Syncing projects from Google Cloud...", expanded=False):
+                n_restored = restore_projects_from_gcs_once(db, force=True)
+            st.toast(f"Cloud sync complete ({n_restored} project(s) updated).", icon="☁️")
+            st.rerun()
+        st.caption("☁️ Cloud Auto-Save: Active")
+    else:
+        st.caption("💾 Local Workspace Mode")
 
 
 # ==============================================================================
-# TOP HEADER & MOBILE/TABLET HORIZONTAL STEPPER (5-STAGE MULTI-CHANNEL FLOW)
+# TOP HEADER & UNIFIED 3D STUDIO NAVIGATION DOCK
 # ==============================================================================
-active_ch_lbl = st.session_state.get("omni_channel_title") or "No Channel Selected Yet"
-active_pl_lbl = st.session_state.get("omni_playlist_title") or "(No Playlist)"
+active_ch_lbl = st.session_state.get("omni_channel_title") or "Select Channel"
+active_pl_lbl = st.session_state.get("omni_playlist_title") or "No Playlist"
+cloud_chip_html = (
+    '<span class="omni-chip omni-chip-cloud">☁️ Cloud Auto-Save On</span>'
+    if cloud_sync_active
+    else ""
+)
 st.markdown(
     f"""
     <div class="omni-header">
-        <h1>🎬 OMNI STUDIO — Multi-Channel Multi-Niche AI Video Engine</h1>
-        <p>Target Channel: <strong>📺 {active_ch_lbl}</strong> &nbsp;•&nbsp; Playlist: <strong>📂 {active_pl_lbl}</strong> &nbsp;•&nbsp; Connected Channels: <strong>{len(all_connected_channels)}</strong></p>
+        <div class="omni-header-top">
+            <h1>🎬 OMNI STUDIO</h1>
+            {cloud_chip_html}
+        </div>
+        <div class="omni-meta-chips">
+            <span class="omni-chip">📺 {active_ch_lbl}</span>
+            <span class="omni-chip">📂 {active_pl_lbl}</span>
+            <span class="omni-chip">🔗 {len(all_connected_channels)} Channel(s) Connected</span>
+        </div>
     </div>
     """,
     unsafe_allow_html=True,
@@ -472,28 +659,22 @@ st.markdown(
 
 step = int(st.session_state["omni_step"])
 steps_meta = [
-    (0, "0. Channel & Playlist"),
-    (1, "1. SEO & Hooks"),
-    (2, "2. Scene Scripting"),
-    (3, "3. Media Rendering"),
-    (4, "4. YT Publish"),
+    (0, "📺 Channel"),
+    (1, "✨ Topic & Plan"),
+    (2, "🎬 Scenes"),
+    (3, "🎞️ Video Studio"),
+    (4, "🚀 Publish"),
 ]
 
-pills_html = []
-for s_num, s_label in steps_meta:
-    if s_num == step:
-        cls = "omni-step-pill omni-step-active"
-    elif s_num < step:
-        cls = "omni-step-pill omni-step-done"
-    else:
-        cls = "omni-step-pill"
-    pills_html.append(f'<div class="{cls}">{s_label}</div>')
+# Sleek unified progress track + single tactile 3D navigation dock (no duplicate stepper rows!)
+fill_pct = int(((step + 1) / float(len(steps_meta))) * 100)
+st.markdown(
+    f'<div class="omni-step-track"><div class="omni-step-fill" style="width:{fill_pct}%;"></div></div>',
+    unsafe_allow_html=True,
+)
 
-st.markdown(f'<div class="omni-stepper">{"".join(pills_html)}</div>', unsafe_allow_html=True)
-
-# Compact clickable quick-navigation row for already-unlocked stages
 nav_cols = st.columns(5)
-max_unlocked = 1  # Both Step 0 (Channel & Playlist) and Step 1 (SEO & Hooks) are always accessible
+max_unlocked = 1  # Both Channel and Topic & Plan are always accessible
 if st.session_state.get("agent1_output"):
     max_unlocked = max(max_unlocked, 2)
 if st.session_state.get("agent2_output"):
@@ -505,7 +686,8 @@ for idx, (s_num, s_label) in enumerate(steps_meta):
     with nav_cols[idx]:
         disabled = s_num > max_unlocked
         btn_type = "primary" if s_num == step else "secondary"
-        if st.button(s_label, key=f"nav_step_{s_num}", use_container_width=True, disabled=disabled, type=btn_type):
+        display_lbl = f"✓ {s_label.split(' ', 1)[1]}" if (s_num < step and not disabled) else s_label
+        if st.button(display_lbl, key=f"nav_step_{s_num}", use_container_width=True, disabled=disabled, type=btn_type):
             st.session_state["omni_step"] = s_num
             if st.session_state.get("omni_project_id"):
                 db.update_project_stage(st.session_state["omni_project_id"], current_step=s_num)
@@ -515,10 +697,10 @@ st.markdown("")
 
 
 # ==============================================================================
-# PRE-STEP (STEP 0) — MULTI-CHANNEL & PLAYLIST SELECTOR
+# PRE-STEP (STEP 0) — CHANNEL & PLAYLIST SELECTOR
 # ==============================================================================
 if step == 0:
-    st.subheader("Pre-Step • Select YouTube Channel & Target Playlist")
+    st.subheader("Select YouTube Channel & Playlist")
 
     selected_ch_auth_ok = True
     with st.container(border=True):
@@ -607,15 +789,13 @@ if step == 0:
                 else:
                     st.selectbox("📂 Target Playlist:", options=["(Connect/Select Channel First)"], disabled=True, key="prestep_pl_disabled")
 
-            # Live OAuth token status feedback (honestly alerts when Google's 7-day Testing token expired!)
             if sel_cid:
                 if selected_ch_auth_ok:
-                    st.success(f"🔐 **{st.session_state.get('omni_channel_title')}** OAuth Active — Live playlists synced & ready for direct YouTube upload.")
+                    st.success(f"✅ **{st.session_state.get('omni_channel_title')}** is connected and ready for direct publishing.")
                 else:
                     st.warning(
-                        f"⚠️ **{st.session_state.get('omni_channel_title')} OAuth Token Expired / Revoked** "
-                        f"(Google revokes refresh tokens after 7 days while an OAuth app is in 'Testing' mode). "
-                        f"Re-authorize **{st.session_state.get('omni_channel_title')}** below to pull all your playlists & enable uploading!"
+                        f"⚠️ **{st.session_state.get('omni_channel_title')} needs quick reconnection** — "
+                        f"click below to sign in again so your playlists and uploads stay active."
                     )
 
             # Inline Create New Playlist widget for the selected channel
@@ -646,9 +826,8 @@ if step == 0:
         else:
             st.warning("🔒 **No YouTube Channel Connected Yet** — Connect your first channel below, or proceed to Step 1 in offline mode.")
 
-    # Multi-Channel OAuth Connect / Re-Authorize Drawer (auto-opens when token expired or no channels yet!)
     with st.expander(
-        "➕ Connect or Re-Authorize YouTube Channel (TopperLab 3D / DharmaGatha / Any Channel)",
+        "➕ Connect or Manage YouTube Channels",
         expanded=(
             not all_connected_channels
             or not selected_ch_auth_ok
@@ -658,7 +837,7 @@ if step == 0:
         _render_connect_channel_drawer("prestep", all_connected_channels)
 
     st.markdown("")
-    if st.button("Start Step 1: SEO, Hooks & Storyboard ➡️", type="primary", use_container_width=True):
+    if st.button("Continue to Topic & Plan ➡️", type="primary", use_container_width=True):
         st.session_state["omni_step"] = 1
         if st.session_state.get("omni_project_id"):
             db.update_project_stage(
@@ -673,22 +852,22 @@ if step == 0:
 
 
 # ==============================================================================
-# STEP 1 — AGENT 1: SEARCH, SEO & STORYBOARD AGENT
+# STEP 1 — TOPIC, TITLES & STORYBOARD PLAN
 # ==============================================================================
 elif step == 1:
-    st.subheader("Step 1 • Agent 1: Search, SEO & High-Retention Storyboard")
+    st.subheader("Topic, Titles & Storyboard Plan")
 
     with st.container(border=True):
         topic_val = st.text_input(
-            "🎯 Video Topic (Any Subject / Any Niche):",
+            "🎯 Video Topic:",
             value=st.session_state["omni_topic"],
-            placeholder="e.g., The History of Cryptocurrency, How Autonomous Vehicles Navigate, 10 AI Tools Changing the World...",
+            placeholder="e.g., Khatu Shyam Baba ka Rahasya, How Electric Cars Work, Top 10 AI Tools...",
             key="input_topic_field",
         )
         c1, c2, c3 = st.columns([1.2, 1.3, 0.9])
         with c1:
             niche_val = st.selectbox(
-                "🧭 Niche:",
+                "🧭 Category:",
                 options=SUPPORTED_NICHES,
                 index=SUPPORTED_NICHES.index(st.session_state["omni_niche"])
                 if st.session_state["omni_niche"] in SUPPORTED_NICHES
@@ -697,7 +876,7 @@ elif step == 1:
             )
         with c2:
             lang_val = st.selectbox(
-                "🗣️ Language & Tone:",
+                "🗣️ Language & Voice Style:",
                 options=SUPPORTED_LANGUAGES,
                 index=SUPPORTED_LANGUAGES.index(st.session_state["omni_language"])
                 if st.session_state["omni_language"] in SUPPORTED_LANGUAGES
@@ -711,37 +890,38 @@ elif step == 1:
                 max_value=8.0,
                 value=float(st.session_state["omni_target_minutes"]),
                 step=0.5,
-                help="5–8 minutes generates 30–50 granular scenes (8–12s visual reset rule).",
+                help="Longer videos automatically include more visual scenes for smooth pacing.",
                 key="input_dur_field",
             )
 
         bgm_presets_s1 = list(BGM_SCORE_PRESETS.keys())
         cur_bgm_s1 = st.session_state.get("omni_bgm_preset", DEFAULT_BGM_PRESET)
         bgm_val_s1 = st.selectbox(
-            "🎼 Background Score / Music Style (Like Niche — Dedicated Lyria-002 Soundtrack or Custom Upload):",
+            "🎼 Background Music Style:",
             options=bgm_presets_s1,
             index=bgm_presets_s1.index(cur_bgm_s1) if cur_bgm_s1 in bgm_presets_s1 else 0,
-            help="Auto-Match adapts automatically to your Niche & Topic (e.g. Religious & Devotional gets bansuri flute, tanpura, sitar & devotional strings), or pick any dedicated score style!",
+            help="Auto-Match picks music tailored to your topic and category, or choose any style (or upload your own track in Video Studio).",
             key="input_bgm_preset_s1",
         )
         st.session_state["omni_bgm_preset"] = bgm_val_s1
 
         run_a1 = st.button(
-            "🔎 Run Agent 1: Mine YouTube SEO, Hooks & Storyboard",
+            "✨ Create Video Plan, Titles & Storyboard",
             type="primary",
             use_container_width=True,
         )
 
     if run_a1:
         if not topic_val.strip():
-            st.warning("Enter any Topic above to launch Agent 1.")
+            st.warning("Enter a video topic above to get started.")
         else:
             st.session_state["omni_topic"] = topic_val.strip()
             st.session_state["omni_niche"] = niche_val
             st.session_state["omni_language"] = lang_val
             st.session_state["omni_target_minutes"] = float(dur_val)
 
-            with st.spinner(f"Agent 1 scanning YouTube trends, mining keywords & drafting storyboard for '{topic_val.strip()}'..."):
+            with st.status(f"✨ Creating video plan for '{topic_val.strip()}'...", expanded=True) as plan_status:
+                st.write("🔍 Researching trending titles, audience questions & keywords...")
                 a1_obj = run_agent1_seo_and_storyboard(
                     topic=topic_val.strip(),
                     niche=niche_val,
@@ -749,6 +929,7 @@ elif step == 1:
                     target_duration_minutes=float(dur_val),
                     config=cfg,
                 )
+                st.write("📝 Saving titles, hooks & chapter storyboard to your workspace...")
                 pid = st.session_state.get("omni_project_id")
                 if not pid:
                     pid = db.create_project(
@@ -774,33 +955,28 @@ elif step == 1:
                 )
                 st.session_state["agent1_output"] = a1_obj.model_dump()
                 _clear_step1_widget_keys()
-                # Clear downstream stale stages only when user explicitly re-runs Agent 1
                 st.session_state["agent2_output"] = None
                 st.session_state["agent3_output"] = None
                 st.session_state["agent4_output"] = None
-            st.success("✅ Agent 1 completed! Review and edit any SEO or storyboard fields below.")
+                plan_status.update(label="✅ Video plan & storyboard ready!", state="complete", expanded=False)
+            st.success("✅ Your titles, description & storyboard are ready below — customize anything you like.")
 
     a1_data = st.session_state.get("agent1_output")
     if a1_data:
         a1 = Agent1Output.model_validate(a1_data)
 
-        # Collapsible Competitor & Audience Research Drawer
-        with st.expander("📊 YouTube Competitor Research, Audience Questions & Visual Hooks", expanded=False):
+        with st.expander("📊 Audience Insights & Trending Inspiration", expanded=False):
             if a1.competitor_insights:
-                st.markdown("**Top-Performing Videos Mined via YouTube Data API v3:**")
+                st.markdown("**Top Related Videos on YouTube:**")
                 for comp in a1.competitor_insights:
                     st.markdown(
-                        f"- **{comp.title}** ({comp.channel_title}) — `{comp.view_count:,} views` • *Hook:* {comp.hook_pattern}"
+                        f"- **{comp.title}** ({comp.channel_title}) — `{comp.view_count:,} views`"
                     )
-            else:
-                st.caption("YouTube autocomplete & Google Search grounding used (add `YOUTUBE_API_KEY` in `.env` for live view-count mining).")
-            st.markdown("**Common Audience Questions:**")
+            st.markdown("**Key Viewer Questions to Answer:**")
             for q in a1.common_audience_questions:
                 st.markdown(f"- {q}")
-            st.markdown(f"**BGM Style Inspiration:** {a1.bgm_style_reference}")
 
-        # Editable SEO Metadata Card
-        with st.expander("📝 High-CTR Titles, SEO Description & 20+ Search Tags (Editable)", expanded=True):
+        with st.expander("📝 Video Title, Description & Thumbnail Concept", expanded=True):
             t_options = list(a1.title_options)
             default_idx = t_options.index(a1.selected_title) if a1.selected_title in t_options else 0
 
@@ -808,7 +984,7 @@ elif step == 1:
                 st.session_state["a1_title_edit"] = st.session_state.get("a1_title_pick", t_options[default_idx])
 
             picked_title = st.radio(
-                "Choose Winning CTR Title:",
+                "Pick Your Favorite Title:",
                 options=t_options,
                 index=default_idx,
                 key="a1_title_pick",
@@ -816,53 +992,52 @@ elif step == 1:
             )
             if "a1_title_edit" not in st.session_state:
                 st.session_state["a1_title_edit"] = a1.selected_title or picked_title
-            edited_title = st.text_input("Fine-Tune Selected Title:", key="a1_title_edit")
-            edited_desc = st.text_area("SEO Description (with Auto-Timestamps):", value=a1.seo_description, height=170, key="a1_desc_edit")
-            edited_tags_str = st.text_area("Targeted Search Tags (comma-separated, 20+):", value=", ".join(a1.tags), height=90, key="a1_tags_edit")
+            edited_title = st.text_input("Refine Selected Title:", key="a1_title_edit")
+            edited_desc = st.text_area("YouTube Description:", value=a1.seo_description, height=160, key="a1_desc_edit")
+            edited_tags_str = st.text_area("Search Tags (comma-separated):", value=", ".join(a1.tags), height=82, key="a1_tags_edit")
 
             th_c1, th_c2 = st.columns(2)
             with th_c1:
-                edited_thumb_hl = st.text_input("Thumbnail Bold Headline (2–4 words):", value=a1.thumbnail_hook_headline, key="a1_th_hl")
+                edited_thumb_hl = st.text_input("Thumbnail Headline (2–4 punchy words):", value=a1.thumbnail_hook_headline, key="a1_th_hl")
             with th_c2:
-                edited_thumb_badge = st.text_input("Thumbnail Badge Label:", value=a1.thumbnail_badge_label, key="a1_th_badge")
+                edited_thumb_badge = st.text_input("Thumbnail Corner Badge:", value=a1.thumbnail_badge_label, key="a1_th_badge")
             edited_thumb_concept = st.text_input(
-                "Thumbnail Glowing Concept Graphics (Opposite @jwalashiva):",
+                "Thumbnail Visual Scene Idea:",
                 value=a1.thumbnail_graphic_concept,
                 key="a1_th_concept",
             )
             edited_bgm_style = st.text_input(
-                "🎼 Topic BGM Film Score Direction (Google Lyria-002 Instrumental):",
+                "🎼 Background Music Mood:",
                 value=a1.bgm_style_reference,
                 key="a1_bgm_style",
             )
 
-        # Editable High-Retention Storyboard & Hook Beats
-        with st.expander("🎬 High-Retention Storyboard Manifest (0:00-0:45 Hook • Retention Loops • Climax & CTA)", expanded=True):
-            edited_hook = st.text_area("⚡ 0:00–0:45 Visual Hook Script:", value=a1.hook_script_0_45s, height=95, key="a1_hook_edit")
-            edited_climax = st.text_area("💡 Climax 'Aha!' & Misconception Debunker:", value=a1.climax_misconception_aha, height=90, key="a1_climax_edit")
-            edited_cta = st.text_area("📣 Outro Subscribe & Comment CTA:", value=a1.outro_cta_script, height=85, key="a1_cta_edit")
+        with st.expander("🎬 Storyboard & Key Moments", expanded=True):
+            edited_hook = st.text_area("⚡ Opening Hook (First 45 Seconds):", value=a1.hook_script_0_45s, height=90, key="a1_hook_edit")
+            edited_climax = st.text_area("💡 Big Reveal / Climax:", value=a1.climax_misconception_aha, height=85, key="a1_climax_edit")
+            edited_cta = st.text_area("📣 Closing Call-to-Action:", value=a1.outro_cta_script, height=80, key="a1_cta_edit")
 
-            st.markdown("**Storyboard Beats (8-Second Visual Reset Rule Mapped):**")
+            st.markdown("**Chapter Breakdown:**")
             updated_beats = []
             for b in a1.storyboard_beats:
                 with st.container(border=True):
                     bc1, bc2 = st.columns([2.2, 1.0])
                     with bc1:
                         bt = st.text_input(
-                            f"Beat {b.beat_id} [{b.phase.replace('_', ' ')}] — {format_timestamp(b.start_sec)}:",
+                            f"Chapter {b.beat_id} · {format_timestamp(b.start_sec)}:",
                             value=b.beat_title,
                             key=f"beat_title_{b.beat_id}",
                         )
                     with bc2:
                         bd = st.number_input(
-                            "Duration (sec):",
+                            "Length (sec):",
                             min_value=10.0,
                             max_value=120.0,
                             value=float(b.duration_sec),
                             step=5.0,
                             key=f"beat_dur_{b.beat_id}",
                         )
-                    bs = st.text_area("Narrative & Retention Loop:", value=b.narrative_summary, height=68, key=f"beat_sum_{b.beat_id}")
+                    bs = st.text_area("Story Beat Summary:", value=b.narrative_summary, height=64, key=f"beat_sum_{b.beat_id}")
                     b_dict = b.model_dump()
                     b_dict["beat_title"] = bt
                     b_dict["duration_sec"] = float(bd)
@@ -872,18 +1047,16 @@ elif step == 1:
         cinema_presets = list(CINEMA_STYLE_PRESETS.keys())
         cur_preset = st.session_state.get("omni_cinema_preset", DEFAULT_CINEMA_PRESET)
         chosen_preset_s1 = st.selectbox(
-            "🎬 Cinema Look & Camera Preset (Applies to All Video Scenes):",
+            "🎥 Visual Style:",
             options=cinema_presets,
             index=cinema_presets.index(cur_preset) if cur_preset in cinema_presets else 0,
-            help="Infuses ARRI Alexa / IMAX / 35mm film lens, lighting, and color-grade grammar into every scene prompt.",
             key="input_cinema_preset_s1",
         )
         st.session_state["omni_cinema_preset"] = chosen_preset_s1
 
         st.markdown("")
-        proceed_s2 = st.button("Proceed to Scene Scripting ➡️", type="primary", use_container_width=True)
+        proceed_s2 = st.button("Build Scene-by-Scene Script ➡️", type="primary", use_container_width=True)
         if proceed_s2:
-            # Commit all user edits back to Agent1Output & SQLite
             edited_a1_dict = a1.model_dump()
             edited_a1_dict["selected_title"] = edited_title.strip() or a1.selected_title
             edited_a1_dict["seo_description"] = edited_desc.strip() or a1.seo_description
@@ -900,12 +1073,14 @@ elif step == 1:
             committed_a1 = Agent1Output.model_validate(edited_a1_dict)
             st.session_state["agent1_output"] = committed_a1.model_dump()
 
-            with st.spinner("Agent 2 directing Hollywood-grade 8–12s scenes with Veo/Omni cinematography & vocal cues..."):
+            with st.status("🎬 Writing scene-by-scene narration & visual shots...", expanded=True) as sc_status:
+                st.write("✍️ Expanding your storyboard into paced cinema scenes...")
                 a2_obj = run_agent2_scene_scripting(
                     committed_a1,
                     cinema_preset=st.session_state.get("omni_cinema_preset", DEFAULT_CINEMA_PRESET),
                     config=cfg,
                 )
+                st.write("☁️ Saving scenes to your Cloud Studio workspace...")
                 st.session_state["agent2_output"] = a2_obj.model_dump()
                 st.session_state["omni_step"] = 2
                 st.session_state["scene_page"] = 1
@@ -917,20 +1092,21 @@ elif step == 1:
                     agent1_data=committed_a1.model_dump(),
                     agent2_data=a2_obj.model_dump(),
                 )
+                sc_status.update(label=f"✅ {len(a2_obj.scenes)} scenes scripted!", state="complete", expanded=False)
             st.rerun()
 
 
 # ==============================================================================
-# STEP 2 — AGENT 2: MULTI-MODEL VISUAL & VOCAL SCRIPTING AGENT
+# STEP 2 — SCENE-BY-SCENE SCRIPT & VISUALS
 # ==============================================================================
 elif step == 2:
-    st.subheader("Step 2 • Agent 2: Multi-Model Visual & Vocal Scene Manifest")
+    st.subheader("Scene-by-Scene Script")
     a1_data = st.session_state.get("agent1_output")
     a2_data = st.session_state.get("agent2_output")
 
     if not a1_data or not a2_data:
-        st.info("Complete Step 1 first to generate your storyboard and scenes.")
-        if st.button("⬅️ Back to Step 1", use_container_width=True):
+        st.info("Create your Topic & Plan first to unlock scene scripting.")
+        if st.button("⬅️ Go to Topic & Plan", use_container_width=True):
             st.session_state["omni_step"] = 1
             st.rerun()
     else:
@@ -939,22 +1115,18 @@ elif step == 2:
         custom_dir = cfg.projects_dir / f"{pid}_{sanitize_slug(a2.topic)}" / "custom_assets"
         custom_dir.mkdir(parents=True, exist_ok=True)
 
-        # Compact responsive metrics bar
-        mg_count = sum(1 for s in a2.scenes if s.asset_mode == "motion_graphics")
         avg_cut = round(a2.total_estimated_duration_sec / max(1, len(a2.scenes)), 1)
-        m1, m2, m3, m4 = st.columns(4)
+        m1, m2, m3 = st.columns(3)
         m1.metric("Total Scenes", len(a2.scenes))
-        m2.metric("Avg Cut Length", f"{avg_cut}s")
-        m3.metric("Est. Runtime", format_timestamp(a2.total_estimated_duration_sec))
-        m4.metric("Motion Graphics", mg_count)
+        m2.metric("Avg Scene Length", f"{avg_cut}s")
+        m3.metric("Estimated Runtime", format_timestamp(a2.total_estimated_duration_sec))
 
-        # Cinema Look selector + 1-click prompt boost for new or existing projects
         cinema_presets_s2 = list(CINEMA_STYLE_PRESETS.keys())
         cur_p_s2 = st.session_state.get("omni_cinema_preset", DEFAULT_CINEMA_PRESET)
         cp_c1, cp_c2 = st.columns([1.4, 1.0])
         with cp_c1:
             sel_preset_s2 = st.selectbox(
-                "🎬 Cinema Look & Lens Preset:",
+                "🎥 Visual Style:",
                 options=cinema_presets_s2,
                 index=cinema_presets_s2.index(cur_p_s2) if cur_p_s2 in cinema_presets_s2 else 0,
                 key="cinema_preset_s2",
@@ -962,27 +1134,26 @@ elif step == 2:
             st.session_state["omni_cinema_preset"] = sel_preset_s2
         with cp_c2:
             st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
-            if st.button("✨ Upgrade All Prompts to Cinema Grade", use_container_width=True):
-                with st.spinner("Rewriting all scene prompts into Hollywood 5-layer cinematography..."):
+            if st.button("✨ Enhance All Scene Visuals", use_container_width=True):
+                with st.status("✨ Upgrading all scene visuals to cinema grade...", expanded=True) as up_st:
+                    st.write("🎥 Polishing camera framing, lighting & sound cues across all scenes...")
                     boosted_a2 = enhance_all_scenes_to_cinema(a2, cinema_preset=sel_preset_s2, config=cfg)
                     st.session_state["agent2_output"] = boosted_a2.model_dump()
                     db.update_project_stage(pid, agent2_data=boosted_a2.model_dump())
-                    # Clear stale per-scene widget keys so updated cinema prompts render immediately
                     for s_i in range(1, len(boosted_a2.scenes) + 1):
                         st.session_state.pop(f"sc_vprompt_{s_i}", None)
                         st.session_state.pop(f"sc_sfx_{s_i}", None)
                         st.session_state.pop(f"sc_mode_{s_i}", None)
                         st.session_state.pop(f"sc_mg_{s_i}", None)
-                st.success("✅ Upgraded all scenes to Hollywood Cinema Grade!")
+                    up_st.update(label="✅ All scene visuals enhanced!", state="complete", expanded=False)
                 st.rerun()
 
-        # Mobile-friendly pagination so 30-50 scene cards remain super responsive
         per_page = 8
         total_pages = max(1, (len(a2.scenes) + per_page - 1) // per_page)
         pg_c1, pg_c2 = st.columns([1.4, 1.0])
         with pg_c1:
             current_page = st.number_input(
-                f"Scene Page (showing {per_page} scenes/page of {len(a2.scenes)} total):",
+                f"Page (showing {per_page} of {len(a2.scenes)} scenes):",
                 min_value=1,
                 max_value=total_pages,
                 value=min(int(st.session_state.get("scene_page", 1)), total_pages),
@@ -991,8 +1162,10 @@ elif step == 2:
             )
             st.session_state["scene_page"] = int(current_page)
         with pg_c2:
-            if st.button("🔄 Regenerate Scenes from Step 1", use_container_width=True):
-                with st.spinner("Re-scripting granular cinematic scenes with Agent 2..."):
+            st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+            if st.button("🔄 Regenerate Scenes", use_container_width=True):
+                with st.status("🔄 Rebuilding scenes from your storyboard...", expanded=True) as rg_st:
+                    st.write("✍️ Drafting fresh narration and camera direction...")
                     fresh_a2 = run_agent2_scene_scripting(
                         Agent1Output.model_validate(a1_data),
                         cinema_preset=sel_preset_s2,
@@ -1004,6 +1177,7 @@ elif step == 2:
                         st.session_state.pop(f"sc_vprompt_{s_i}", None)
                         st.session_state.pop(f"sc_mode_{s_i}", None)
                         st.session_state.pop(f"sc_mg_{s_i}", None)
+                    rg_st.update(label="✅ Scenes regenerated!", state="complete", expanded=False)
                 st.rerun()
 
         start_idx = (int(current_page) - 1) * per_page
@@ -1013,33 +1187,34 @@ elif step == 2:
         for idx in range(start_idx, end_idx):
             sc = scenes_dicts[idx]
             s_num = sc["scene_index"]
-            mode_icon = "📊" if sc["asset_mode"] == "motion_graphics" else "🎞️" if sc["asset_mode"] == "custom_upload" else "🎥"
+            mode_icon = "🎞️" if sc["asset_mode"] == "custom_upload" else "🎥"
             exp_title = (
-                f"{mode_icon} Scene {s_num:02d} ({format_timestamp(sc['start_sec'])} • {sc['duration_sec']}s) "
-                f"— {sc['chapter_label'][:38]}"
+                f"{mode_icon} Scene {s_num:02d} ({format_timestamp(sc['start_sec'])} · {sc['duration_sec']}s) "
+                f"— {sc['chapter_label'][:42]}"
             )
             with st.expander(exp_title, expanded=(idx == start_idx)):
-                sc_c1, sc_c2, sc_c3 = st.columns([1.1, 1.1, 0.8])
-                with sc_c1:
-                    modes = ["ai_video", "motion_graphics", "custom_upload"]
-                    new_mode = st.selectbox(
-                        "Visual Source Mode:",
-                        options=modes,
-                        index=modes.index(sc["asset_mode"]) if sc["asset_mode"] in modes else 0,
-                        key=f"sc_mode_{s_num}",
+                new_vo = st.text_area(
+                    "🎙️ Voiceover Script:",
+                    value=sc["voiceover_text"],
+                    height=74,
+                    key=f"sc_vo_{s_num}",
+                )
+                new_vis_prompt = st.text_area(
+                    "🎥 Visual Scene Description:",
+                    value=sc["visual_prompt_veo_omni"],
+                    height=82,
+                    key=f"sc_vprompt_{s_num}",
+                )
+                s_col1, s_col2 = st.columns([2.2, 0.8])
+                with s_col1:
+                    new_sfx = st.text_input(
+                        "🔊 Sound Effects:",
+                        value=sc.get("sfx_cue", ""),
+                        key=f"sc_sfx_{s_num}",
                     )
-                with sc_c2:
-                    mg_opts = ["none", "manim_formula", "data_chart", "comparison_chart", "timeline_chart"]
-                    cur_mg = sc.get("motion_graphic_type") or "none"
-                    new_mg = st.selectbox(
-                        "Procedural Graphic Type:",
-                        options=mg_opts,
-                        index=mg_opts.index(cur_mg) if cur_mg in mg_opts else 0,
-                        key=f"sc_mg_{s_num}",
-                    )
-                with sc_c3:
+                with s_col2:
                     new_dur = st.number_input(
-                        "Cut Sec:",
+                        "Length (sec):",
                         min_value=6.0,
                         max_value=14.0,
                         value=float(sc["duration_sec"]),
@@ -1047,48 +1222,53 @@ elif step == 2:
                         key=f"sc_dur_{s_num}",
                     )
 
-                new_vis_prompt = st.text_area(
-                    "🎥 Veo / Gemini Omni / Flow Visual Prompt:",
-                    value=sc["visual_prompt_veo_omni"],
-                    height=82,
-                    key=f"sc_vprompt_{s_num}",
-                )
-                new_vo = st.text_area(
-                    "🎙️ Voiceover Script:",
-                    value=sc["voiceover_text"],
-                    height=74,
-                    key=f"sc_vo_{s_num}",
-                )
-                new_ssml = st.text_input(
-                    "🎭 Expressive Vocal Cues & <break/> Pauses:",
-                    value=sc.get("ssml_voice_cues", ""),
-                    key=f"sc_ssml_{s_num}",
-                )
-                new_sfx = st.text_input(
-                    "🔊 Frame-Synced Foley SFX Cue (e.g., arrow release, revolving chakra hum, rain, thunder):",
-                    value=sc.get("sfx_cue", ""),
-                    key=f"sc_sfx_{s_num}",
-                )
-                new_callout = st.text_input(
-                    "✨ On-Screen Visual Callout:",
-                    value=sc.get("on_screen_callout", ""),
-                    key=f"sc_callout_{s_num}",
-                )
-
-                # Optional user custom footage/image fallback per scene
                 uploaded_asset = st.file_uploader(
-                    "📁 Optional: Import Your Own Scene Footage / Image (.mp4, .png, .jpg)",
+                    "📁 Optional: Upload Your Own Clip or Image (supports Google Flow exports)",
                     type=["mp4", "mov", "png", "jpg", "jpeg"],
                     key=f"sc_upload_{s_num}",
                 )
+                new_mode = sc["asset_mode"]
+                new_mg = sc.get("motion_graphic_type") or "none"
+                new_ssml = sc.get("ssml_voice_cues", "")
+                new_callout = sc.get("on_screen_callout", "")
+
+                with st.expander("⚙️ Advanced Scene Options", expanded=False):
+                    ac1, ac2 = st.columns(2)
+                    with ac1:
+                        modes = ["ai_video", "motion_graphics", "custom_upload"]
+                        new_mode = st.selectbox(
+                            "Visual Source:",
+                            options=modes,
+                            index=modes.index(sc["asset_mode"]) if sc["asset_mode"] in modes else 0,
+                            key=f"sc_mode_{s_num}",
+                        )
+                    with ac2:
+                        mg_opts = ["none", "manim_formula", "data_chart", "comparison_chart", "timeline_chart"]
+                        new_mg = st.selectbox(
+                            "Graphic Overlay:",
+                            options=mg_opts,
+                            index=mg_opts.index(new_mg) if new_mg in mg_opts else 0,
+                            key=f"sc_mg_{s_num}",
+                        )
+                    new_ssml = st.text_input(
+                        "Vocal Pacing Notes:",
+                        value=sc.get("ssml_voice_cues", ""),
+                        key=f"sc_ssml_{s_num}",
+                    )
+                    new_callout = st.text_input(
+                        "Scene Title Tag:",
+                        value=sc.get("on_screen_callout", ""),
+                        key=f"sc_callout_{s_num}",
+                    )
+
                 if uploaded_asset is not None:
                     dest = custom_dir / f"scene_{s_num:03d}_{uploaded_asset.name}"
                     dest.write_bytes(uploaded_asset.getvalue())
                     sc["custom_asset_path"] = str(dest)
                     new_mode = "custom_upload"
-                    st.caption(f"✅ Custom asset attached: `{dest.name}`")
+                    st.caption(f"✅ Attached clip: `{dest.name}`")
                 elif sc.get("custom_asset_path"):
-                    st.caption(f"📎 Active custom asset: `{Path(sc['custom_asset_path']).name}`")
+                    st.caption(f"📎 Attached clip: `{Path(sc['custom_asset_path']).name}`")
 
                 sc["asset_mode"] = new_mode
                 sc["motion_graphic_type"] = new_mg
@@ -1099,7 +1279,6 @@ elif step == 2:
                 sc["sfx_cue"] = new_sfx
                 sc["on_screen_callout"] = new_callout
 
-        # Persist edits seamlessly in session_state on every rerun
         a2_updated_dict = a2.model_dump()
         a2_updated_dict["scenes"] = scenes_dicts
         a2_updated_dict["total_estimated_duration_sec"] = round(sum(s["duration_sec"] for s in scenes_dicts), 1)
@@ -1108,12 +1287,12 @@ elif step == 2:
         st.markdown("")
         act_c1, act_c2 = st.columns([1, 2])
         with act_c1:
-            if st.button("⬅️ Back to Step 1", use_container_width=True):
+            if st.button("⬅️ Back to Topic & Plan", use_container_width=True):
                 db.update_project_stage(pid, current_step=1, agent2_data=a2_updated_dict)
                 st.session_state["omni_step"] = 1
                 st.rerun()
         with act_c2:
-            if st.button("Proceed to Rendering Studio ➡️", type="primary", use_container_width=True):
+            if st.button("Continue to Video Studio ➡️", type="primary", use_container_width=True):
                 validated_a2 = Agent2Output.model_validate(a2_updated_dict)
                 st.session_state["agent2_output"] = validated_a2.model_dump()
                 st.session_state["omni_step"] = 3
@@ -1127,49 +1306,48 @@ elif step == 2:
 
 
 # ==============================================================================
-# STEP 3 — AGENT 3: MEDIA GENERATOR & COMPOSER STUDIO
+# STEP 3 — VIDEO PRODUCTION STUDIO
 # ==============================================================================
 elif step == 3:
-    st.subheader("Step 3 • Agent 3: Asynchronous Media Generator & Composer Studio")
+    st.subheader("Video Production Studio")
     a1_data = st.session_state.get("agent1_output")
     a2_data = st.session_state.get("agent2_output")
     pid = st.session_state.get("omni_project_id")
 
     if not a1_data or not a2_data or not pid:
-        st.info("Complete Step 1 & Step 2 first to unlock the Media Rendering Studio.")
+        st.info("Complete your Topic & Scenes first to open the Video Production Studio.")
     else:
         a1 = Agent1Output.model_validate(a1_data)
         a2 = Agent2Output.model_validate(a2_data)
         render_task_key = f"render_{pid}"
 
-        # Sync completed background render output from SQLite automatically
         fresh_proj = db.get_project(pid)
         if fresh_proj and fresh_proj.get("agent3_data"):
             st.session_state["agent3_output"] = fresh_proj["agent3_data"]
 
-        with st.expander("⚙️ Render Quality, Topic Film Score (Lyria), Foley SFX & Avatar Settings", expanded=True):
-            rc1, rc2 = st.columns([1.4, 1.0])
+        with st.expander("⚙️ Video Quality, Music & Presenter Settings", expanded=True):
+            rc1, rc2 = st.columns([1.35, 1.0])
             with rc1:
                 quality_label = st.selectbox(
-                    "🎞️ Visual Render Mode:",
+                    "🎞️ Video Quality:",
                     options=[
-                        "Full Gemini Omni 1.2 Flash + Veo 3.1 AI Video (Recommended Best Quality)",
-                        "AI Cinema Keyframes + Smooth 24fps Motion (Fast Gemini 3 Pro)",
-                        "Fast Studio Preview (Local Plates — Offline Test Only)",
+                        "Cinema AI Video (Best Quality)",
+                        "Fast AI Visuals (Standard)",
+                        "Quick Draft Preview",
                     ],
                     index=0,
                     key="render_quality_sel",
                 )
                 quality_map = {
-                    "Full Gemini Omni 1.2 Flash + Veo 3.1 AI Video (Recommended Best Quality)": "full_omni_video",
-                    "AI Cinema Keyframes + Smooth 24fps Motion (Fast Gemini 3 Pro)": "ai_keyframes_kenburns",
-                    "Fast Studio Preview (Local Plates — Offline Test Only)": "fast_studio_preview",
+                    "Cinema AI Video (Best Quality)": "full_omni_video",
+                    "Fast AI Visuals (Standard)": "ai_keyframes_kenburns",
+                    "Quick Draft Preview": "fast_studio_preview",
                 }
                 render_quality = quality_map[quality_label]
                 cinema_presets_s3 = list(CINEMA_STYLE_PRESETS.keys())
                 cur_p_s3 = st.session_state.get("omni_cinema_preset", DEFAULT_CINEMA_PRESET)
                 cinema_preset_s3 = st.selectbox(
-                    "🎥 Cinema Look & Color Grade:",
+                    "🎥 Visual Style:",
                     options=cinema_presets_s3,
                     index=cinema_presets_s3.index(cur_p_s3) if cur_p_s3 in cinema_presets_s3 else 0,
                     key="render_cinema_preset_sel",
@@ -1178,10 +1356,9 @@ elif step == 3:
                 bgm_presets_s3 = list(BGM_SCORE_PRESETS.keys())
                 cur_bgm_s3 = st.session_state.get("omni_bgm_preset", DEFAULT_BGM_PRESET)
                 selected_bgm_preset_s3 = st.selectbox(
-                    "🎼 Background Score / Soundtrack Style:",
+                    "🎼 Background Music Style:",
                     options=bgm_presets_s3,
                     index=bgm_presets_s3.index(cur_bgm_s3) if cur_bgm_s3 in bgm_presets_s3 else 0,
-                    help="Pick a dedicated soundtrack (e.g. Indian Devotional & Bhakti, Epic Mythological War, Hans Zimmer Epic) or upload your own .mp3/.wav track!",
                     key="render_bgm_preset_sel",
                 )
                 st.session_state["omni_bgm_preset"] = selected_bgm_preset_s3
@@ -1189,33 +1366,31 @@ elif step == 3:
                 bgm_level_label = st.selectbox(
                     "🎵 Background Music Volume:",
                     options=[
-                        "Cinema Balanced (-13.5 dB — Clearly Audible, Default)",
-                        "Rich Dramatic Score (-10.5 dB — Bold Film Presence)",
-                        "Subtle Documentary (-17.5 dB — Soft Under Voice)",
+                        "Balanced (Recommended)",
+                        "Bold & Dramatic",
+                        "Soft & Subtle",
                     ],
                     index=0,
                     key="opt_bgm_level",
                 )
                 bgm_level_map = {
-                    "Cinema Balanced (-13.5 dB — Clearly Audible, Default)": -13.5,
-                    "Rich Dramatic Score (-10.5 dB — Bold Film Presence)": -10.5,
-                    "Subtle Documentary (-17.5 dB — Soft Under Voice)": -17.5,
+                    "Balanced (Recommended)": -13.5,
+                    "Bold & Dramatic": -10.5,
+                    "Soft & Subtle": -17.5,
                 }
                 selected_bgm_duck_db = bgm_level_map[bgm_level_label]
                 enable_foley_sfx = st.checkbox(
-                    "🔊 Frame-Synced Cinematic Foley SFX (Zero Cartoon Cuts)",
+                    "🔊 Realistic Scene Sound Effects",
                     value=True,
-                    help="Preserves Omni 1.2 Flash & Veo 3.1 frame-synced sound effects (arrow releases, spinning chakra, thunder, fire, rain) with realistic cinema Foley fallback.",
                     key="opt_enable_foley_sfx",
                 )
                 force_ai_cinema = st.checkbox(
-                    "🎬 100% AI Cinema (No Flat Python Charts)",
+                    "🎬 Full Cinema Visuals on All Scenes",
                     value=True,
-                    help="Overrides any Python chart scenes to render with real Gemini Omni 1.2 Flash / Veo 3.1 / Gemini 3 Pro Cinema.",
                     key="opt_force_ai_cinema",
                 )
                 fast_tts = st.checkbox(
-                    "⚡ Fast Local Edge-TTS (skip Gemini 3.8 TTS)",
+                    "⚡ Quick Voice Mode (Faster Draft)",
                     value=False,
                     key="render_fast_tts",
                 )
@@ -1225,7 +1400,7 @@ elif step == 3:
                 bgm_dir = cfg.projects_dir / f"{pid}_{sanitize_slug(a1.topic)}" / "audio"
                 bgm_dir.mkdir(parents=True, exist_ok=True)
                 up_bgm = st.file_uploader(
-                    "🎵 Upload Your Custom Instrumental BGM Track (.mp3, .wav, .m4a):",
+                    "🎵 Upload Custom Music Track (.mp3, .wav, .m4a):",
                     type=["mp3", "wav", "m4a"],
                     key="upload_custom_bgm_s3",
                 )
@@ -1233,25 +1408,23 @@ elif step == 3:
                     dst_bgm = bgm_dir / f"user_custom_bgm{Path(up_bgm.name).suffix.lower()}"
                     dst_bgm.write_bytes(up_bgm.getvalue())
                     st.session_state["omni_custom_bgm_path"] = str(dst_bgm)
-                    st.success(f"✅ Custom BGM attached: `{up_bgm.name}` (will loop smoothly & duck cleanly under narration)")
+                    st.success(f"✅ Music attached: `{up_bgm.name}`")
                 if st.session_state.get("omni_custom_bgm_path") and Path(st.session_state["omni_custom_bgm_path"]).exists():
                     custom_bgm_file_path = st.session_state["omni_custom_bgm_path"]
                     st.audio(Path(custom_bgm_file_path).read_bytes())
 
-            st.markdown("**🧍 Creator Avatar / Likeness Opt-In Controls:**")
+            st.markdown("**🧍 Optional Presenter Photo:**")
             av_c1, av_c2 = st.columns(2)
             with av_c1:
                 include_avatar_thumb = st.checkbox(
-                    "Include my avatar/photo on Thumbnail",
+                    "Show my photo on Thumbnail",
                     value=False,
-                    help="OFF = Full-bleed epic faceless topic cinema thumbnail (recommended for clean focus). ON = Includes your likeness on the thumbnail.",
                     key="opt_include_avatar_thumb",
                 )
             with av_c2:
                 include_avatar_video = st.checkbox(
-                    "Include my avatar/photo in Video (Hook & Outro Host PIP)",
+                    "Show presenter badge on Intro & Outro",
                     value=False,
-                    help="OFF = 100% pure topic visuals & motion graphics. ON = Adds a clean glowing circular host presenter badge on Opening Hook & Outro CTA.",
                     key="opt_include_avatar_video",
                 )
 
@@ -1261,40 +1434,39 @@ elif step == 3:
                 opt_c1, opt_c2 = st.columns(2)
                 with opt_c1:
                     av_style_lbl = st.selectbox(
-                        "Avatar Thumbnail Style:",
+                        "Photo Style:",
                         options=[
-                            "Exact Real Studio Photo Cutout (100% Real Face — Zero AI Distortion)",
-                            "AI Studio Portrait (Gemini 3 Pro — Nehru Jacket + Pointing)",
+                            "Real Studio Photo Cutout (Recommended)",
+                            "Stylized AI Portrait",
                         ],
                         index=0,
                         key="opt_avatar_thumb_style",
                     )
-                    avatar_thumb_mode = "real_photo" if av_style_lbl.startswith("Exact Real") else "ai_pro"
+                    avatar_thumb_mode = "real_photo" if av_style_lbl.startswith("Real") else "ai_pro"
                 with opt_c2:
                     creator_side = st.selectbox(
-                        "Avatar Side on Thumbnail:",
+                        "Photo Position:",
                         options=["left", "right"],
                         index=0,
                         key="thumb_creator_side",
                     )
 
-            # Optional likeness manager drawer
             if include_avatar_thumb or include_avatar_video:
-                with st.expander(f"🪪 Manage Studio Likeness Photos ({cfg.creator_handle})", expanded=False):
+                with st.expander("🪪 Update Your Studio Photo", expanded=False):
                     studio_refs = [p for p in (cfg.likeness_dir / "image_13.png", cfg.likeness_dir / "image_14.png") if p.exists()]
                     if studio_refs:
                         lcols = st.columns(len(studio_refs))
                         for lcol, lp in zip(lcols, studio_refs):
                             with lcol:
-                                st.image(str(lp), caption=lp.name, use_container_width=True)
+                                st.image(str(lp), use_container_width=True)
                     up_ref = st.file_uploader(
-                        "Upload Your Clean Studio Photo (replaces `image_13.png`):",
+                        "Upload New Studio Photo:",
                         type=["png", "jpg", "jpeg"],
                         key="replace_likeness_img",
                     )
                     if up_ref is not None:
                         (cfg.likeness_dir / "image_13.png").write_bytes(up_ref.getvalue())
-                        st.success("Updated `assets/likeness/image_13.png` ✅")
+                        st.success("✅ Studio photo updated!")
 
         is_rendering = worker.is_running(render_task_key)
         proj_clips_dir = cfg.projects_dir / f"{pid}_{sanitize_slug(a1.topic)}" / "clips_16x9"
@@ -1307,11 +1479,11 @@ elif step == 3:
         resume_stitch = False
         if cached_vis_count > 0:
             st.info(
-                f"🎞️ **{cached_vis_count}/{len(a2.scenes)} rendered scene clips are already saved on disk!** "
-                f"Click below to stitch them into 1080p + Shorts immediately without re-generating AI videos."
+                f"🎞️ **{cached_vis_count}/{len(a2.scenes)} scene clips are already saved!** "
+                f"Use Fast Resume below to assemble your Full HD video & Shorts without regenerating clips."
             )
             resume_stitch = st.button(
-                f"⚡ Stitch Existing {cached_vis_count}/{len(a2.scenes)} Rendered Clips Now (Fast Resume — Skip AI Re-Render)",
+                f"⚡ Finish Video from Saved Clips ({cached_vis_count}/{len(a2.scenes)} Ready)",
                 type="primary",
                 use_container_width=True,
                 disabled=is_rendering,
@@ -1321,14 +1493,14 @@ elif step == 3:
         btn_r1, btn_r2 = st.columns([2.0, 1.0])
         with btn_r1:
             start_render = st.button(
-                "🚀 Launch Fresh Media Generation & 1080p + Shorts Assembly" if cached_vis_count > 0 else "🚀 Launch Async Media Generation & 1080p + Shorts Assembly",
+                "🎬 Generate Fresh Video & Shorts" if cached_vis_count > 0 else "🎬 Generate Full HD Video & Shorts",
                 type="secondary" if cached_vis_count > 0 else "primary",
                 use_container_width=True,
                 disabled=is_rendering,
             )
         with btn_r2:
             regen_thumb = st.button(
-                "🖼️ Regenerate Thumbnail Only",
+                "🖼️ Regenerate Thumbnail",
                 use_container_width=True,
                 disabled=is_rendering,
             )
@@ -1339,7 +1511,7 @@ elif step == 3:
                 task_key=render_task_key,
                 project_id=pid,
                 job_type="master_render",
-                label=f"{'Resume Stitch' if resume_stitch else 'Render'} 1080p + Shorts: {a1.topic[:32]}",
+                label=f"{'Resume' if resume_stitch else 'Create'} Video: {a1.topic[:32]}",
                 fn=run_agent3_media_pipeline,
                 kwargs={
                     "project_id": pid,
@@ -1365,7 +1537,7 @@ elif step == 3:
             )
             if launched:
                 st.session_state["render_task_key"] = render_task_key
-                st.toast("Background media worker started! Tracking real-time progress in SQLite.", icon="🎬")
+                st.toast("Video production started!", icon="🎬")
                 st.rerun()
 
         if regen_thumb:
@@ -1375,8 +1547,9 @@ elif step == 3:
                 if a3_existing and a3_existing.get("thumbnail_16x9_path")
                 else cfg.projects_dir / f"{pid}_{sanitize_slug(a1.topic)}" / "renders" / "thumbnail_16x9.png"
             )
-            with st.spinner("Generating High-CTR Thumbnail..."):
-                t_path, t_eng = generate_high_ctr_thumbnail(
+            with st.status("🖼️ Designing your new thumbnail...", expanded=True) as th_st:
+                st.write("🎨 Composing high-contrast artwork & headline...")
+                t_path, _ = generate_high_ctr_thumbnail(
                     thumb_dest,
                     topic=a1.topic,
                     niche=a1.niche,
@@ -1389,54 +1562,83 @@ elif step == 3:
                     config=cfg,
                     use_ai_image_api=True,
                 )
-            st.success(f"Thumbnail regenerated via `{t_eng}` ✅")
-            st.image(str(t_path), caption="Updated High-CTR 16:9 Thumbnail", use_container_width=True)
+                th_st.update(label="✅ Thumbnail ready!", state="complete", expanded=False)
+            st.image(str(t_path), caption="Updated Video Thumbnail", use_container_width=True)
 
-        # Real-Time SQLite Worker Progress Monitor
+        # Solid Structured Production Progress Deck
         stage_jobs = db.get_project_jobs(pid, job_type="media_stage")
         if stage_jobs or is_rendering:
-            st.markdown("### 📡 Live Asynchronous Render Queue (SQLite-Backed)")
             overall_pct = int(sum(j["progress_pct"] for j in stage_jobs) / max(1, len(stage_jobs))) if stage_jobs else 5
-            st.progress(overall_pct / 100.0, text=f"Overall Render Progress: {overall_pct}%")
+            hdr_dot = '<span class="omni-live-dot"></span>' if is_rendering else '<span class="omni-done-dot"></span>'
+            hdr_title = "Producing Your Video..." if is_rendering else "Production Progress"
+            hdr_badge = (
+                f'<span class="omni-badge omni-badge-run">{overall_pct}% Complete</span>'
+                if is_rendering
+                else f'<span class="omni-badge omni-badge-done">{overall_pct}% Ready</span>'
+            )
 
+            rows_html: List[str] = []
             for j in stage_jobs:
-                badge = "✅ Completed" if j["status"] == "completed" else "❌ Failed" if j["status"] == "failed" else f"⏳ {j['progress_pct']}%"
-                st.markdown(
-                    f"""
-                    <div class="omni-status-row">
-                        <span><strong>{j['label']}</strong></span>
-                        <span style="color:#38bdf8;">{j['message'] or badge}</span>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
+                st_val = j.get("status", "queued")
+                if st_val == "completed":
+                    row_cls = "omni-stage-row omni-stage-row-done"
+                    pill = '<span class="omni-badge omni-badge-done">Done</span>'
+                elif st_val == "failed":
+                    row_cls = "omni-stage-row"
+                    pill = '<span class="omni-badge omni-badge-err">Error</span>'
+                elif st_val == "running":
+                    row_cls = "omni-stage-row omni-stage-row-active"
+                    pill = f'<span class="omni-badge omni-badge-run">{j["progress_pct"]}%</span>'
+                else:
+                    row_cls = "omni-stage-row"
+                    pill = '<span class="omni-badge omni-badge-wait">Queued</span>'
+                detail_txt = j.get("message") or ""
+                rows_html.append(
+                    f'<div class="{row_cls}">'
+                    f'<span class="omni-stage-name">{j["label"]}</span>'
+                    f'<span class="omni-stage-detail"><span>{detail_txt}</span>{pill}</span>'
+                    f'</div>'
                 )
+
+            st.markdown(
+                f"""
+                <div class="omni-process-deck">
+                    <div class="omni-process-hdr">
+                        <span class="omni-process-title">{hdr_dot} {hdr_title}</span>
+                        {hdr_badge}
+                    </div>
+                    {''.join(rows_html)}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.progress(overall_pct / 100.0)
 
             err_msg = worker.get_task_error(render_task_key)
             if err_msg:
-                st.error(f"Background render error: {err_msg}")
+                st.error(f"Production paused due to an error: {err_msg}")
 
             if is_rendering:
-                st.caption("Background worker is actively rendering — auto-refreshing status every 2 seconds...")
+                st.caption("Working in the background — updating live every 2 seconds...")
                 time.sleep(2.0)
                 st.rerun()
 
-        # Preview Rendered Deliverables (Inline 1080p Player + Thumbnail + Collapsible Shorts Drawer)
+        # Preview Rendered Deliverables
         a3_data = st.session_state.get("agent3_output")
         if a3_data and not is_rendering:
             a3 = Agent3Output.model_validate(a3_data)
             st.success(
-                f"✅ **Render Complete!** 16:9 Long-Form (`{format_timestamp(a3.final_duration_sec)}`) • "
-                f"9:16 Shorts (`{format_timestamp(a3.shorts_duration_sec)}`) • {a3.scene_count_rendered} scenes stitched."
+                f"✅ **Your Video is Ready!** Full HD (`{format_timestamp(a3.final_duration_sec)}`) · "
+                f"Shorts (`{format_timestamp(a3.shorts_duration_sec)}`) · {a3.scene_count_rendered} scenes"
             )
 
             p_c1, p_c2 = st.columns([1.15, 1.0])
             with p_c1:
-                st.markdown("#### 📺 Final 1080p Long-Form Video (16:9 + Burned-In Active Subtitles)")
+                st.markdown("#### 📺 Full HD Video (16:9)")
                 if Path(a3.video_16x9_path).exists():
                     st.video(a3.video_16x9_path)
-                    # Deferred callable avoids pinning 100+ MB MP4 in Streamlit RAM on every rerun!
                     st.download_button(
-                        "⬇️ Download 16:9 1080p MP4",
+                        "⬇️ Download Full HD Video (.mp4)",
                         data=lambda p=a3.video_16x9_path: Path(p).read_bytes(),
                         file_name=Path(a3.video_16x9_path).name,
                         mime="video/mp4",
@@ -1444,11 +1646,11 @@ elif step == 3:
                         key=f"dl_16x9_{pid}",
                     )
             with p_c2:
-                st.markdown("#### 🖼️ High-CTR @jwalashiva Likeness Thumbnail (16:9)")
+                st.markdown("#### 🖼️ Video Thumbnail")
                 if Path(a3.thumbnail_16x9_path).exists():
                     st.image(a3.thumbnail_16x9_path, use_container_width=True)
                     st.download_button(
-                        "⬇️ Download High-CTR Thumbnail (.png)",
+                        "⬇️ Download Thumbnail (.png)",
                         data=lambda p=a3.thumbnail_16x9_path: Path(p).read_bytes(),
                         file_name="thumbnail_16x9.png",
                         mime="image/png",
@@ -1456,13 +1658,13 @@ elif step == 3:
                         key=f"dl_thumb_{pid}",
                     )
 
-            with st.expander("📱 9:16 Vertical Shorts Cutdown, Exact Chapters & Subtitle Files", expanded=False):
+            with st.expander("📱 Vertical Short (9:16) & Video Chapters", expanded=False):
                 sh_c1, sh_c2 = st.columns([1.0, 1.2])
                 with sh_c1:
                     if Path(a3.video_9x16_shorts_path).exists():
                         st.video(a3.video_9x16_shorts_path)
                         st.download_button(
-                            "⬇️ Download 9:16 Shorts MP4",
+                            "⬇️ Download Vertical Short (.mp4)",
                             data=lambda p=a3.video_9x16_shorts_path: Path(p).read_bytes(),
                             file_name=Path(a3.video_9x16_shorts_path).name,
                             mime="video/mp4",
@@ -1470,44 +1672,36 @@ elif step == 3:
                             key=f"dl_9x16_{pid}",
                         )
                 with sh_c2:
-                    st.markdown("**Exact Auto-Calculated Chapters (Anchored to Measured Audio):**")
+                    st.markdown("**Video Chapters:**")
                     st.code(a3.exact_chapters_text, language="text")
-                    master_wav_p = Path(a3.video_16x9_path).parent / "master_audio_16x9.wav"
-                    if master_wav_p.exists():
-                        st.caption("🔊 Master Voiceover + Ducked BGM Audio Preview:")
-                        st.audio(str(master_wav_p))
-                    st.caption(f"ASS Subtitles (16:9): `{a3.ass_subtitles_16x9_path}`")
-                    st.caption(f"BGM Stem: `{a3.bgm_stem_path}`")
 
             st.markdown("")
-            if st.button("👉 PROCEED TO AGENT 4 (OAUTH & PUBLISH)", type="primary", use_container_width=True):
+            if st.button("Continue to Publish ➡️", type="primary", use_container_width=True):
                 st.session_state["omni_step"] = 4
                 db.update_project_stage(pid, current_step=4)
                 st.rerun()
 
 
 # ==============================================================================
-# STEP 4 — AGENT 4: DIRECT YOUTUBE PUBLISHER AGENT
+# STEP 4 — PUBLISH TO YOUTUBE
 # ==============================================================================
 elif step == 4:
-    st.subheader("Step 4 • Agent 4: OAuth 2.0 & Direct YouTube Resumable Publisher")
+    st.subheader("Publish to YouTube")
     a1_data = st.session_state.get("agent1_output")
     a3_data = st.session_state.get("agent3_output")
     pid = st.session_state.get("omni_project_id")
 
     if not a1_data or not a3_data or not pid:
-        st.info("Complete Step 3 (Media Rendering) first to publish your video to YouTube.")
+        st.info("Finish generating your video in Video Studio first to publish to YouTube.")
     else:
         a1 = Agent1Output.model_validate(a1_data)
         a3 = Agent3Output.model_validate(a3_data)
         publish_task_key = f"publish_{pid}"
 
-        # Sync completed publish status from SQLite
         fresh_proj = db.get_project(pid)
         if fresh_proj and fresh_proj.get("agent4_data"):
             st.session_state["agent4_output"] = fresh_proj["agent4_data"]
 
-        # 1. Multi-Channel OAuth 2.0 Selector & Connection Card (Synced from Step 0)
         connected_chs_s4 = list_connected_youtube_channels(cfg, db)
         active_ch_id_s4 = st.session_state.get("omni_channel_id", "")
         with st.container(border=True):
@@ -1526,7 +1720,7 @@ elif step == 4:
                     if cid == active_ch_id_s4:
                         default_s4_idx = ci
                 sel_ch_lbl_s4 = st.selectbox(
-                    "📺 Publish Target YouTube Channel (Pre-selected from Step 0):",
+                    "📺 Target YouTube Channel:",
                     options=list(ch_opts_s4.keys()),
                     index=default_s4_idx,
                     key="step4_channel_sel",
@@ -1538,39 +1732,38 @@ elif step == 4:
                 creds, tok_rec = get_valid_youtube_credentials(cfg, db, channel_id=active_ch_id_s4)
                 if creds and tok_rec:
                     st.success(
-                        f"🔐 **Ready to Publish** — Target Channel: **{_format_channel_label(tok_rec, with_icon=False)}**"
+                        f"✅ **Ready to Publish** to **{_format_channel_label(tok_rec, with_icon=False)}**"
                     )
                 else:
-                    st.warning("⚠️ Stored OAuth token for this channel expired/revoked — re-authorize below before uploading.")
+                    st.warning("⚠️ Channel sign-in expired — reconnect below before publishing.")
             else:
                 creds, tok_rec = None, None
-                st.warning("🔒 **No YouTube Channel Connected Yet** — Authorize your channel below to enable 4MB chunked direct upload.")
+                st.warning("🔒 **No YouTube Channel Connected Yet** — Connect your channel below to upload directly.")
 
-            with st.expander("➕ Connect / Manage Multiple YouTube Channels (`youtube.upload`)", expanded=(creds is None)):
+            with st.expander("➕ Connect or Manage YouTube Channels", expanded=(creds is None)):
                 _render_connect_channel_drawer("step4", connected_chs_s4)
 
-        # 2. Publishing & Scheduling Form
         with st.container(border=True):
             pub_format = st.radio(
-                "📦 Deliverable to Upload:",
-                options=["16:9 Long-Form (1080p)", "9:16 Vertical Shorts"],
+                "📦 Video to Upload:",
+                options=["Full HD Video (16:9)", "Vertical Short (9:16)"],
                 horizontal=True,
                 key="pub_format_radio",
             )
-            default_title = a1.selected_title if pub_format.startswith("16:9") else f"{a1.selected_title[:85]} #Shorts"
+            is_long_fmt = pub_format.startswith("Full HD")
+            default_title = a1.selected_title if is_long_fmt else f"{a1.selected_title[:85]} #Shorts"
             pub_title = st.text_input("YouTube Video Title:", value=default_title, max_chars=100, key="pub_title_in")
 
-            # Merge exact audio-anchored chapters into description
             base_desc = a1.seo_description
             if a3.exact_chapters_text and "00:00" not in base_desc:
                 base_desc = f"{base_desc}\n\n⏱️ CHAPTERS:\n{a3.exact_chapters_text}"
-            pub_desc = st.text_area("YouTube Description (with Exact Chapters):", value=base_desc, height=160, key="pub_desc_in")
+            pub_desc = st.text_area("YouTube Description:", value=base_desc, height=160, key="pub_desc_in")
 
             pc1, pc2, pc3 = st.columns(3)
             with pc1:
-                privacy_opt = st.selectbox("🔒 Privacy Status:", options=["private", "unlisted", "public"], index=0, key="pub_privacy")
+                privacy_opt = st.selectbox("🔒 Visibility:", options=["private", "unlisted", "public"], index=0, key="pub_privacy")
             with pc2:
-                use_schedule = st.checkbox("📅 Schedule Future Publish", value=False, key="pub_use_sched")
+                use_schedule = st.checkbox("📅 Schedule Publish Time", value=False, key="pub_use_sched")
                 sched_date = st.date_input("Publish Date (IST):", value=datetime.date.today() + datetime.timedelta(days=1), disabled=not use_schedule)
                 sched_time = st.time_input("Publish Time (IST):", value=datetime.time(18, 30), disabled=not use_schedule)
             with pc3:
@@ -1586,7 +1779,7 @@ elif step == 4:
                         pl_s4_idx = pi
                         break
                 sel_pl_label = st.selectbox(
-                    "📂 Playlist Routing (Pre-selected from Step 0):",
+                    "📂 Add to Playlist:",
                     options=pl_keys_s4,
                     index=pl_s4_idx,
                     key=f"pub_playlist_{active_ch_id_s4}",
@@ -1597,7 +1790,7 @@ elif step == 4:
 
         is_uploading = worker.is_running(publish_task_key)
         submit_pub = st.button(
-            f"🚀 Publish to {st.session_state.get('omni_channel_title') or 'YouTube'} (4MB Chunked Resumable Upload)",
+            f"🚀 Publish to {st.session_state.get('omni_channel_title') or 'YouTube'}",
             type="primary",
             use_container_width=True,
             disabled=(is_uploading or creds is None),
@@ -1609,19 +1802,18 @@ elif step == 4:
 
             sched_iso: Optional[str] = None
             if use_schedule:
-                # Convert IST (+05:30) to RFC3339 UTC ISO-8601 required by YouTube Data API
                 ist_tz = datetime.timezone(datetime.timedelta(hours=5, minutes=30))
                 dt_ist = datetime.datetime.combine(sched_date, sched_time, tzinfo=ist_tz)
                 sched_iso = dt_ist.astimezone(datetime.timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
-            target_video = Path(a3.video_16x9_path if pub_format.startswith("16:9") else a3.video_9x16_shorts_path)
-            target_thumb = Path(a3.thumbnail_16x9_path) if pub_format.startswith("16:9") else None
+            target_video = Path(a3.video_16x9_path if is_long_fmt else a3.video_9x16_shorts_path)
+            target_thumb = Path(a3.thumbnail_16x9_path) if is_long_fmt else None
 
             worker.submit_task(
                 task_key=publish_task_key,
                 project_id=pid,
                 job_type="youtube_upload",
-                label=f"YouTube Upload ({st.session_state.get('omni_channel_title') or 'YT'}): {pub_title[:28]}",
+                label=f"Uploading to {st.session_state.get('omni_channel_title') or 'YouTube'}",
                 fn=run_agent4_youtube_publish,
                 kwargs={
                     "project_id": pid,
@@ -1642,37 +1834,50 @@ elif step == 4:
             st.session_state["publish_task_key"] = publish_task_key
             st.rerun()
 
-        # Live Upload Progress Tracker
         up_jobs = db.get_project_jobs(pid, job_type="youtube_upload")
         if up_jobs or is_uploading:
-            latest_up = up_jobs[-1] if up_jobs else {"progress_pct": 5, "message": "Initializing upload..."}
-            st.progress(latest_up["progress_pct"] / 100.0, text=f"Upload Status: {latest_up['message']}")
+            latest_up = up_jobs[-1] if up_jobs else {"progress_pct": 5, "message": "Preparing upload..."}
+            up_dot = '<span class="omni-live-dot"></span>' if is_uploading else '<span class="omni-done-dot"></span>'
+            up_hdr = "Uploading to YouTube..." if is_uploading else "Upload Status"
+            st.markdown(
+                f"""
+                <div class="omni-process-deck">
+                    <div class="omni-process-hdr">
+                        <span class="omni-process-title">{up_dot} {up_hdr}</span>
+                        <span class="omni-badge omni-badge-run">{latest_up['progress_pct']}%</span>
+                    </div>
+                    <div class="omni-stage-row omni-stage-row-active">
+                        <span class="omni-stage-name">YouTube Transfer</span>
+                        <span class="omni-stage-detail">{latest_up['message']}</span>
+                    </div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+            st.progress(latest_up["progress_pct"] / 100.0)
             up_err = worker.get_task_error(publish_task_key)
             if up_err:
-                st.error(f"YouTube upload error: {up_err}")
+                st.error(f"Upload paused: {up_err}")
             if is_uploading:
                 time.sleep(1.5)
                 st.rerun()
 
-        # Final Published Confirmation + Studio URL + Balloons + Restart Button
         a4_data = st.session_state.get("agent4_output")
         if a4_data and not is_uploading:
             a4 = Agent4Output.model_validate(a4_data)
             if not st.session_state.get("publish_balloons_shown"):
                 st.balloons()
                 st.session_state["publish_balloons_shown"] = True
-            st.success(f"🎉 **Published to YouTube!** Status: `{a4.status}` • Video ID: `{a4.video_id}`")
-            st.markdown(f"- **🎬 YouTube Studio Editor:** [{a4.studio_url}]({a4.studio_url})")
-            st.markdown(f"- **📺 YouTube Watch Link:** [{a4.watch_url}]({a4.watch_url})")
-            st.caption(a4.note)
+            st.success(f"🎉 **Published to YouTube!** Visibility: `{a4.status}`")
+            st.markdown(f"- **🎬 Open in YouTube Studio:** [{a4.studio_url}]({a4.studio_url})")
+            st.markdown(f"- **📺 Watch on YouTube:** [{a4.watch_url}]({a4.watch_url})")
 
-        # Recent SQLite Publish Log
         pub_logs = db.get_publish_records(project_id=pid, limit=5)
         if pub_logs:
-            with st.expander("📋 Project Upload History (SQLite)", expanded=False):
+            with st.expander("📋 Recent Uploads", expanded=False):
                 st.dataframe(pub_logs, use_container_width=True, hide_index=True)
 
         st.markdown("---")
-        if st.button("🔄 Restart Pipeline Workspace", use_container_width=True):
+        if st.button("➕ Start a New Video Project", use_container_width=True):
             _reset_workspace()
             st.rerun()

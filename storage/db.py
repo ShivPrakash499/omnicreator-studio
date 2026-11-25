@@ -201,7 +201,87 @@ class OmniDatabase:
                     now,
                 ),
             )
+        try:
+            from storage.cloud_sync import sync_project_record_async
+
+            sync_project_record_async(self.get_project(pid))
+        except Exception:
+            pass
         return pid
+
+    def upsert_project_from_cloud(self, rec: Dict[str, Any]) -> bool:
+        """Restores a cloud-backed project record into SQLite if missing or newer than local."""
+        pid = str(rec.get("id") or "").strip()
+        topic = str(rec.get("topic") or "").strip()
+        if not pid or not topic:
+            return False
+        cloud_upd = str(rec.get("updated_at") or _utc_now())
+        with self._connect() as conn:
+            existing = conn.execute("SELECT updated_at FROM projects WHERE id = ?", (pid,)).fetchone()
+            if existing and str(existing["updated_at"] or "") >= cloud_upd:
+                return False
+
+            def _to_json_str(data_key: str, json_key: str) -> Optional[str]:
+                if rec.get(data_key) is not None:
+                    return json.dumps(rec[data_key], ensure_ascii=False)
+                val = rec.get(json_key)
+                if isinstance(val, str):
+                    return val
+                if val is not None:
+                    return json.dumps(val, ensure_ascii=False)
+                return None
+
+            conn.execute(
+                """
+                INSERT INTO projects (
+                    id, topic, niche, language_tone, target_minutes,
+                    target_channel_id, target_channel_title, target_playlist_id, target_playlist_title,
+                    current_step, status,
+                    agent1_json, agent2_json, agent3_json, agent4_json,
+                    youtube_video_id, youtube_url, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    topic=excluded.topic,
+                    niche=excluded.niche,
+                    language_tone=excluded.language_tone,
+                    target_minutes=excluded.target_minutes,
+                    target_channel_id=excluded.target_channel_id,
+                    target_channel_title=excluded.target_channel_title,
+                    target_playlist_id=excluded.target_playlist_id,
+                    target_playlist_title=excluded.target_playlist_title,
+                    current_step=excluded.current_step,
+                    status=excluded.status,
+                    agent1_json=excluded.agent1_json,
+                    agent2_json=excluded.agent2_json,
+                    agent3_json=excluded.agent3_json,
+                    agent4_json=excluded.agent4_json,
+                    youtube_video_id=excluded.youtube_video_id,
+                    youtube_url=excluded.youtube_url,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    pid,
+                    topic,
+                    str(rec.get("niche") or "Education"),
+                    str(rec.get("language_tone") or "Hinglish (Spirited Indian Mentor)"),
+                    float(rec.get("target_minutes") or 6.0),
+                    str(rec.get("target_channel_id") or ""),
+                    str(rec.get("target_channel_title") or ""),
+                    str(rec.get("target_playlist_id") or ""),
+                    str(rec.get("target_playlist_title") or ""),
+                    int(rec.get("current_step") or 1),
+                    str(rec.get("status") or "step1_ready"),
+                    _to_json_str("agent1_data", "agent1_json"),
+                    _to_json_str("agent2_data", "agent2_json"),
+                    _to_json_str("agent3_data", "agent3_json"),
+                    _to_json_str("agent4_data", "agent4_json"),
+                    rec.get("youtube_video_id"),
+                    rec.get("youtube_url"),
+                    str(rec.get("created_at") or cloud_upd),
+                    cloud_upd,
+                ),
+            )
+        return True
 
     def get_project(self, project_id: str) -> Optional[Dict[str, Any]]:
         with self._connect() as conn:
@@ -293,6 +373,12 @@ class OmniDatabase:
         values.append(project_id)
         with self._connect() as conn:
             conn.execute(f"UPDATE projects SET {', '.join(fields)} WHERE id = ?", values)
+        try:
+            from storage.cloud_sync import sync_project_record_async
+
+            sync_project_record_async(self.get_project(project_id))
+        except Exception:
+            pass
 
     # ------------------------------------------------------------------
     # Generation Queue CRUD (Async Worker Telemetry)

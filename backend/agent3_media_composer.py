@@ -736,14 +736,14 @@ def run_agent3_media_pipeline(
     total_scenes = len(scenes)
 
     database.clear_project_jobs(project_id, job_type="media_stage")
-    # Seed stage trackers in SQLite so UI shows live progress immediately
+    # Seed stage trackers so UI shows clean, readable progress immediately
     stage_defs = [
-        ("voiceover", "1. Indian Voiceover Synthesis & Duration Anchoring"),
-        ("thumbnail", "2. High-CTR Cinema Thumbnail Studio"),
-        ("visuals_16x9", "3. Full-Motion AI Cinema & Frame-Synced Foley Capture (16:9)"),
-        ("bgm_mix", "4. Topic-Matched Lyria Film Score, Foley SFX & Smooth Audio Mix"),
-        ("assemble_16x9", "5. 1080p Final Assembly & Active-Highlight .ass Subtitles"),
-        ("assemble_9x16", "6. 9:16 Vertical Shorts Cutdown & Vertical Subtitles"),
+        ("voiceover", "1. Voiceover Narration"),
+        ("thumbnail", "2. Video Thumbnail"),
+        ("visuals_16x9", "3. AI Cinema Scenes"),
+        ("bgm_mix", "4. Background Music & Sound Effects"),
+        ("assemble_16x9", "5. Full HD Video & Subtitles"),
+        ("assemble_9x16", "6. Vertical Shorts Cutdown"),
     ]
     for idx, (skey, slabel) in enumerate(stage_defs, start=1):
         database.upsert_job(
@@ -754,7 +754,7 @@ def run_agent3_media_pipeline(
             label=slabel,
             status="queued",
             progress_pct=0,
-            message="Waiting...",
+            message="Queued",
         )
 
     # ------------------------------------------------------------------
@@ -768,7 +768,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[0][1],
         status="running",
         progress_pct=5,
-        message=f"Synthesizing 0/{total_scenes} scene voiceovers...",
+        message=f"Recording narration (0/{total_scenes} scenes)...",
     )
     voice_results: Dict[int, Tuple[Path, float, str]] = {}
 
@@ -808,7 +808,7 @@ def run_agent3_media_pipeline(
                 label=stage_defs[0][1],
                 status="running" if done_cnt < total_scenes else "completed",
                 progress_pct=pct,
-                message=f"Processing ({pct}%) — {done_cnt}/{total_scenes} clips frame-locked ({eng})" if done_cnt < total_scenes else f"Completed ✅ ({total_scenes} voiceovers frame-locked)",
+                message=f"{done_cnt}/{total_scenes} voiceovers ready ({pct}%)" if done_cnt < total_scenes else f"{total_scenes} voiceovers ready",
             )
 
     # Exact global offsets & YouTube Chapters derived from exact quantized frame counts (0.000ms drift!)
@@ -838,7 +838,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[1][1],
         status="running",
         progress_pct=25,
-        message="Generating High-CTR Thumbnail preserving @jwalashiva likeness (image_12..14.png)...",
+        message="Designing video thumbnail...",
     )
     thumb_path = renders_dir / "thumbnail_16x9.png"
     if reuse_existing_clips and thumb_path.exists() and thumb_path.stat().st_size > 16384:
@@ -865,7 +865,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[1][1],
         status="completed",
         progress_pct=100,
-        message=f"Completed ✅ ({thumb_engine})",
+        message="Thumbnail ready",
         output_path=str(thumb_path),
     )
 
@@ -880,7 +880,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[2][1],
         status="running",
         progress_pct=5,
-        message=f"Rendering 0/{total_scenes} visual scenes...",
+        message=f"Creating scenes (0/{total_scenes})...",
     )
     visual_results: Dict[int, Tuple[Path, str]] = {}
 
@@ -970,7 +970,7 @@ def run_agent3_media_pipeline(
                 label=stage_defs[2][1],
                 status="running" if done_v < total_scenes else "completed",
                 progress_pct=pct,
-                message=f"Processing ({pct}%) — {done_v}/{total_scenes} ({summary_str})" if done_v < total_scenes else f"Completed ✅ ({summary_str})",
+                message=f"Scene {done_v}/{total_scenes} ready ({pct}%)" if done_v < total_scenes else f"{total_scenes} scenes ready",
             )
 
     # ------------------------------------------------------------------
@@ -985,7 +985,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[3][1],
         status="running",
         progress_pct=20,
-        message=f"Composing topic-matched Lyria film score for '{agent1.topic[:32]}' & blending frame-synced Foley SFX...",
+        message="Composing background music & balancing sound effects...",
     )
     bgm_stem_path = audio_dir / "topic_film_score_bgm.wav"
     generate_niche_bgm_stem(
@@ -1080,10 +1080,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[3][1],
         status="completed",
         progress_pct=100,
-        message=(
-            f"Completed ✅ ({bgm_engine_note.split('|')[0].strip()} @ {effective_duck_db:.1f}dB | "
-            f"{native_foley_cnt}x native Omni/Veo Foley, {cinema_foley_cnt}x cinema Foley | zero cut-ting)"
-        ),
+        message="Music & sound effects mixed",
     )
 
     # ------------------------------------------------------------------
@@ -1098,7 +1095,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[4][1],
         status="running",
         progress_pct=30,
-        message="Stitching video + continuous 44.1kHz stereo audio + active-highlight .ass subtitles (1080p)...",
+        message="Combining scenes, audio & captions into Full HD video...",
     )
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     vid_16_list: List[Path] = []
@@ -1140,7 +1137,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[4][1],
         status="completed",
         progress_pct=100,
-        message=f"Completed ✅ (1080p 16:9 • 44.1kHz Stereo AAC • {total_actual_duration:.1f}s)",
+        message=f"Full HD ready ({format_timestamp(total_actual_duration)})",
         output_path=str(final_16x9_mp4),
     )
 
@@ -1155,7 +1152,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[5][1],
         status="running",
         progress_pct=35,
-        message="Building 9:16 vertical Shorts cutdown with stereo audio & active captions...",
+        message="Creating vertical Shorts highlight cut...",
     )
     short_scenes: List[SceneClipSpec] = []
     short_dur_acc = 0.0
@@ -1234,7 +1231,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[5][1],
         status="completed",
         progress_pct=100,
-        message=f"Completed ✅ (9:16 Shorts • 44.1kHz Stereo AAC • {short_cursor:.1f}s)",
+        message=f"Shorts ready ({format_timestamp(short_cursor)})",
         output_path=str(final_9x16_mp4),
     )
 
@@ -1253,5 +1250,18 @@ def run_agent3_media_pipeline(
         generation_mode=render_quality,
         scene_artifacts=scene_artifacts,
     )
-    database.update_project_stage(project_id, status="step3_rendered", agent3_data=out.model_dump())
+    out_dict = out.model_dump()
+    database.update_project_stage(project_id, status="step3_rendered", agent3_data=out_dict)
+    # Persist rendered deliverables in background to the user's private Google Cloud bucket
+    try:
+        from storage.cloud_sync import upload_project_renders_to_gcs
+
+        threading.Thread(
+            target=upload_project_renders_to_gcs,
+            args=(project_id, out_dict),
+            daemon=True,
+            name=f"gcs_renders_{project_id[:12]}",
+        ).start()
+    except Exception:
+        pass
     return out
