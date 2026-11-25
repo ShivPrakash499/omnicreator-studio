@@ -683,6 +683,99 @@ def _mux_continuous_audio_and_burn_ass(
     return output_mp4
 
 
+def select_hybrid_hero_scene_indices(scenes: List[SceneClipSpec]) -> set:
+    """
+    Selects the high-impact Hero scenes (~25% of scenes) for full-motion AI video (`gemini-omni-1.2-flash`)
+    in `hybrid_cinema` mode while rendering supporting scenes with ultra-crisp AI cinema visuals + 24fps motion
+    (~70% cheaper than rendering every single scene with Omni video!).
+    Always prioritizes: Opening Hook (first 2 scenes), Climax Reveal (first 2 scenes), Final Outro,
+    plus evenly spaced body hero shots every 5th scene.
+    """
+    if not scenes:
+        return set()
+    hero: set = set()
+    hooks = [s.scene_index for s in scenes if s.beat_phase == "Visual_Hook_0_45s"]
+    climaxes = [s.scene_index for s in scenes if s.beat_phase == "Climax_Aha"]
+    hero.update(hooks[:2] if hooks else [scenes[0].scene_index])
+    hero.update(climaxes[:2])
+    hero.add(scenes[-1].scene_index)
+    # Sprinkle full-motion hero shots roughly every 5 scenes across the middle body
+    for idx, sc in enumerate(scenes):
+        if idx > 0 and idx % 5 == 0:
+            hero.add(sc.scene_index)
+    return hero
+
+
+def estimate_render_cost_usd(
+    scenes: List[SceneClipSpec],
+    render_quality: str,
+    *,
+    cached_scene_count: int = 0,
+    use_fast_tts: bool = False,
+) -> Dict[str, Any]:
+    """
+    Computes a transparent pre-render Vertex AI credit estimate (USD) before the user clicks Generate:
+    - `gemini-omni-1.2-flash` (720p ~10s clip): ~$0.70/scene
+    - `gemini-3-pro-image` cinema keyframe + 24fps motion: ~$0.05/scene
+    - Voiceover + Thumbnail + Lyria-002 music overhead: ~$0.20 (or ~$0.06 with quick voice)
+    """
+    total = len(scenes)
+    remaining = max(0, total - max(0, int(cached_scene_count)))
+    base_overhead = 0.06 if use_fast_tts else 0.22
+
+    if remaining == 0:
+        return {
+            "total_usd": round(base_overhead, 2),
+            "video_scenes": 0,
+            "keyframe_scenes": 0,
+            "reused_scenes": total,
+            "full_motion_usd": round(total * 0.70 + base_overhead, 2),
+        }
+
+    if render_quality == "fast_studio_preview":
+        return {
+            "total_usd": 0.0,
+            "video_scenes": 0,
+            "keyframe_scenes": 0,
+            "reused_scenes": total - remaining,
+            "full_motion_usd": round(total * 0.70 + base_overhead, 2),
+        }
+
+    if render_quality == "ai_keyframes_kenburns":
+        est = remaining * 0.05 + base_overhead
+        return {
+            "total_usd": round(est, 2),
+            "video_scenes": 0,
+            "keyframe_scenes": remaining,
+            "reused_scenes": total - remaining,
+            "full_motion_usd": round(total * 0.70 + base_overhead, 2),
+        }
+
+    if render_quality == "hybrid_cinema":
+        hero_ids = select_hybrid_hero_scene_indices(scenes)
+        # Scale hero count proportionally to remaining scenes
+        hero_cnt = min(remaining, len(hero_ids))
+        kf_cnt = max(0, remaining - hero_cnt)
+        est = hero_cnt * 0.70 + kf_cnt * 0.05 + base_overhead
+        return {
+            "total_usd": round(est, 2),
+            "video_scenes": hero_cnt,
+            "keyframe_scenes": kf_cnt,
+            "reused_scenes": total - remaining,
+            "full_motion_usd": round(total * 0.70 + base_overhead, 2),
+        }
+
+    # full_omni_video
+    est = remaining * 0.70 + base_overhead
+    return {
+        "total_usd": round(est, 2),
+        "video_scenes": remaining,
+        "keyframe_scenes": 0,
+        "reused_scenes": total - remaining,
+        "full_motion_usd": round(est, 2),
+    }
+
+
 def run_agent3_media_pipeline(
     project_id: str,
     agent1: Agent1Output,
@@ -899,6 +992,8 @@ def run_agent3_media_pipeline(
                 accent_rgb=_hex_to_rgb(prof["accent_hex"]),
             )
 
+    hybrid_hero_ids = select_hybrid_hero_scene_indices(scenes) if render_quality == "hybrid_cinema" else set()
+
     def _render_vis(sc: SceneClipSpec) -> Tuple[int, Path, str]:
         dur = voice_results[sc.scene_index][1]
         n_frames = scene_frame_counts[sc.scene_index]
@@ -925,6 +1020,11 @@ def run_agent3_media_pipeline(
             else:
                 p, src = out_mp4, "cached_ai_cinema"
         else:
+            scene_quality = (
+                ("full_omni_video" if sc.scene_index in hybrid_hero_ids else "ai_keyframes_kenburns")
+                if render_quality == "hybrid_cinema"
+                else render_quality
+            )
             p, src = _generate_ai_scene_visual(
                 sc,
                 out_mp4,
@@ -933,7 +1033,7 @@ def run_agent3_media_pipeline(
                 duration_sec=dur,
                 exact_frames=n_frames,
                 aspect_ratio="16:9",
-                render_quality=render_quality,
+                render_quality=scene_quality,
                 force_ai_cinema=force_ai_cinema,
                 cinema_preset=cinema_preset,
                 foley_out_wav=foley_wav,

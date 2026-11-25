@@ -23,7 +23,7 @@ import streamlit as st
 
 from backend.agent1_seo_storyboard import run_agent1_seo_and_storyboard
 from backend.agent2_scene_scripter import enhance_all_scenes_to_cinema, run_agent2_scene_scripting
-from backend.agent3_media_composer import run_agent3_media_pipeline
+from backend.agent3_media_composer import estimate_render_cost_usd, run_agent3_media_pipeline
 from backend.agent4_youtube_publisher import (
     build_youtube_oauth_url,
     create_youtube_playlist,
@@ -320,6 +320,39 @@ st.markdown(
     .omni-badge-run  { background: #1D4ED8; color: #EFF6FF; border: 1px solid #60A5FA; }
     .omni-badge-wait { background: #1E293B; color: #94A3B8; border: 1px solid #334155; }
     .omni-badge-err  { background: #991B1B; color: #FEF2F2; border: 1px solid #F87171; }
+
+    /* Live Cost Estimator Strip */
+    .omni-cost-card {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+        padding: 12px 16px;
+        margin: 8px 0 12px 0;
+        border-radius: 14px;
+        background: linear-gradient(90deg, rgba(16, 185, 129, 0.14) 0%, rgba(15, 23, 42, 0.92) 60%);
+        border: 1px solid rgba(52, 211, 153, 0.40);
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.28);
+    }
+    .omni-cost-main {
+        color: #ECFDF5;
+        font-size: 0.96rem;
+        font-weight: 700;
+    }
+    .omni-cost-sub {
+        color: #CBD5E1;
+        font-size: 0.84rem;
+    }
+    .omni-cost-save {
+        padding: 3px 10px;
+        border-radius: 999px;
+        background: #065F46;
+        color: #ECFDF5;
+        border: 1px solid #34D399;
+        font-size: 0.78rem;
+        font-weight: 700;
+    }
 
     /* Elevated Metric Tiles & Section Headings */
     div[data-testid="stMetric"] {
@@ -1470,17 +1503,19 @@ elif step == 3:
                 quality_label = st.selectbox(
                     "🎞️ Video Quality:",
                     options=[
-                        "Cinema AI Video (Best Quality)",
-                        "Fast AI Visuals (Standard)",
-                        "Quick Draft Preview",
+                        "⚡ Hybrid Cinema (Recommended — ~70% Lower Cost)",
+                        "🖼️ Fast AI Visuals (Ultra Budget — ~90% Lower Cost)",
+                        "🎬 Full Motion Cinema (All AI Video — Premium)",
+                        "📝 Quick Draft Preview (Free Offline Test)",
                     ],
                     index=0,
                     key="render_quality_sel",
                 )
                 quality_map = {
-                    "Cinema AI Video (Best Quality)": "full_omni_video",
-                    "Fast AI Visuals (Standard)": "ai_keyframes_kenburns",
-                    "Quick Draft Preview": "fast_studio_preview",
+                    "⚡ Hybrid Cinema (Recommended — ~70% Lower Cost)": "hybrid_cinema",
+                    "🖼️ Fast AI Visuals (Ultra Budget — ~90% Lower Cost)": "ai_keyframes_kenburns",
+                    "🎬 Full Motion Cinema (All AI Video — Premium)": "full_omni_video",
+                    "📝 Quick Draft Preview (Free Offline Test)": "fast_studio_preview",
                 }
                 render_quality = quality_map[quality_label]
                 cinema_presets_s3 = list(CINEMA_STYLE_PRESETS.keys())
@@ -1615,11 +1650,39 @@ elif step == 3:
             else 0
         )
 
+        # Transparent Live Credit Cost Estimator Card (shown BEFORE clicking Generate!)
+        fresh_est = estimate_render_cost_usd(a2.scenes, render_quality, cached_scene_count=0, use_fast_tts=fast_tts)
+        est_usd = fresh_est["total_usd"]
+        full_usd = fresh_est["full_motion_usd"]
+        savings_usd = max(0.0, round(full_usd - est_usd, 2))
+        if render_quality == "hybrid_cinema":
+            est_detail = f"{fresh_est['video_scenes']} full-motion hero clips + {fresh_est['keyframe_scenes']} AI cinema visual scenes + narration, thumbnail & music"
+        elif render_quality == "ai_keyframes_kenburns":
+            est_detail = f"{fresh_est['keyframe_scenes']} AI cinema visual scenes with smooth motion + narration, thumbnail & music"
+        elif render_quality == "fast_studio_preview":
+            est_detail = "Free offline draft preview (no AI video or image credits used)"
+        else:
+            est_detail = f"All {fresh_est['video_scenes']} scenes rendered as full-motion AI video + narration, thumbnail & music"
+        save_badge = f'<span class="omni-cost-save">Saves ~${savings_usd:.2f} vs Full Motion</span>' if savings_usd >= 0.50 else ""
+        st.markdown(
+            f"""
+            <div class="omni-cost-card">
+                <div>
+                    <div class="omni-cost-main">💰 Estimated Credit Cost: ~${est_usd:.2f}</div>
+                    <div class="omni-cost-sub">{est_detail}</div>
+                </div>
+                {save_badge}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
         resume_stitch = False
         if cached_vis_count > 0:
+            res_est = estimate_render_cost_usd(a2.scenes, render_quality, cached_scene_count=cached_vis_count, use_fast_tts=fast_tts)
             st.info(
                 f"🎞️ **{cached_vis_count}/{len(a2.scenes)} scene clips are already saved!** "
-                f"Use Fast Resume below to assemble your Full HD video & Shorts without regenerating clips."
+                f"Fast Resume reuses them (~${res_est['total_usd']:.2f} estimated cost — no AI video re-render)."
             )
             resume_stitch = st.button(
                 f"⚡ Finish Video from Saved Clips ({cached_vis_count}/{len(a2.scenes)} Ready)",

@@ -763,7 +763,7 @@ def _resumable_upload_via_googleapiclient(
                 status, response = request.next_chunk()
                 if status:
                     pct = int(status.progress() * 100)
-                    progress_cb(min(95, pct), f"Uploading 4MB resumable chunks... ({pct}%)")
+                    progress_cb(min(95, pct), f"Uploading video... ({pct}%)")
             except HttpError as he:
                 if he.resp.status in (500, 502, 503, 504, 429) and retry < max_retries:
                     retry += 1
@@ -844,7 +844,7 @@ def _resumable_upload_via_rest_chunks(
                         else:
                             offset = end_byte + 1
                         pct = int((offset / float(file_size)) * 95)
-                        progress_cb(pct, f"Uploading 4MB resumable chunks... ({pct}%)")
+                        progress_cb(pct, f"Uploading video... ({pct}%)")
                         break
                     if resp.status_code in (429, 500, 502, 503, 504) and attempt < max_retries:
                         wait = min(32.0, 2.0 ** attempt)
@@ -860,6 +860,62 @@ def _resumable_upload_via_rest_chunks(
                     raise RuntimeError(f"Resumable upload aborted after retries: {net_exc}") from net_exc
 
     raise RuntimeError("Upload finished without receiving YouTube video ID.")
+
+
+def sanitize_youtube_tags(
+    tags: List[str],
+    *,
+    max_total_chars: int = 440,
+    max_tag_len: int = 55,
+    max_count: int = 30,
+) -> List[str]:
+    """
+    Strictly sanitizes video tags to comply with YouTube Data API v3 rules (preventing HTTP 400 `invalidTags`):
+    - Strips `<`, `>`, `#`, quotes, pipes, newlines, and control characters
+    - Trims each tag to <= `max_tag_len` chars
+    - Deduplicates case-insensitively
+    - Enforces total serialized length (including YouTube's quotes around multi-word tags & commas) <= `max_total_chars` (hard API cap is 500)
+    """
+    import re as _re
+
+    cleaned: List[str] = []
+    seen: set = set()
+    used_chars = 0
+    for raw in tags or []:
+        if not raw:
+            continue
+        t = str(raw)
+        # Remove angle brackets, hashtags, quotes, backslashes, control chars, and extra whitespace
+        t = _re.sub(r"[<>\"'`#|\\/\r\n\t]+", " ", t)
+        t = _re.sub(r"[\x00-\x1f\x7f]", "", t)
+        t = _re.sub(r"\s+", " ", t).strip(" ,.;:-_")
+        if len(t) < 2:
+            continue
+        if len(t) > max_tag_len:
+            t = t[:max_tag_len].rsplit(" ", 1)[0].strip(" ,.;:-_") or t[:max_tag_len].strip()
+        if len(t) < 2:
+            continue
+        key = t.casefold()
+        if key in seen:
+            continue
+        # YouTube counts multi-word tags as wrapped in double quotes + comma separator
+        cost = len(t) + (2 if " " in t else 0) + (1 if cleaned else 0)
+        if used_chars + cost > max_total_chars:
+            continue
+        seen.add(key)
+        cleaned.append(t)
+        used_chars += cost
+        if len(cleaned) >= max_count:
+            break
+    return cleaned
+
+
+def _sanitize_youtube_text(text: str, max_len: int) -> str:
+    """Removes angle brackets `<` / `>` which YouTube Data API v3 rejects in title/description."""
+    import re as _re
+
+    cleaned = _re.sub(r"[<>]", "", (text or "").strip())
+    return cleaned[:max_len].strip()
 
 
 def run_agent4_youtube_publish(
@@ -881,8 +937,8 @@ def run_agent4_youtube_publish(
 ) -> Agent4Output:
     """
     Executes Agent 4 (Direct YouTube Publisher Agent) targeting the exact selected `channel_id`:
-    - Uploads video using 4MB chunked resumable upload with backoff.
-    - Writes exact scene timestamp chapters into description.
+    - Sanitizes title, description & tags strictly for YouTube Data API v3 (zero `invalidTags` 400 errors!).
+    - Uploads video using resumable chunked upload with automatic retry & fallback.
     - Attaches thumbnail & adds to playlist on that channel.
     - Updates SQLite `publish_records` and marks project `"Published"`.
     """
@@ -896,7 +952,7 @@ def run_agent4_youtube_publish(
     creds, ch_rec = get_valid_youtube_credentials(cfg, database, channel_id=channel_id)
     if creds is None:
         raise RuntimeError(
-            "Selected YouTube channel is not connected. Authorize it in Step 0 (Channel & Playlist) or Step 4 before uploading."
+            "Selected YouTube channel is not connected. Reconnect it in Channel settings before publishing."
         )
     target_ch_name = (ch_rec or {}).get("channel_title") or "Connected YouTube Channel"
 
@@ -904,6 +960,10 @@ def run_agent4_youtube_publish(
     final_desc = description.strip()
     if exact_chapters_text.strip() and "00:00" not in final_desc:
         final_desc = f"{final_desc}\n\n⏱️ CHAPTERS:\n{exact_chapters_text.strip()}"
+
+    safe_title = _sanitize_youtube_text(title, 100) or "Untitled Video"
+    safe_desc = _sanitize_youtube_text(final_desc, 4950)
+    safe_tags = sanitize_youtube_tags(tags, max_total_chars=440)
 
     # YouTube requires privacyStatus='private' when `publishAt` scheduling is specified
     effective_privacy = "private" if scheduled_publish_at_iso else privacy_status.lower()
@@ -916,9 +976,9 @@ def run_agent4_youtube_publish(
 
     body: Dict[str, Any] = {
         "snippet": {
-            "title": title[:100],
-            "description": final_desc[:4950],
-            "tags": [t.strip() for t in tags if t.strip()][:35],
+            "title": safe_title,
+            "description": safe_desc,
+            "tags": safe_tags,
             "categoryId": category_id,
         },
         "status": status_block,
@@ -928,7 +988,7 @@ def run_agent4_youtube_publish(
         database.upsert_publish_record(
             record_id=record_id,
             project_id=project_id,
-            title=title[:100],
+            title=safe_title,
             privacy_status=effective_privacy,
             scheduled_publish_at=scheduled_publish_at_iso,
             playlist_id=playlist_id,
@@ -939,24 +999,47 @@ def run_agent4_youtube_publish(
             job_id=f"{project_id}_yt_upload",
             project_id=project_id,
             job_type="youtube_upload",
-            label=f"YouTube Resumable Upload: {title[:36]}",
+            label=f"Uploading to {target_ch_name}",
             status="running",
             progress_pct=pct,
             message=msg,
         )
 
-    _on_progress(2, "Initializing 4MB chunked resumable upload to YouTube...")
-    video_id = _resumable_upload_via_googleapiclient(creds, video_path, body, _on_progress)
-    if not video_id:
-        video_id = _resumable_upload_via_rest_chunks(creds, video_path, body, _on_progress)
+    def _do_upload(upload_body: Dict[str, Any]) -> str:
+        vid = _resumable_upload_via_googleapiclient(creds, video_path, upload_body, _on_progress)
+        if not vid:
+            vid = _resumable_upload_via_rest_chunks(creds, video_path, upload_body, _on_progress)
+        return vid
+
+    _on_progress(2, "Starting upload to YouTube...")
+    try:
+        video_id = _do_upload(body)
+    except Exception as exc:
+        if "invalidtags" in str(exc).lower() or "invalid video keywords" in str(exc).lower():
+            logger.warning("YouTube rejected sanitized tags (%s); retrying upload with safe compact tags.", exc)
+            _on_progress(4, "Adjusting video keywords for YouTube & retrying upload...")
+            fallback_body = json.loads(json.dumps(body))
+            fallback_body["snippet"]["tags"] = sanitize_youtube_tags(
+                [t for t in safe_tags if t.isascii()], max_total_chars=260, max_count=12
+            )
+            try:
+                video_id = _do_upload(fallback_body)
+            except Exception as exc2:
+                if "invalidtags" in str(exc2).lower() or "invalid video keywords" in str(exc2).lower():
+                    fallback_body["snippet"].pop("tags", None)
+                    video_id = _do_upload(fallback_body)
+                else:
+                    raise
+        else:
+            raise
 
     thumb_ok = False
     if thumbnail_path and thumbnail_path.exists():
-        _on_progress(97, "Attaching High-CTR Thumbnail...")
+        _on_progress(97, "Attaching video thumbnail...")
         thumb_ok = _attach_thumbnail(creds, video_id, thumbnail_path)
 
     if playlist_id and playlist_id != "NONE":
-        _on_progress(99, "Routing video into selected playlist...")
+        _on_progress(99, "Adding video to playlist...")
         _add_video_to_playlist(creds, video_id, playlist_id)
 
     watch_url = f"https://www.youtube.com/watch?v={video_id}"
@@ -965,7 +1048,7 @@ def run_agent4_youtube_publish(
     database.upsert_publish_record(
         record_id=record_id,
         project_id=project_id,
-        title=title[:100],
+        title=safe_title,
         privacy_status=effective_privacy,
         scheduled_publish_at=scheduled_publish_at_iso,
         playlist_id=playlist_id,
@@ -979,10 +1062,10 @@ def run_agent4_youtube_publish(
         job_id=f"{project_id}_yt_upload",
         project_id=project_id,
         job_type="youtube_upload",
-        label=f"YouTube Resumable Upload: {title[:36]}",
+        label=f"Uploading to {target_ch_name}",
         status="completed",
         progress_pct=100,
-        message=f"Completed ✅ Video ID: {video_id}",
+        message="Published to YouTube!",
         output_path=studio_url,
     )
 
@@ -991,16 +1074,16 @@ def run_agent4_youtube_publish(
         video_id=video_id,
         watch_url=watch_url,
         studio_url=studio_url,
-        title=title[:100],
+        title=safe_title,
         privacy_status=effective_privacy,
         scheduled_publish_at=scheduled_publish_at_iso,
         playlist_id=playlist_id,
         thumbnail_attached=thumb_ok,
         status="Published",
         note=(
-            f"Uploaded to '{target_ch_name}' via 4MB chunked resumable upload with chapters & thumbnail."
+            f"Published to '{target_ch_name}' with chapters & custom thumbnail."
             if thumb_ok
-            else f"Uploaded to '{target_ch_name}' via 4MB chunked resumable upload (custom thumbnail requires verified YouTube channel)."
+            else f"Published to '{target_ch_name}' with chapters (custom thumbnail requires a verified YouTube channel)."
         ),
     )
     database.update_project_stage(
