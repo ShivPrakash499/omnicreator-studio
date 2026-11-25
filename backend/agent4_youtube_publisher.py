@@ -113,7 +113,7 @@ def hydrate_all_youtube_channels(
     cfg = config or OmniStudioConfig()
     database = db or get_db()
 
-    # 1. Migrate legacy single 'youtube' row into namespaced 'youtube:<channel_id>'
+    # 1. Migrate legacy single 'youtube' row into namespaced 'youtube:<channel_id>' & purge duplicates
     legacy = database.get_oauth_token("youtube")
     if legacy and legacy.get("token_dict"):
         _save_channel_token_record(
@@ -122,11 +122,18 @@ def hydrate_all_youtube_channels(
             fallback_title=legacy.get("channel_title") or "Connected YouTube Channel",
         )
         database.delete_oauth_token("youtube")
+    database.deduplicate_youtube_channels()
 
+    cur_chs = database.list_youtube_channels()
     existing_ids = {
         (ch.get("channel_id") or "").strip()
-        for ch in database.list_youtube_channels()
+        for ch in cur_chs
         if (ch.get("channel_id") or "").strip()
+    }
+    existing_refresh_tokens = {
+        ((ch.get("token_dict") or {}).get("refresh_token") or "").strip()
+        for ch in cur_chs
+        if ((ch.get("token_dict") or {}).get("refresh_token") or "").strip()
     }
 
     def _ingest_maybe_multi(raw_obj: Any, source_label: str) -> None:
@@ -154,11 +161,16 @@ def hydrate_all_youtube_channels(
 
         for tok in items:
             known_cid = (tok.get("connected_channel_id") or "").strip()
-            if known_cid and known_cid in existing_ids:
+            known_ref = (tok.get("refresh_token") or "").strip()
+            if (known_cid and known_cid in existing_ids) or (known_ref and known_ref in existing_refresh_tokens):
                 continue
             saved = _save_channel_token_record(database, tok, fallback_title=source_label)
-            if saved and saved.get("channel_id"):
-                existing_ids.add(saved["channel_id"])
+            if saved:
+                if saved.get("channel_id"):
+                    existing_ids.add(saved["channel_id"])
+                sref = ((saved.get("token_dict") or {}).get("refresh_token") or "").strip()
+                if sref:
+                    existing_refresh_tokens.add(sref)
 
     # 2. Collect secrets from Streamlit Cloud Secrets + Environment variables
     secret_sources: Dict[str, Any] = {}
@@ -194,6 +206,7 @@ def hydrate_all_youtube_channels(
         except Exception as exc:
             logger.warning("Could not hydrate local YouTube token file %s: %s", tf, exc)
 
+    database.deduplicate_youtube_channels()
     return database.list_youtube_channels()
 
 

@@ -434,30 +434,101 @@ class OmniDatabase:
             conn.execute("DELETE FROM oauth_tokens WHERE provider = ?", (provider,))
 
     def list_youtube_channels(self) -> List[Dict[str, Any]]:
-        """Lists ALL connected YouTube channels stored in SQLite (`youtube` or `youtube:<channel_id>`)."""
+        """Lists ALL unique connected YouTube channels stored in SQLite (`youtube` or `youtube:<channel_id>`)."""
         with self._connect() as conn:
             rows = conn.execute(
                 """
                 SELECT * FROM oauth_tokens
                 WHERE provider = 'youtube' OR provider LIKE 'youtube:%'
-                ORDER BY updated_at DESC
+                ORDER BY
+                    CASE WHEN channel_id LIKE 'UC%' THEN 0 ELSE 1 END ASC,
+                    updated_at DESC
                 """
             ).fetchall()
             out: List[Dict[str, Any]] = []
             seen_ids = set()
+            seen_refresh = set()
+            seen_titles = set()
             for r in rows:
                 rec = dict(r)
                 try:
                     rec["token_dict"] = json.loads(rec["token_json"])
                 except Exception:
                     rec["token_dict"] = {}
-                cid = (rec.get("channel_id") or rec["token_dict"].get("connected_channel_id") or rec["provider"]).strip()
-                if cid in seen_ids:
+                cid = (rec.get("channel_id") or rec["token_dict"].get("connected_channel_id") or "").strip()
+                ref_tok = (rec["token_dict"].get("refresh_token") or "").strip()
+                title_norm = (rec.get("channel_title") or rec["token_dict"].get("connected_channel_title") or "").strip().lower()
+                if cid and cid in seen_ids:
                     continue
-                seen_ids.add(cid)
-                rec["resolved_channel_id"] = cid
+                if ref_tok and ref_tok in seen_refresh:
+                    continue
+                if title_norm and not cid.startswith("UC") and title_norm in seen_titles:
+                    continue
+                if cid:
+                    seen_ids.add(cid)
+                if ref_tok:
+                    seen_refresh.add(ref_tok)
+                if title_norm:
+                    seen_titles.add(title_norm)
+                rec["resolved_channel_id"] = cid or rec["provider"]
                 out.append(rec)
             return out
+
+    def deduplicate_youtube_channels(self) -> int:
+        """
+        Physically purges redundant duplicate YouTube channel rows from SQLite (same channel_id,
+        same refresh_token, or legacy placeholder rows duplicating a real `UC...` channel).
+        Returns the number of duplicate rows removed.
+        """
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT provider, channel_id, channel_title, token_json, updated_at
+                FROM oauth_tokens
+                WHERE provider = 'youtube' OR provider LIKE 'youtube:%'
+                ORDER BY
+                    CASE WHEN channel_id LIKE 'UC%' THEN 0 ELSE 1 END ASC,
+                    CASE WHEN provider LIKE 'youtube:UC%' THEN 0 ELSE 1 END ASC,
+                    updated_at DESC
+                """
+            ).fetchall()
+            keep_providers = set()
+            seen_ids = set()
+            seen_refresh = set()
+            seen_titles = set()
+            to_delete: List[str] = []
+            for r in rows:
+                prov = r["provider"]
+                try:
+                    td = json.loads(r["token_json"])
+                except Exception:
+                    td = {}
+                cid = (r["channel_id"] or td.get("connected_channel_id") or "").strip()
+                ref_tok = (td.get("refresh_token") or "").strip()
+                title_norm = (r["channel_title"] or td.get("connected_channel_title") or "").strip().lower()
+
+                is_dup = False
+                if cid and cid in seen_ids:
+                    is_dup = True
+                elif ref_tok and ref_tok in seen_refresh:
+                    is_dup = True
+                elif title_norm and not cid.startswith("UC") and title_norm in seen_titles:
+                    is_dup = True
+
+                if is_dup:
+                    to_delete.append(prov)
+                else:
+                    keep_providers.add(prov)
+                    if cid:
+                        seen_ids.add(cid)
+                    if ref_tok:
+                        seen_refresh.add(ref_tok)
+                    if title_norm:
+                        seen_titles.add(title_norm)
+
+            for prov in to_delete:
+                conn.execute("DELETE FROM oauth_tokens WHERE provider = ?", (prov,))
+            return len(to_delete)
 
     def get_youtube_channel(self, channel_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
         """Fetches a specific connected YouTube channel by `channel_id` (or first connected channel if omitted)."""

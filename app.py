@@ -292,6 +292,8 @@ def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[st
     )
     redir_opts = [
         "http://localhost:8501",
+        "http://localhost:8080",
+        "http://localhost",
         "https://onebillionviews.streamlit.app",
     ]
     if cfg.youtube_redirect_uri and cfg.youtube_redirect_uri not in redir_opts:
@@ -300,7 +302,7 @@ def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[st
         "🔗 OAuth Redirect URI:",
         options=redir_opts,
         index=0,
-        help="Use `http://localhost:8501` for instant copy/paste from your browser bar (works immediately with Desktop OAuth apps), or `https://onebillionviews.streamlit.app` if added to Google Cloud Console.",
+        help="Desktop OAuth apps work with `http://localhost:8501` or `http://localhost` (just copy the redirected URL from your browser address bar and paste below!). Use `https://onebillionviews.streamlit.app` only if registered in Google Cloud Console.",
         key=f"{prefix}_redir_uri",
     )
     st.session_state["omni_oauth_redirect_uri"] = sel_redir
