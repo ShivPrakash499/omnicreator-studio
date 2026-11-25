@@ -1434,49 +1434,50 @@ elif step == 3:
                 st.markdown("#### 📺 Final 1080p Long-Form Video (16:9 + Burned-In Active Subtitles)")
                 if Path(a3.video_16x9_path).exists():
                     st.video(a3.video_16x9_path)
-                    master_wav_p = Path(a3.video_16x9_path).parent / "master_audio_16x9.wav"
-                    if master_wav_p.exists():
-                        st.caption("🔊 Master Voiceover + (-24dB) Ducked BGM Audio Preview:")
-                        st.audio(str(master_wav_p))
-                    with open(a3.video_16x9_path, "rb") as vfp:
-                        st.download_button(
-                            "⬇️ Download 16:9 1080p MP4",
-                            data=vfp.read(),
-                            file_name=Path(a3.video_16x9_path).name,
-                            mime="video/mp4",
-                            use_container_width=True,
-                        )
+                    # Deferred callable avoids pinning 100+ MB MP4 in Streamlit RAM on every rerun!
+                    st.download_button(
+                        "⬇️ Download 16:9 1080p MP4",
+                        data=lambda p=a3.video_16x9_path: Path(p).read_bytes(),
+                        file_name=Path(a3.video_16x9_path).name,
+                        mime="video/mp4",
+                        use_container_width=True,
+                        key=f"dl_16x9_{pid}",
+                    )
             with p_c2:
                 st.markdown("#### 🖼️ High-CTR @jwalashiva Likeness Thumbnail (16:9)")
                 if Path(a3.thumbnail_16x9_path).exists():
                     st.image(a3.thumbnail_16x9_path, use_container_width=True)
-                    with open(a3.thumbnail_16x9_path, "rb") as tfp:
-                        st.download_button(
-                            "⬇️ Download High-CTR Thumbnail (.png)",
-                            data=tfp.read(),
-                            file_name="thumbnail_16x9.png",
-                            mime="image/png",
-                            use_container_width=True,
-                        )
+                    st.download_button(
+                        "⬇️ Download High-CTR Thumbnail (.png)",
+                        data=lambda p=a3.thumbnail_16x9_path: Path(p).read_bytes(),
+                        file_name="thumbnail_16x9.png",
+                        mime="image/png",
+                        use_container_width=True,
+                        key=f"dl_thumb_{pid}",
+                    )
 
             with st.expander("📱 9:16 Vertical Shorts Cutdown, Exact Chapters & Subtitle Files", expanded=False):
                 sh_c1, sh_c2 = st.columns([1.0, 1.2])
                 with sh_c1:
                     if Path(a3.video_9x16_shorts_path).exists():
                         st.video(a3.video_9x16_shorts_path)
-                        with open(a3.video_9x16_shorts_path, "rb") as sfp:
-                            st.download_button(
-                                "⬇️ Download 9:16 Shorts MP4",
-                                data=sfp.read(),
-                                file_name=Path(a3.video_9x16_shorts_path).name,
-                                mime="video/mp4",
-                                use_container_width=True,
-                            )
+                        st.download_button(
+                            "⬇️ Download 9:16 Shorts MP4",
+                            data=lambda p=a3.video_9x16_shorts_path: Path(p).read_bytes(),
+                            file_name=Path(a3.video_9x16_shorts_path).name,
+                            mime="video/mp4",
+                            use_container_width=True,
+                            key=f"dl_9x16_{pid}",
+                        )
                 with sh_c2:
                     st.markdown("**Exact Auto-Calculated Chapters (Anchored to Measured Audio):**")
                     st.code(a3.exact_chapters_text, language="text")
+                    master_wav_p = Path(a3.video_16x9_path).parent / "master_audio_16x9.wav"
+                    if master_wav_p.exists():
+                        st.caption("🔊 Master Voiceover + Ducked BGM Audio Preview:")
+                        st.audio(str(master_wav_p))
                     st.caption(f"ASS Subtitles (16:9): `{a3.ass_subtitles_16x9_path}`")
-                    st.caption(f"BGM Stem (-24dB ducked): `{a3.bgm_stem_path}`")
+                    st.caption(f"BGM Stem: `{a3.bgm_stem_path}`")
 
             st.markdown("")
             if st.button("👉 PROCEED TO AGENT 4 (OAUTH & PUBLISH)", type="primary", use_container_width=True):

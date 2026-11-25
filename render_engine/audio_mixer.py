@@ -862,19 +862,22 @@ def mix_scene_master_audio(
 def concat_wav_segments(wav_paths: List[Path], output_wav: Path) -> Path:
     """
     Concatenates scene master WAVs directly at the raw PCM level into ONE seamless continuous WAV
-    (eliminating AAC concat edit-list discontinuities that mute audio in browsers!).
+    via low-RAM streaming chunks (eliminating AAC concat discontinuities & giant RAM buffers!).
     """
     output_wav.parent.mkdir(parents=True, exist_ok=True)
     sr = 24000
-    all_frames = bytearray()
-    for p in wav_paths:
-        if not p.exists():
-            continue
-        with wave.open(str(p), "rb") as wf:
-            all_frames.extend(wf.readframes(wf.getnframes()))
+    chunk_frames = 32768
     with wave.open(str(output_wav), "wb") as out_wf:
         out_wf.setnchannels(1)
         out_wf.setsampwidth(2)
         out_wf.setframerate(sr)
-        out_wf.writeframes(all_frames)
+        for p in wav_paths:
+            if not p.exists():
+                continue
+            with wave.open(str(p), "rb") as wf:
+                while True:
+                    buf = wf.readframes(chunk_frames)
+                    if not buf:
+                        break
+                    out_wf.writeframes(buf)
     return output_wav

@@ -363,6 +363,7 @@ def render_motion_graphic_clip(
             "-t", f"{dur:.2f}",
             "-r", str(fps),
             "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+            "-threads", "2", "-x264-params", "rc-lookahead=10:sync-lookahead=0:threads=2",
             str(output_mp4),
         ],
         check=True,

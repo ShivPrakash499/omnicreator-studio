@@ -23,9 +23,11 @@ Persists granular real-time progress logs ("Processing (45%)", "Completed ✅") 
 from __future__ import annotations
 
 import base64
+import gc
 import logging
 import math
 import subprocess
+import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
@@ -71,6 +73,14 @@ from render_engine.thumbnail_studio import generate_high_ctr_thumbnail
 from storage.db import OmniDatabase, get_db
 
 logger = logging.getLogger("omni_studio.agent3")
+
+# Serialize heavy 1080p libx264 encodes & cap FFmpeg threads/lookahead so peak RAM stays <120MB
+# on 1 GB cloud containers (prevents Linux OOM SIGKILL on Streamlit Community Cloud!).
+_FFMPEG_ENCODE_LOCK = threading.Lock()
+_LOW_RAM_X264_ARGS: List[str] = [
+    "-threads", "2",
+    "-x264-params", "rc-lookahead=10:sync-lookahead=0:threads=2",
+]
 
 
 def _hex_to_rgb(hex_color: str, fallback: Tuple[int, int, int] = (0, 229, 255)) -> Tuple[int, int, int]:
@@ -239,10 +249,12 @@ def _normalize_video_clip_exact(
         "-color_primaries", "bt709",
         "-color_trc", "bt709",
         "-an",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+        "-c:v", "libx264", "-preset", "superfast", "-crf", "20",
+        *_LOW_RAM_X264_ARGS,
         str(output_mp4),
     ])
-    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    with _FFMPEG_ENCODE_LOCK:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return output_mp4
 
 
@@ -299,19 +311,21 @@ def _generate_ai_scene_visual(
                 f"crop={w}:{h}:x='(iw-ow)/2+((iw-ow)/4)*sin(2*PI*t/{dur:.4f})':y='(ih-oh)/2',"
                 f"setsar=1,setpts=PTS-STARTPTS,fps={fps},format=yuv420p"
             )
-            subprocess.run(
-                [
-                    ffmpeg_exe, "-y", "-loop", "1", "-i", str(custom_p),
-                    "-vf", vf, "-r", str(fps), "-frames:v", str(n_frames),
-                    "-video_track_timescale", "24000", "-bf", "0", "-g", str(fps),
-                    "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
-                    "-an", "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
-                    str(output_mp4),
-                ],
-                check=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-            )
+            with _FFMPEG_ENCODE_LOCK:
+                subprocess.run(
+                    [
+                        ffmpeg_exe, "-y", "-loop", "1", "-i", str(custom_p),
+                        "-vf", vf, "-r", str(fps), "-frames:v", str(n_frames),
+                        "-video_track_timescale", "24000", "-bf", "0", "-g", str(fps),
+                        "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+                        "-an", "-c:v", "libx264", "-preset", "superfast", "-crf", "20",
+                        *_LOW_RAM_X264_ARGS,
+                        str(output_mp4),
+                    ],
+                    check=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                )
             return output_mp4, "custom_uploaded_image"
 
     # 2. Procedural Motion Graphics (ONLY if explicitly opted in AND `force_ai_cinema=False`)
@@ -488,24 +502,26 @@ def _generate_ai_scene_visual(
         f"crop={w}:{h}:x='(iw-ow)/2+((iw-ow)/4)*sin(2*PI*t/{dur:.4f})':y='(ih-oh)/2+((ih-oh)/4)*cos(2*PI*t/{dur:.4f})',"
         f"setsar=1,setpts=PTS-STARTPTS,fps={fps},format=yuv420p"
     )
-    subprocess.run(
-        [
-            ffmpeg_exe, "-y",
-            "-loop", "1", "-i", str(frame_png),
-            "-vf", vf,
-            "-r", str(fps),
-            "-frames:v", str(n_frames),
-            "-video_track_timescale", "24000",
-            "-bf", "0", "-g", str(fps),
-            "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
-            "-an",
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
-            str(output_mp4),
-        ],
-        check=True,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    with _FFMPEG_ENCODE_LOCK:
+        subprocess.run(
+            [
+                ffmpeg_exe, "-y",
+                "-loop", "1", "-i", str(frame_png),
+                "-vf", vf,
+                "-r", str(fps),
+                "-frames:v", str(n_frames),
+                "-video_track_timescale", "24000",
+                "-bf", "0", "-g", str(fps),
+                "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
+                "-an",
+                "-c:v", "libx264", "-preset", "superfast", "-crf", "20",
+                *_LOW_RAM_X264_ARGS,
+                str(output_mp4),
+            ],
+            check=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
     return output_mp4, source_tag
 
 
@@ -570,12 +586,14 @@ def _overlay_host_pip_on_clip(
         "-bf", "0", "-g", str(fps),
         "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709",
         "-an",
-        "-c:v", "libx264", "-preset", "veryfast", "-crf", "19",
+        "-c:v", "libx264", "-preset", "superfast", "-crf", "20",
+        *_LOW_RAM_X264_ARGS,
     ]
     if exact_frames and exact_frames > 0:
         cmd.extend(["-frames:v", str(exact_frames)])
     cmd.append(str(output_mp4))
-    subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    with _FFMPEG_ENCODE_LOCK:
+        subprocess.run(cmd, check=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     return output_mp4
 
 
@@ -609,24 +627,27 @@ def _mux_continuous_audio_and_burn_ass(
         else ["-i", str(concat_txt_or_video)]
     )
     try:
-        subprocess.run(
-            [
-                ffmpeg_exe, "-y",
-                *vid_in_args,
-                "-i", str(continuous_master_wav),
-                "-map", "0:v:0", "-map", "1:a:0",
-                "-vf", vf_str,
-                "-r", str(fps),
-                "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-                "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
-                "-movflags", "+faststart",
-                "-shortest",
-                str(output_mp4),
-            ],
-            check=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-        )
+        with _FFMPEG_ENCODE_LOCK:
+            subprocess.run(
+                [
+                    ffmpeg_exe, "-y",
+                    *vid_in_args,
+                    "-i", str(continuous_master_wav),
+                    "-map", "0:v:0", "-map", "1:a:0",
+                    "-vf", vf_str,
+                    "-r", str(fps),
+                    "-c:v", "libx264", "-preset", "superfast", "-crf", "21", "-pix_fmt", "yuv420p",
+                    *_LOW_RAM_X264_ARGS,
+                    "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
+                    "-max_muxing_queue_size", "512",
+                    "-movflags", "+faststart",
+                    "-shortest",
+                    str(output_mp4),
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
         if output_mp4.exists() and output_mp4.stat().st_size > 4096:
             return output_mp4
     except subprocess.CalledProcessError as exc:
@@ -636,23 +657,26 @@ def _mux_continuous_audio_and_burn_ass(
         logger.warning("FFmpeg ASS burn pass failed (%s); stitching clean CFR video + stereo audio without ASS.", exc)
 
     # Guaranteed FFmpeg 4.x-9.x compatible fallback WITH clean CFR re-encode & full 44.1kHz stereo audio
-    res = subprocess.run(
-        [
-            ffmpeg_exe, "-y",
-            *vid_in_args,
-            "-i", str(continuous_master_wav),
-            "-map", "0:v:0", "-map", "1:a:0",
-            "-vf", f"fps={fps},format=yuv420p",
-            "-r", str(fps),
-            "-c:v", "libx264", "-preset", "veryfast", "-crf", "20", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
-            "-movflags", "+faststart",
-            "-shortest",
-            str(output_mp4),
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-    )
+    with _FFMPEG_ENCODE_LOCK:
+        res = subprocess.run(
+            [
+                ffmpeg_exe, "-y",
+                *vid_in_args,
+                "-i", str(continuous_master_wav),
+                "-map", "0:v:0", "-map", "1:a:0",
+                "-vf", f"fps={fps},format=yuv420p",
+                "-r", str(fps),
+                "-c:v", "libx264", "-preset", "superfast", "-crf", "21", "-pix_fmt", "yuv420p",
+                *_LOW_RAM_X264_ARGS,
+                "-c:a", "aac", "-ar", "44100", "-ac", "2", "-b:a", "192k",
+                "-max_muxing_queue_size", "512",
+                "-movflags", "+faststart",
+                "-shortest",
+                str(output_mp4),
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
     if res.returncode != 0:
         err_msg = (res.stderr or b"").decode("utf-8", errors="ignore")[-450:]
         raise RuntimeError(f"FFmpeg final stitch failed (exit {res.returncode}): {err_msg}")
@@ -923,8 +947,10 @@ def run_agent3_media_pipeline(
             src = f"{src}+host_pip"
         return sc.scene_index, p, src
 
-    # Keep AI video workers politely throttled (2 concurrent) so Vertex Omni/Veo never drops clips to Python fallback
-    vis_workers = 2 if render_quality == "full_omni_video" else min(3, cfg.max_workers)
+    # Run 1 sequential worker during Fast Resume (zero parallel FFmpeg RAM spikes on 1 GB cloud containers);
+    # keep 2 concurrent workers during fresh AI video generation (FFmpeg itself is serialized by _FFMPEG_ENCODE_LOCK).
+    gc.collect()
+    vis_workers = 1 if reuse_existing_clips else 2
     engine_counts: Dict[str, int] = {}
     with ThreadPoolExecutor(max_workers=vis_workers) as pool:
         futs = [pool.submit(_render_vis, sc) for sc in scenes]
@@ -1063,6 +1089,7 @@ def run_agent3_media_pipeline(
     # ------------------------------------------------------------------
     # STAGE 5: Stitch 16:9 (1080p) + Continuous 44.1kHz Stereo Audio + Burn `.ass` Subtitles
     # ------------------------------------------------------------------
+    gc.collect()
     database.upsert_job(
         job_id=f"{project_id}_assemble_16x9",
         project_id=project_id,
