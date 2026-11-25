@@ -47,72 +47,174 @@ CHUNK_SIZE_BYTES: int = 4 * 1024 * 1024  # 4MB resumable chunks
 
 
 # ==============================================================================
-# 1. OAUTH 2.0 TOKEN STORAGE & CHANNEL CONNECTION (SQLITE-BACKED)
+# 1. MULTI-CHANNEL OAUTH 2.0 TOKEN STORAGE & CHANNEL CONNECTION (SQLITE-BACKED)
 # ==============================================================================
-def hydrate_local_token_into_sqlite(
-    config: Optional[OmniStudioConfig] = None,
-    db: Optional[OmniDatabase] = None,
+def _save_channel_token_record(
+    database: OmniDatabase,
+    raw_token: Dict[str, Any],
+    *,
+    fallback_title: str = "Connected YouTube Channel",
 ) -> Optional[Dict[str, Any]]:
     """
-    Checks SQLite `oauth_tokens` first; if empty, imports existing `YOUTUBE_TOKEN_FILE`
-    (e.g. `config/credentials/youtube_oauth_token.json`) so connected channels work immediately.
+    Normalizes, enriches via `channels.list(mine=true)`, and stores a YouTube channel token
+    under `provider = youtube:<channel_id>` so UNLIMITED channels coexist cleanly in SQLite.
+    """
+    if not isinstance(raw_token, dict):
+        return None
+    if not (raw_token.get("refresh_token") or raw_token.get("access_token") or raw_token.get("token")):
+        return None
+
+    token_copy = dict(raw_token)
+    if token_copy.get("access_token") and not token_copy.get("token"):
+        token_copy["token"] = token_copy["access_token"]
+
+    creds = _credentials_from_token_dict(token_copy)
+    ch_info = fetch_authenticated_channel_info(creds) if creds else {}
+
+    ch_id = (ch_info.get("channel_id") or token_copy.get("connected_channel_id") or "").strip()
+    ch_title = (ch_info.get("channel_title") or token_copy.get("connected_channel_title") or fallback_title).strip()
+    custom_url = (ch_info.get("custom_url") or token_copy.get("connected_custom_url") or "").strip()
+
+    if creds is not None:
+        token_copy["token"] = creds.token
+        token_copy["access_token"] = creds.token
+        if creds.refresh_token:
+            token_copy["refresh_token"] = creds.refresh_token
+    if ch_id:
+        token_copy["connected_channel_id"] = ch_id
+    if ch_title:
+        token_copy["connected_channel_title"] = ch_title
+    if custom_url:
+        token_copy["connected_custom_url"] = custom_url
+
+    provider_key = f"youtube:{ch_id}" if ch_id else f"youtube:ch_{uuid.uuid4().hex[:8]}"
+    database.save_oauth_token(
+        provider_key,
+        token_copy,
+        account_email=custom_url or ch_info.get("email", ""),
+        channel_id=ch_id or provider_key.split(":", 1)[1],
+        channel_title=ch_title,
+        scopes=list(token_copy.get("scopes") or YOUTUBE_SCOPES),
+    )
+    return database.get_oauth_token(provider_key)
+
+
+def hydrate_all_youtube_channels(
+    config: Optional[OmniStudioConfig] = None,
+    db: Optional[OmniDatabase] = None,
+) -> List[Dict[str, Any]]:
+    """
+    Hydrates ALL configured YouTube channels into SQLite without overwriting existing channels:
+    1. Migrates any legacy single `provider='youtube'` SQLite record into `youtube:<channel_id>`.
+    2. Loads `YOUTUBE_OAUTH_TOKEN_JSON`, `YOUTUBE_CHANNELS_JSON` (list/dict), AND any
+       `YOUTUBE_OAUTH_TOKEN_*` secret from Streamlit Cloud Secrets or environment variables.
+    3. Loads all local `config/credentials/youtube_oauth_token*.json` files.
     """
     cfg = config or OmniStudioConfig()
     database = db or get_db()
-    existing = database.get_oauth_token("youtube")
-    if existing and existing.get("token_dict"):
-        return existing
 
-    # 1. Hydrate from Streamlit Cloud Secrets (`YOUTUBE_OAUTH_TOKEN_JSON`) or env var
-    raw_secret: Optional[Dict[str, Any]] = None
+    # 1. Migrate legacy single 'youtube' row into namespaced 'youtube:<channel_id>'
+    legacy = database.get_oauth_token("youtube")
+    if legacy and legacy.get("token_dict"):
+        _save_channel_token_record(
+            database,
+            legacy["token_dict"],
+            fallback_title=legacy.get("channel_title") or "Connected YouTube Channel",
+        )
+        database.delete_oauth_token("youtube")
+
+    existing_ids = {
+        (ch.get("channel_id") or "").strip()
+        for ch in database.list_youtube_channels()
+        if (ch.get("channel_id") or "").strip()
+    }
+
+    def _ingest_maybe_multi(raw_obj: Any, source_label: str) -> None:
+        items: List[Dict[str, Any]] = []
+        if isinstance(raw_obj, str):
+            txt = raw_obj.strip()
+            if not txt:
+                return
+            try:
+                raw_obj = json.loads(txt)
+            except Exception:
+                return
+        if isinstance(raw_obj, list):
+            items = [x for x in raw_obj if isinstance(x, dict)]
+        elif isinstance(raw_obj, dict):
+            if any(k in raw_obj for k in ("refresh_token", "access_token", "token")):
+                items = [raw_obj]
+            else:
+                # Dict mapping label -> token_dict
+                for lbl, val in raw_obj.items():
+                    if isinstance(val, dict) and any(k in val for k in ("refresh_token", "access_token", "token")):
+                        v_copy = dict(val)
+                        v_copy.setdefault("connected_channel_title", str(lbl))
+                        items.append(v_copy)
+
+        for tok in items:
+            known_cid = (tok.get("connected_channel_id") or "").strip()
+            if known_cid and known_cid in existing_ids:
+                continue
+            saved = _save_channel_token_record(database, tok, fallback_title=source_label)
+            if saved and saved.get("channel_id"):
+                existing_ids.add(saved["channel_id"])
+
+    # 2. Collect secrets from Streamlit Cloud Secrets + Environment variables
+    secret_sources: Dict[str, Any] = {}
     try:
         import streamlit as st
-        if hasattr(st, "secrets") and "YOUTUBE_OAUTH_TOKEN_JSON" in st.secrets:
-            val = st.secrets["YOUTUBE_OAUTH_TOKEN_JSON"]
-            raw_secret = json.loads(val) if isinstance(val, str) else dict(val)
+        if hasattr(st, "secrets"):
+            for k in st.secrets.keys():
+                ks = str(k)
+                if ks == "YOUTUBE_CHANNELS_JSON" or ks.startswith("YOUTUBE_OAUTH_TOKEN"):
+                    secret_sources[ks] = st.secrets[ks]
     except Exception:
         pass
-    if raw_secret is None and os.getenv("YOUTUBE_OAUTH_TOKEN_JSON", "").strip():
-        try:
-            raw_secret = json.loads(os.getenv("YOUTUBE_OAUTH_TOKEN_JSON", "").strip())
-        except Exception:
-            pass
+    for k, v in os.environ.items():
+        if (k == "YOUTUBE_CHANNELS_JSON" or k.startswith("YOUTUBE_OAUTH_TOKEN")) and k not in secret_sources:
+            secret_sources[k] = v
 
-    if raw_secret and (raw_secret.get("refresh_token") or raw_secret.get("access_token") or raw_secret.get("token")):
-        try:
-            creds = _credentials_from_token_dict(raw_secret)
-            ch_info = fetch_authenticated_channel_info(creds) if creds else {}
-            database.save_oauth_token(
-                "youtube",
-                raw_secret,
-                account_email=ch_info.get("email", ""),
-                channel_id=ch_info.get("channel_id") or raw_secret.get("connected_channel_id", ""),
-                channel_title=ch_info.get("channel_title") or raw_secret.get("connected_channel_title", "Connected YouTube Channel"),
-                scopes=raw_secret.get("scopes", YOUTUBE_SCOPES),
-            )
-            return database.get_oauth_token("youtube")
-        except Exception as exc:
-            logger.warning("Could not hydrate YOUTUBE_OAUTH_TOKEN_JSON secret: %s", exc)
+    for skey, sval in secret_sources.items():
+        _ingest_maybe_multi(sval, skey)
 
-    # 2. Hydrate from local token file (`config/credentials/youtube_oauth_token.json`)
-    token_file = cfg.youtube_token_file
-    if token_file.exists():
+    # 3. Collect local token JSON files (`youtube_oauth_token*.json`)
+    token_candidates: List[Path] = []
+    if cfg.youtube_token_file.exists():
+        token_candidates.append(cfg.youtube_token_file)
+    cred_dir = cfg.youtube_token_file.parent
+    if cred_dir.exists():
+        for fp in sorted(cred_dir.glob("youtube_oauth_token*.json")):
+            if fp not in token_candidates:
+                token_candidates.append(fp)
+
+    for tf in token_candidates:
         try:
-            raw = json.loads(token_file.read_text(encoding="utf-8"))
-            creds = _credentials_from_token_dict(raw)
-            ch_info = fetch_authenticated_channel_info(creds) if creds else {}
-            database.save_oauth_token(
-                "youtube",
-                raw,
-                account_email=ch_info.get("email", ""),
-                channel_id=ch_info.get("channel_id", ""),
-                channel_title=ch_info.get("channel_title", "Connected YouTube Channel"),
-                scopes=raw.get("scopes", YOUTUBE_SCOPES),
-            )
-            return database.get_oauth_token("youtube")
+            _ingest_maybe_multi(tf.read_text(encoding="utf-8"), tf.stem)
         except Exception as exc:
-            logger.warning("Could not hydrate local YouTube token file: %s", exc)
-    return None
+            logger.warning("Could not hydrate local YouTube token file %s: %s", tf, exc)
+
+    return database.list_youtube_channels()
+
+
+def list_connected_youtube_channels(
+    config: Optional[OmniStudioConfig] = None,
+    db: Optional[OmniDatabase] = None,
+) -> List[Dict[str, Any]]:
+    """Returns all connected YouTube channels (hydrating from Secrets / local files automatically)."""
+    return hydrate_all_youtube_channels(config, db)
+
+
+def hydrate_local_token_into_sqlite(
+    config: Optional[OmniStudioConfig] = None,
+    db: Optional[OmniDatabase] = None,
+    channel_id: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    """Backward-compatible helper returning the requested (or default first) connected YouTube channel."""
+    cfg = config or OmniStudioConfig()
+    database = db or get_db()
+    hydrate_all_youtube_channels(cfg, database)
+    return database.get_youtube_channel(channel_id)
 
 
 def _credentials_from_token_dict(token_dict: Dict[str, Any]) -> Optional[Credentials]:
@@ -138,110 +240,242 @@ def _credentials_from_token_dict(token_dict: Dict[str, Any]) -> Optional[Credent
 def get_valid_youtube_credentials(
     config: Optional[OmniStudioConfig] = None,
     db: Optional[OmniDatabase] = None,
+    channel_id: Optional[str] = None,
 ) -> Tuple[Optional[Credentials], Optional[Dict[str, Any]]]:
+    """Fetches & refreshes OAuth credentials for the specified `channel_id` (or first connected channel)."""
     cfg = config or OmniStudioConfig()
     database = db or get_db()
-    record = hydrate_local_token_into_sqlite(cfg, database)
+    record = hydrate_local_token_into_sqlite(cfg, database, channel_id=channel_id)
     if not record or not record.get("token_dict"):
         return None, None
     creds = _credentials_from_token_dict(record["token_dict"])
     if creds is None:
         return None, record
-    # Persist refreshed access token back into SQLite
-    updated_dict = {
-        "token": creds.token,
-        "refresh_token": creds.refresh_token or record["token_dict"].get("refresh_token"),
-        "token_uri": creds.token_uri,
-        "client_id": creds.client_id,
-        "client_secret": creds.client_secret,
-        "scopes": list(creds.scopes or YOUTUBE_SCOPES),
-    }
+    # Persist refreshed access token back into SQLite under the EXACT same channel provider key!
+    updated_dict = dict(record["token_dict"])
+    updated_dict.update(
+        {
+            "token": creds.token,
+            "access_token": creds.token,
+            "refresh_token": creds.refresh_token or record["token_dict"].get("refresh_token"),
+            "token_uri": creds.token_uri,
+            "client_id": creds.client_id,
+            "client_secret": creds.client_secret,
+            "scopes": list(creds.scopes or YOUTUBE_SCOPES),
+        }
+    )
+    provider_key = record.get("provider") or f"youtube:{record.get('channel_id', 'default')}"
     database.save_oauth_token(
-        "youtube",
+        provider_key,
         updated_dict,
         account_email=record.get("account_email", ""),
         channel_id=record.get("channel_id", ""),
         channel_title=record.get("channel_title", ""),
         scopes=updated_dict["scopes"],
     )
-    return creds, database.get_oauth_token("youtube")
+    return creds, database.get_oauth_token(provider_key)
+
+
+def resolve_oauth_client_config(
+    client_secrets_path: Optional[Path] = None,
+    *,
+    config: Optional[OmniStudioConfig] = None,
+    db: Optional[OmniDatabase] = None,
+) -> Tuple[Optional[Dict[str, str]], str]:
+    """
+    Resolves Google OAuth Client `(client_id, client_secret, auth_uri, token_uri)` seamlessly from:
+    1. Local `client_secret.json`
+    2. `YOUTUBE_CLIENT_SECRETS_JSON` Streamlit Secret / env var
+    3. Any already-connected YouTube channel token (so adding Channel #2, #3, #4 works on Streamlit Cloud
+       with ZERO extra `client_secret.json` setup!).
+    """
+    cfg = config or OmniStudioConfig()
+    database = db or get_db()
+    sec_path = client_secrets_path or cfg.youtube_client_secrets
+
+    if sec_path and sec_path.exists():
+        try:
+            raw = json.loads(sec_path.read_text(encoding="utf-8"))
+            blk = raw.get("web") or raw.get("installed") or raw
+            if blk.get("client_id") and blk.get("client_secret"):
+                return {
+                    "client_id": blk["client_id"],
+                    "client_secret": blk["client_secret"],
+                    "auth_uri": blk.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
+                    "token_uri": blk.get("token_uri", "https://oauth2.googleapis.com/token"),
+                }, "local_client_secret"
+        except Exception:
+            pass
+
+    # Check Streamlit Secrets / env var `YOUTUBE_CLIENT_SECRETS_JSON`
+    raw_sec_str = os.getenv("YOUTUBE_CLIENT_SECRETS_JSON", "").strip()
+    if not raw_sec_str:
+        try:
+            import streamlit as st
+            if hasattr(st, "secrets") and "YOUTUBE_CLIENT_SECRETS_JSON" in st.secrets:
+                val = st.secrets["YOUTUBE_CLIENT_SECRETS_JSON"]
+                raw_sec_str = val if isinstance(val, str) else json.dumps(dict(val))
+        except Exception:
+            pass
+    if raw_sec_str:
+        try:
+            raw = json.loads(raw_sec_str)
+            blk = raw.get("web") or raw.get("installed") or raw
+            if blk.get("client_id") and blk.get("client_secret"):
+                return {
+                    "client_id": blk["client_id"],
+                    "client_secret": blk["client_secret"],
+                    "auth_uri": blk.get("auth_uri", "https://accounts.google.com/o/oauth2/auth"),
+                    "token_uri": blk.get("token_uri", "https://oauth2.googleapis.com/token"),
+                }, "secret_client_json"
+        except Exception:
+            pass
+
+    # Reuse OAuth client_id + client_secret directly from any connected YouTube channel token!
+    for ch in hydrate_all_youtube_channels(cfg, database):
+        td = ch.get("token_dict") or {}
+        if td.get("client_id") and td.get("client_secret"):
+            return {
+                "client_id": td["client_id"],
+                "client_secret": td["client_secret"],
+                "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+                "token_uri": td.get("token_uri", "https://oauth2.googleapis.com/token"),
+            }, "reused_connected_oauth_app"
+
+    return None, "No Google OAuth Client credentials found (place `client_secret.json` or connect a token first)."
+
+
+def extract_oauth_code_from_input(raw_input: str) -> str:
+    """Accepts EITHER a raw OAuth authorization code OR a full redirected URL (`http://.../?code=4/0A...`)."""
+    txt = (raw_input or "").strip()
+    if not txt:
+        return ""
+    if "code=" in txt:
+        parsed = urllib.parse.urlparse(txt)
+        qs = urllib.parse.parse_qs(parsed.query)
+        if qs.get("code"):
+            return qs["code"][0].strip()
+        # Handle fragments or raw query strings without scheme
+        qs2 = urllib.parse.parse_qs(txt.split("?", 1)[-1])
+        if qs2.get("code"):
+            return qs2["code"][0].strip()
+    return txt
 
 
 def build_youtube_oauth_url(
-    client_secrets_path: Path,
+    client_secrets_path: Optional[Path] = None,
     redirect_uri: str = "http://localhost:8501",
+    *,
+    config: Optional[OmniStudioConfig] = None,
+    db: Optional[OmniDatabase] = None,
 ) -> Tuple[Optional[str], str]:
-    """Generates a Google OAuth 2.0 consent URL for `youtube.upload`."""
-    if not client_secrets_path.exists():
-        return None, f"Client secrets JSON not found at `{client_secrets_path}`."
-    try:
-        raw = json.loads(client_secrets_path.read_text(encoding="utf-8"))
-        cfg_block = raw.get("web") or raw.get("installed") or {}
-        client_id = cfg_block.get("client_id", "")
-        auth_uri = cfg_block.get("auth_uri", "https://accounts.google.com/o/oauth2/auth")
-        if not client_id:
-            return None, "Invalid client_secret.json (missing client_id)."
-        params = {
-            "client_id": client_id,
-            "redirect_uri": redirect_uri,
-            "response_type": "code",
-            "scope": " ".join(YOUTUBE_SCOPES),
-            "access_type": "offline",
-            "prompt": "consent",
-        }
-        return f"{auth_uri}?{urllib.parse.urlencode(params)}", "OK"
-    except Exception as exc:
-        return None, str(exc)
+    """
+    Generates a Google OAuth 2.0 consent URL with `prompt=consent select_account` so Google ALWAYS
+    displays the Google Account + Brand Account / YouTube Channel Picker (for connecting any channel!).
+    """
+    oauth_cfg, src_msg = resolve_oauth_client_config(client_secrets_path, config=config, db=db)
+    if not oauth_cfg:
+        return None, src_msg
+    params = {
+        "client_id": oauth_cfg["client_id"],
+        "redirect_uri": redirect_uri.strip(),
+        "response_type": "code",
+        "scope": " ".join(YOUTUBE_SCOPES),
+        "access_type": "offline",
+        "prompt": "consent select_account",
+    }
+    return f"{oauth_cfg['auth_uri']}?{urllib.parse.urlencode(params)}", "OK"
+
+
+def format_channel_streamlit_secret_toml(channel_record: Dict[str, Any]) -> str:
+    """Formats a ready-to-paste Streamlit Cloud Secrets TOML block to persist a newly connected channel forever."""
+    title = (channel_record.get("channel_title") or "NEW_CHANNEL").upper()
+    slug = "".join(ch if ch.isalnum() else "_" for ch in title).strip("_")[:20] or "CHANNEL"
+    secret_key = f"YOUTUBE_OAUTH_TOKEN_{slug}"
+    tok_json = json.dumps(channel_record.get("token_dict") or {}, indent=2, ensure_ascii=False)
+    return f"{secret_key} = '''\n{tok_json}\n'''"
 
 
 def exchange_oauth_code_and_store(
-    auth_code: str,
-    client_secrets_path: Path,
+    auth_code_or_url: str,
+    client_secrets_path: Optional[Path] = None,
     redirect_uri: str = "http://localhost:8501",
     db: Optional[OmniDatabase] = None,
-) -> Tuple[bool, str]:
-    """Exchanges an OAuth 2.0 authorization code for tokens and saves refresh_token into SQLite."""
+    config: Optional[OmniStudioConfig] = None,
+) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    """
+    Exchanges an OAuth 2.0 authorization code (or full redirect URL) for refresh tokens and stores
+    the new channel alongside existing channels in SQLite (NEVER overwriting other connected channels!).
+    """
     database = db or get_db()
-    if not client_secrets_path.exists():
-        return False, f"Missing `{client_secrets_path}`."
+    oauth_cfg, src_msg = resolve_oauth_client_config(client_secrets_path, config=config, db=database)
+    if not oauth_cfg:
+        return False, src_msg, None
+
+    clean_code = extract_oauth_code_from_input(auth_code_or_url)
+    if not clean_code:
+        return False, "Paste the authorization code or redirected browser URL first.", None
+
     try:
-        raw = json.loads(client_secrets_path.read_text(encoding="utf-8"))
-        cfg_block = raw.get("web") or raw.get("installed") or {}
-        token_uri = cfg_block.get("token_uri", "https://oauth2.googleapis.com/token")
         resp = requests.post(
-            token_uri,
+            oauth_cfg["token_uri"],
             data={
-                "code": auth_code.strip(),
-                "client_id": cfg_block["client_id"],
-                "client_secret": cfg_block["client_secret"],
-                "redirect_uri": redirect_uri,
+                "code": clean_code,
+                "client_id": oauth_cfg["client_id"],
+                "client_secret": oauth_cfg["client_secret"],
+                "redirect_uri": redirect_uri.strip(),
                 "grant_type": "authorization_code",
             },
             timeout=15.0,
         )
         if resp.status_code != 200:
-            return False, f"Token exchange failed ({resp.status_code}): {resp.text[:250]}"
+            return False, f"Token exchange failed ({resp.status_code}): {resp.text[:260]}", None
         tok = resp.json()
         token_dict = {
             "token": tok.get("access_token"),
+            "access_token": tok.get("access_token"),
             "refresh_token": tok.get("refresh_token"),
-            "token_uri": token_uri,
-            "client_id": cfg_block["client_id"],
-            "client_secret": cfg_block["client_secret"],
+            "token_uri": oauth_cfg["token_uri"],
+            "client_id": oauth_cfg["client_id"],
+            "client_secret": oauth_cfg["client_secret"],
             "scopes": YOUTUBE_SCOPES,
         }
-        creds = _credentials_from_token_dict(token_dict)
-        info = fetch_authenticated_channel_info(creds) if creds else {}
-        database.save_oauth_token(
-            "youtube",
-            token_dict,
-            channel_id=info.get("channel_id", ""),
-            channel_title=info.get("channel_title", "Connected YouTube Channel"),
-            scopes=YOUTUBE_SCOPES,
-        )
-        return True, f"Connected to YouTube channel: {info.get('channel_title', 'Authorized')} ✅"
+        saved = _save_channel_token_record(database, token_dict, fallback_title="Connected YouTube Channel")
+        if not saved:
+            return False, "Token received but could not save channel record.", None
+        ch_name = saved.get("channel_title") or "Authorized Channel"
+        ch_id = saved.get("channel_id") or ""
+        return True, f"Connected YouTube channel: **{ch_name}** (`{ch_id}`) ✅", saved
     except Exception as exc:
-        return False, str(exc)
+        return False, str(exc), None
+
+
+def import_youtube_token_json(
+    raw_json_text: str,
+    *,
+    db: Optional[OmniDatabase] = None,
+) -> Tuple[bool, str, Optional[Dict[str, Any]]]:
+    """Imports a pasted or uploaded YouTube OAuth token JSON into SQLite alongside existing channels."""
+    database = db or get_db()
+    try:
+        parsed = json.loads(raw_json_text)
+        if isinstance(parsed, list):
+            last_saved = None
+            cnt = 0
+            for item in parsed:
+                sv = _save_channel_token_record(database, item)
+                if sv:
+                    last_saved = sv
+                    cnt += 1
+            if cnt > 0:
+                return True, f"Imported {cnt} YouTube channel(s) ✅", last_saved
+            return False, "JSON list did not contain valid YouTube OAuth tokens.", None
+        saved = _save_channel_token_record(database, parsed)
+        if not saved:
+            return False, "JSON is missing `refresh_token` or `access_token`.", None
+        return True, f"Connected channel **{saved.get('channel_title')}** (`{saved.get('channel_id')}`) ✅", saved
+    except Exception as exc:
+        return False, f"Invalid token JSON: {exc}", None
 
 
 def fetch_authenticated_channel_info(creds: Credentials) -> Dict[str, str]:
@@ -256,9 +490,11 @@ def fetch_authenticated_channel_info(creds: Credentials) -> Dict[str, str]:
             items = resp.json().get("items", [])
             if items:
                 ch = items[0]
+                snip = ch.get("snippet", {})
                 return {
                     "channel_id": ch.get("id", ""),
-                    "channel_title": ch.get("snippet", {}).get("title", ""),
+                    "channel_title": snip.get("title", ""),
+                    "custom_url": snip.get("customUrl", ""),
                     "subscribers": ch.get("statistics", {}).get("subscriberCount", "0"),
                 }
     except Exception as exc:
@@ -269,15 +505,16 @@ def fetch_authenticated_channel_info(creds: Credentials) -> Dict[str, str]:
 def list_user_youtube_playlists(
     config: Optional[OmniStudioConfig] = None,
     db: Optional[OmniDatabase] = None,
+    channel_id: Optional[str] = None,
 ) -> List[Dict[str, str]]:
-    """Lists authenticated user's YouTube playlists for playlist routing in Step 4."""
-    creds, _ = get_valid_youtube_credentials(config, db)
+    """Lists playlists belonging to the SPECIFIC selected YouTube channel (`channel_id`)."""
+    creds, _ = get_valid_youtube_credentials(config, db, channel_id=channel_id)
     if not creds:
         return []
     try:
         resp = requests.get(
             "https://www.googleapis.com/youtube/v3/playlists",
-            params={"part": "snippet", "mine": "true", "maxResults": 30},
+            params={"part": "snippet", "mine": "true", "maxResults": 50},
             headers={"Authorization": f"Bearer {creds.token}"},
             timeout=10.0,
         )
@@ -289,6 +526,46 @@ def list_user_youtube_playlists(
     except Exception as exc:
         logger.debug("Playlist list skipped: %s", exc)
     return []
+
+
+def create_youtube_playlist(
+    title: str,
+    *,
+    description: str = "",
+    privacy_status: str = "public",
+    channel_id: Optional[str] = None,
+    config: Optional[OmniStudioConfig] = None,
+    db: Optional[OmniDatabase] = None,
+) -> Tuple[Optional[Dict[str, str]], str]:
+    """Creates a brand-new YouTube playlist directly on the selected channel."""
+    clean_title = (title or "").strip()
+    if not clean_title:
+        return None, "Enter a playlist title first."
+    creds, ch_rec = get_valid_youtube_credentials(config, db, channel_id=channel_id)
+    if not creds:
+        return None, "Selected YouTube channel is not authenticated."
+    try:
+        resp = requests.post(
+            "https://www.googleapis.com/youtube/v3/playlists",
+            params={"part": "snippet,status"},
+            headers={
+                "Authorization": f"Bearer {creds.token}",
+                "Content-Type": "application/json",
+            },
+            json={
+                "snippet": {"title": clean_title[:150], "description": description[:500]},
+                "status": {"privacyStatus": privacy_status},
+            },
+            timeout=15.0,
+        )
+        if resp.status_code in (200, 201):
+            item = resp.json()
+            pl = {"id": item["id"], "title": item.get("snippet", {}).get("title", clean_title)}
+            ch_name = (ch_rec or {}).get("channel_title", "channel")
+            return pl, f"Created playlist **{pl['title']}** on {ch_name} ✅"
+        return None, f"Playlist creation failed ({resp.status_code}): {resp.text[:220]}"
+    except Exception as exc:
+        return None, str(exc)
 
 
 # ==============================================================================
@@ -483,15 +760,16 @@ def run_agent4_youtube_publish(
     privacy_status: str = "private",
     scheduled_publish_at_iso: Optional[str] = None,
     playlist_id: Optional[str] = None,
+    channel_id: Optional[str] = None,
     category_id: str = "27",
     config: Optional[OmniStudioConfig] = None,
     db: Optional[OmniDatabase] = None,
 ) -> Agent4Output:
     """
-    Executes Agent 4 (Direct YouTube Publisher Agent):
+    Executes Agent 4 (Direct YouTube Publisher Agent) targeting the exact selected `channel_id`:
     - Uploads video using 4MB chunked resumable upload with backoff.
     - Writes exact scene timestamp chapters into description.
-    - Attaches thumbnail & adds to playlist.
+    - Attaches thumbnail & adds to playlist on that channel.
     - Updates SQLite `publish_records` and marks project `"Published"`.
     """
     cfg = config or OmniStudioConfig()
@@ -501,11 +779,12 @@ def run_agent4_youtube_publish(
     if not video_path.exists():
         raise FileNotFoundError(f"Video file not found: {video_path}")
 
-    creds, _ = get_valid_youtube_credentials(cfg, database)
+    creds, ch_rec = get_valid_youtube_credentials(cfg, database, channel_id=channel_id)
     if creds is None:
         raise RuntimeError(
-            "YouTube OAuth 2.0 is not connected. Complete OAuth authentication in Step 4 before uploading."
+            "Selected YouTube channel is not connected. Authorize it in Step 0 (Channel & Playlist) or Step 4 before uploading."
         )
+    target_ch_name = (ch_rec or {}).get("channel_title") or "Connected YouTube Channel"
 
     # Ensure exact scene-based chapters are embedded in the description
     final_desc = description.strip()
@@ -604,7 +883,11 @@ def run_agent4_youtube_publish(
         playlist_id=playlist_id,
         thumbnail_attached=thumb_ok,
         status="Published",
-        note="Uploaded via 4MB chunked resumable upload with chapters & thumbnail." if thumb_ok else "Uploaded via 4MB chunked resumable upload (custom thumbnail requires verified YouTube channel).",
+        note=(
+            f"Uploaded to '{target_ch_name}' via 4MB chunked resumable upload with chapters & thumbnail."
+            if thumb_ok
+            else f"Uploaded to '{target_ch_name}' via 4MB chunked resumable upload (custom thumbnail requires verified YouTube channel)."
+        ),
     )
     database.update_project_stage(
         project_id,

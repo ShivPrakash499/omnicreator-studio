@@ -61,6 +61,10 @@ class OmniDatabase:
                     niche TEXT NOT NULL,
                     language_tone TEXT NOT NULL,
                     target_minutes REAL DEFAULT 6.0,
+                    target_channel_id TEXT DEFAULT '',
+                    target_channel_title TEXT DEFAULT '',
+                    target_playlist_id TEXT DEFAULT '',
+                    target_playlist_title TEXT DEFAULT '',
                     current_step INTEGER DEFAULT 1,
                     status TEXT DEFAULT 'draft',
                     agent1_json TEXT,
@@ -121,6 +125,11 @@ class OmniDatabase:
                 );
                 """
             )
+            # Safe idempotent migration for existing SQLite databases missing multi-channel columns
+            existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(projects)").fetchall()}
+            for col_name in ("target_channel_id", "target_channel_title", "target_playlist_id", "target_playlist_title"):
+                if col_name not in existing_cols:
+                    conn.execute(f"ALTER TABLE projects ADD COLUMN {col_name} TEXT DEFAULT ''")
 
     # ------------------------------------------------------------------
     # Projects CRUD
@@ -132,6 +141,10 @@ class OmniDatabase:
         language_tone: str,
         target_minutes: float = 6.0,
         project_id: Optional[str] = None,
+        target_channel_id: str = "",
+        target_channel_title: str = "",
+        target_playlist_id: str = "",
+        target_playlist_title: str = "",
     ) -> str:
         pid = project_id or f"omni_{uuid.uuid4().hex[:10]}"
         now = _utc_now()
@@ -140,10 +153,23 @@ class OmniDatabase:
                 """
                 INSERT INTO projects (
                     id, topic, niche, language_tone, target_minutes,
+                    target_channel_id, target_channel_title, target_playlist_id, target_playlist_title,
                     current_step, status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, 1, 'step1_active', ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'step1_active', ?, ?)
                 """,
-                (pid, topic.strip(), niche.strip(), language_tone.strip(), float(target_minutes), now, now),
+                (
+                    pid,
+                    topic.strip(),
+                    niche.strip(),
+                    language_tone.strip(),
+                    float(target_minutes),
+                    (target_channel_id or "").strip(),
+                    (target_channel_title or "").strip(),
+                    (target_playlist_id or "").strip(),
+                    (target_playlist_title or "").strip(),
+                    now,
+                    now,
+                ),
             )
         return pid
 
@@ -189,6 +215,10 @@ class OmniDatabase:
         agent4_data: Optional[Dict[str, Any]] = None,
         youtube_video_id: Optional[str] = None,
         youtube_url: Optional[str] = None,
+        target_channel_id: Optional[str] = None,
+        target_channel_title: Optional[str] = None,
+        target_playlist_id: Optional[str] = None,
+        target_playlist_title: Optional[str] = None,
     ) -> None:
         fields: List[str] = ["updated_at = ?"]
         values: List[Any] = [_utc_now()]
@@ -217,6 +247,18 @@ class OmniDatabase:
         if youtube_url is not None:
             fields.append("youtube_url = ?")
             values.append(youtube_url)
+        if target_channel_id is not None:
+            fields.append("target_channel_id = ?")
+            values.append(target_channel_id)
+        if target_channel_title is not None:
+            fields.append("target_channel_title = ?")
+            values.append(target_channel_title)
+        if target_playlist_id is not None:
+            fields.append("target_playlist_id = ?")
+            values.append(target_playlist_id)
+        if target_playlist_title is not None:
+            fields.append("target_playlist_title = ?")
+            values.append(target_playlist_title)
 
         values.append(project_id)
         with self._connect() as conn:
@@ -360,6 +402,55 @@ class OmniDatabase:
     def delete_oauth_token(self, provider: str = "youtube") -> None:
         with self._connect() as conn:
             conn.execute("DELETE FROM oauth_tokens WHERE provider = ?", (provider,))
+
+    def list_youtube_channels(self) -> List[Dict[str, Any]]:
+        """Lists ALL connected YouTube channels stored in SQLite (`youtube` or `youtube:<channel_id>`)."""
+        with self._connect() as conn:
+            rows = conn.execute(
+                """
+                SELECT * FROM oauth_tokens
+                WHERE provider = 'youtube' OR provider LIKE 'youtube:%'
+                ORDER BY updated_at DESC
+                """
+            ).fetchall()
+            out: List[Dict[str, Any]] = []
+            seen_ids = set()
+            for r in rows:
+                rec = dict(r)
+                try:
+                    rec["token_dict"] = json.loads(rec["token_json"])
+                except Exception:
+                    rec["token_dict"] = {}
+                cid = (rec.get("channel_id") or rec["token_dict"].get("connected_channel_id") or rec["provider"]).strip()
+                if cid in seen_ids:
+                    continue
+                seen_ids.add(cid)
+                rec["resolved_channel_id"] = cid
+                out.append(rec)
+            return out
+
+    def get_youtube_channel(self, channel_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+        """Fetches a specific connected YouTube channel by `channel_id` (or first connected channel if omitted)."""
+        channels = self.list_youtube_channels()
+        if not channels:
+            return None
+        if not channel_id:
+            return channels[0]
+        target = channel_id.strip()
+        for ch in channels:
+            if ch.get("channel_id") == target or ch.get("provider") == f"youtube:{target}" or ch.get("provider") == target:
+                return ch
+        return None
+
+    def delete_youtube_channel(self, channel_id: str) -> None:
+        target = (channel_id or "").strip()
+        if not target:
+            return
+        with self._connect() as conn:
+            conn.execute(
+                "DELETE FROM oauth_tokens WHERE channel_id = ? OR provider = ? OR provider = ?",
+                (target, f"youtube:{target}", target),
+            )
 
     # ------------------------------------------------------------------
     # Publish Records CRUD

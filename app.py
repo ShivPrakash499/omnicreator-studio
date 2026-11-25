@@ -23,8 +23,12 @@ from backend.agent2_scene_scripter import enhance_all_scenes_to_cinema, run_agen
 from backend.agent3_media_composer import run_agent3_media_pipeline
 from backend.agent4_youtube_publisher import (
     build_youtube_oauth_url,
+    create_youtube_playlist,
     exchange_oauth_code_and_store,
+    format_channel_streamlit_secret_toml,
     get_valid_youtube_credentials,
+    import_youtube_token_json,
+    list_connected_youtube_channels,
     list_user_youtube_playlists,
     run_agent4_youtube_publish,
 )
@@ -162,7 +166,7 @@ st.markdown(
 # ==============================================================================
 def _init_session_state() -> None:
     defaults: Dict[str, Any] = {
-        "omni_step": 1,
+        "omni_step": 0,
         "omni_project_id": None,
         "omni_topic": "",
         "omni_niche": SUPPORTED_NICHES[2],  # AI & Future Tech default
@@ -171,6 +175,11 @@ def _init_session_state() -> None:
         "omni_bgm_preset": DEFAULT_BGM_PRESET,
         "omni_custom_bgm_path": None,
         "omni_target_minutes": 6.0,
+        "omni_channel_id": "",
+        "omni_channel_title": "",
+        "omni_playlist_id": "NONE",
+        "omni_playlist_title": "(No Playlist)",
+        "newly_connected_secret_toml": "",
         "agent1_output": None,      # Dict matching Agent1Output
         "agent2_output": None,      # Dict matching Agent2Output
         "agent3_output": None,      # Dict matching Agent3Output
@@ -224,11 +233,17 @@ def _load_project_into_session(project_id: str) -> None:
         proj["language_tone"] if proj["language_tone"] in SUPPORTED_LANGUAGES else SUPPORTED_LANGUAGES[0]
     )
     st.session_state["omni_target_minutes"] = float(proj.get("target_minutes") or 6.0)
+    if proj.get("target_channel_id"):
+        st.session_state["omni_channel_id"] = proj.get("target_channel_id") or ""
+        st.session_state["omni_channel_title"] = proj.get("target_channel_title") or ""
+    if proj.get("target_playlist_id"):
+        st.session_state["omni_playlist_id"] = proj.get("target_playlist_id") or "NONE"
+        st.session_state["omni_playlist_title"] = proj.get("target_playlist_title") or "(No Playlist)"
     st.session_state["agent1_output"] = proj.get("agent1_data")
     st.session_state["agent2_output"] = proj.get("agent2_data")
     st.session_state["agent3_output"] = proj.get("agent3_data")
     st.session_state["agent4_output"] = proj.get("agent4_data")
-    st.session_state["omni_step"] = max(1, min(4, int(proj.get("current_step") or 1)))
+    st.session_state["omni_step"] = max(0, min(4, int(proj.get("current_step") or 1)))
     st.session_state["publish_balloons_shown"] = False
 
 
@@ -238,20 +253,138 @@ cfg = OmniStudioConfig()
 db = get_db()
 worker = get_worker_manager()
 
+# Hydrate all connected YouTube channels from SQLite / Streamlit Secrets / local files
+all_connected_channels = list_connected_youtube_channels(cfg, db)
+if all_connected_channels and not st.session_state.get("omni_channel_id"):
+    first_ch = all_connected_channels[0]
+    st.session_state["omni_channel_id"] = first_ch.get("channel_id") or ""
+    st.session_state["omni_channel_title"] = first_ch.get("channel_title") or "Connected YouTube Channel"
+
 # Handle OAuth 2.0 callback `?code=...` cleanly if Google redirected back to Streamlit
 query_code = st.query_params.get("code")
 if query_code and not st.session_state.get("_oauth_code_handled"):
-    ok_cb, msg_cb = exchange_oauth_code_and_store(
+    cb_redirect = st.session_state.get("omni_oauth_redirect_uri") or cfg.youtube_redirect_uri
+    ok_cb, msg_cb, saved_ch = exchange_oauth_code_and_store(
         str(query_code),
         cfg.youtube_client_secrets,
-        redirect_uri=cfg.youtube_redirect_uri,
+        redirect_uri=cb_redirect,
         db=db,
+        config=cfg,
     )
     st.session_state["_oauth_code_handled"] = True
-    if ok_cb:
+    if ok_cb and saved_ch:
+        st.session_state["omni_channel_id"] = saved_ch.get("channel_id") or ""
+        st.session_state["omni_channel_title"] = saved_ch.get("channel_title") or ""
+        st.session_state["omni_playlist_id"] = "NONE"
+        st.session_state["omni_playlist_title"] = "(No Playlist)"
+        st.session_state["newly_connected_secret_toml"] = format_channel_streamlit_secret_toml(saved_ch)
+        all_connected_channels = list_connected_youtube_channels(cfg, db)
         st.toast(msg_cb, icon="✅")
     else:
         st.toast(f"OAuth exchange note: {msg_cb}", icon="⚠️")
+
+
+def _render_connect_channel_drawer(prefix: str, connected_channels: List[Dict[str, Any]]) -> None:
+    """Reusable multi-channel OAuth & Token Import panel used in BOTH Step 0 and Step 4."""
+    st.caption(
+        "Connect as many YouTube channels as you want (TopperLab 3D, Religious Stories, or any future channel). "
+        "Each channel is stored independently and never overwrites existing connected channels."
+    )
+    redir_opts = [
+        "http://localhost:8501",
+        "https://onebillionviews.streamlit.app",
+    ]
+    if cfg.youtube_redirect_uri and cfg.youtube_redirect_uri not in redir_opts:
+        redir_opts.insert(0, cfg.youtube_redirect_uri)
+    sel_redir = st.selectbox(
+        "🔗 OAuth Redirect URI:",
+        options=redir_opts,
+        index=0,
+        help="Use `http://localhost:8501` for instant copy/paste from your browser bar (works immediately with Desktop OAuth apps), or `https://onebillionviews.streamlit.app` if added to Google Cloud Console.",
+        key=f"{prefix}_redir_uri",
+    )
+    st.session_state["omni_oauth_redirect_uri"] = sel_redir
+
+    auth_url, auth_msg = build_youtube_oauth_url(
+        cfg.youtube_client_secrets,
+        redirect_uri=sel_redir,
+        config=cfg,
+        db=db,
+    )
+    if auth_url:
+        st.markdown(
+            f"1. **[🌐 Click Here to Sign In & Pick Your New YouTube Channel (Google OAuth 2.0) ↗]({auth_url})**\n"
+            f"2. Choose your Google Account and select your target channel (e.g., your **Religious Stories** channel) and click **Allow**.\n"
+            f"3. After redirect, copy the **entire URL** from your browser address bar (`http://localhost:8501/?code=4/0A...`) or just the `code` and paste it below:"
+        )
+        code_in = st.text_input(
+            "Paste Redirected Browser URL or Authorization Code:",
+            placeholder="http://localhost:8501/?code=4/0A...&scope=...  (or just 4/0A...)",
+            key=f"{prefix}_oauth_code_in",
+        )
+        if st.button("✅ Verify & Connect This YouTube Channel", type="primary", use_container_width=True, key=f"{prefix}_btn_exch"):
+            ok_ex, msg_ex, saved_ch = exchange_oauth_code_and_store(
+                code_in,
+                cfg.youtube_client_secrets,
+                redirect_uri=sel_redir,
+                db=db,
+                config=cfg,
+            )
+            if ok_ex and saved_ch:
+                st.session_state["omni_channel_id"] = saved_ch.get("channel_id") or ""
+                st.session_state["omni_channel_title"] = saved_ch.get("channel_title") or ""
+                st.session_state["omni_playlist_id"] = "NONE"
+                st.session_state["omni_playlist_title"] = "(No Playlist)"
+                st.session_state["newly_connected_secret_toml"] = format_channel_streamlit_secret_toml(saved_ch)
+                st.success(msg_ex)
+                st.rerun()
+            else:
+                st.error(msg_ex)
+    else:
+        st.info(f"OAuth Client note: {auth_msg} You can also import a channel token JSON below.")
+
+    if st.session_state.get("newly_connected_secret_toml"):
+        with st.expander("☁️ Save New Channel Permanently on Streamlit Cloud (Optional 1-Time Paste)", expanded=True):
+            st.caption(
+                "Your new channel is live right now! To make it survive Streamlit Cloud reboots automatically, "
+                "append this block at the bottom of your **Streamlit Cloud → Settings → Secrets**:"
+            )
+            st.code(st.session_state["newly_connected_secret_toml"], language="toml")
+
+    st.markdown("---")
+    imp_c1, imp_c2 = st.columns(2)
+    with imp_c1:
+        up_tok = st.file_uploader(
+            "📄 Or Import Channel Token JSON File:",
+            type=["json"],
+            key=f"{prefix}_upload_yt_tok",
+        )
+        if up_tok is not None:
+            ok_imp, msg_imp, saved_imp = import_youtube_token_json(up_tok.getvalue().decode("utf-8"), db=db)
+            if ok_imp and saved_imp:
+                st.session_state["omni_channel_id"] = saved_imp.get("channel_id") or ""
+                st.session_state["omni_channel_title"] = saved_imp.get("channel_title") or ""
+                st.session_state["newly_connected_secret_toml"] = format_channel_streamlit_secret_toml(saved_imp)
+                st.success(msg_imp)
+                st.rerun()
+            else:
+                st.error(msg_imp)
+    with imp_c2:
+        if connected_channels:
+            rem_opts = {
+                f"{c.get('channel_title') or 'Channel'} ({c.get('channel_id')})": c.get("channel_id") or c.get("provider")
+                for c in connected_channels
+            }
+            rem_pick = st.selectbox("🗑️ Disconnect a Channel:", options=list(rem_opts.keys()), key=f"{prefix}_rem_sel")
+            if st.button("Disconnect Selected Channel", use_container_width=True, key=f"{prefix}_rem_btn"):
+                target_rm = rem_opts[rem_pick]
+                db.delete_youtube_channel(str(target_rm))
+                if st.session_state.get("omni_channel_id") == target_rm:
+                    st.session_state["omni_channel_id"] = ""
+                    st.session_state["omni_channel_title"] = ""
+                    st.session_state["omni_playlist_id"] = "NONE"
+                    st.session_state["omni_playlist_title"] = "(No Playlist)"
+                st.rerun()
 
 
 # ==============================================================================
@@ -281,13 +414,15 @@ with st.sidebar:
 
 
 # ==============================================================================
-# TOP HEADER & MOBILE/TABLET HORIZONTAL STEPPER
+# TOP HEADER & MOBILE/TABLET HORIZONTAL STEPPER (5-STAGE MULTI-CHANNEL FLOW)
 # ==============================================================================
+active_ch_lbl = st.session_state.get("omni_channel_title") or "No Channel Selected Yet"
+active_pl_lbl = st.session_state.get("omni_playlist_title") or "(No Playlist)"
 st.markdown(
-    """
+    f"""
     <div class="omni-header">
-        <h1>🎬 OMNI STUDIO — Multi-Niche AI Video Engine</h1>
-        <p>Generic 4-Agent Pipeline for High-Retention 5–8 Min YouTube Videos &amp; Shorts • Any Niche • Direct YouTube Publish</p>
+        <h1>🎬 OMNI STUDIO — Multi-Channel Multi-Niche AI Video Engine</h1>
+        <p>Target Channel: <strong>📺 {active_ch_lbl}</strong> &nbsp;•&nbsp; Playlist: <strong>📂 {active_pl_lbl}</strong> &nbsp;•&nbsp; Connected Channels: <strong>{len(all_connected_channels)}</strong></p>
     </div>
     """,
     unsafe_allow_html=True,
@@ -295,6 +430,7 @@ st.markdown(
 
 step = int(st.session_state["omni_step"])
 steps_meta = [
+    (0, "0. Channel & Playlist"),
     (1, "1. SEO & Hooks"),
     (2, "2. Scene Scripting"),
     (3, "3. Media Rendering"),
@@ -314,8 +450,8 @@ for s_num, s_label in steps_meta:
 st.markdown(f'<div class="omni-stepper">{"".join(pills_html)}</div>', unsafe_allow_html=True)
 
 # Compact clickable quick-navigation row for already-unlocked stages
-nav_cols = st.columns(4)
-max_unlocked = 1
+nav_cols = st.columns(5)
+max_unlocked = 1  # Both Step 0 (Channel & Playlist) and Step 1 (SEO & Hooks) are always accessible
 if st.session_state.get("agent1_output"):
     max_unlocked = max(max_unlocked, 2)
 if st.session_state.get("agent2_output"):
@@ -337,9 +473,145 @@ st.markdown("")
 
 
 # ==============================================================================
+# PRE-STEP (STEP 0) — MULTI-CHANNEL & PLAYLIST SELECTOR
+# ==============================================================================
+if step == 0:
+    st.subheader("Pre-Step • Select YouTube Channel & Target Playlist")
+
+    with st.container(border=True):
+        if all_connected_channels:
+            st.success(f"🔐 **{len(all_connected_channels)} YouTube Channel(s) Connected** — Pick the channel & playlist for this video below.")
+            ch_labels: List[str] = []
+            ch_by_label: Dict[str, Optional[Dict[str, Any]]] = {}
+            default_ch_idx = 0
+            cur_cid = st.session_state.get("omni_channel_id", "")
+
+            for i, ch in enumerate(all_connected_channels):
+                cid = ch.get("channel_id") or ""
+                ctitle = ch.get("channel_title") or "Connected Channel"
+                handle = ch.get("account_email") or (ch.get("token_dict") or {}).get("connected_custom_url") or ""
+                handle_str = f" • {handle}" if handle else ""
+                lbl = f"📺 {ctitle}{handle_str} ({cid})"
+                ch_labels.append(lbl)
+                ch_by_label[lbl] = ch
+                if cid == cur_cid:
+                    default_ch_idx = i
+
+            offline_lbl = "🎬 Create Offline / Choose Channel Later"
+            ch_labels.append(offline_lbl)
+            ch_by_label[offline_lbl] = None
+
+            ch_col, pl_col = st.columns([1.25, 1.0])
+            with ch_col:
+                picked_ch_lbl = st.selectbox(
+                    "📺 Target YouTube Channel:",
+                    options=ch_labels,
+                    index=default_ch_idx,
+                    key="prestep_channel_sel",
+                )
+                picked_ch = ch_by_label[picked_ch_lbl]
+                if picked_ch:
+                    new_cid = picked_ch.get("channel_id") or ""
+                    new_ctitle = picked_ch.get("channel_title") or "Connected Channel"
+                    if new_cid != st.session_state.get("omni_channel_id"):
+                        st.session_state["omni_channel_id"] = new_cid
+                        st.session_state["omni_channel_title"] = new_ctitle
+                        st.session_state["omni_playlist_id"] = "NONE"
+                        st.session_state["omni_playlist_title"] = "(No Playlist)"
+                        # Smart auto-suggest Religious & Devotional niche/BGM if channel looks devotional
+                        low_c = new_ctitle.lower()
+                        if any(k in low_c for k in ("shyam", "bhakti", "dharm", "katha", "ram", "krishna", "shiv", "devotion", "spirit", "relig", "temple", "sanatan", "gita")):
+                            if "Religious & Devotional" in SUPPORTED_NICHES:
+                                st.session_state["omni_niche"] = "Religious & Devotional"
+                            for b_k in BGM_SCORE_PRESETS.keys():
+                                if "Indian Devotional" in b_k:
+                                    st.session_state["omni_bgm_preset"] = b_k
+                                    break
+                else:
+                    st.session_state["omni_channel_id"] = ""
+                    st.session_state["omni_channel_title"] = "Offline / Select Later"
+                    st.session_state["omni_playlist_id"] = "NONE"
+                    st.session_state["omni_playlist_title"] = "(No Playlist)"
+
+            with pl_col:
+                sel_cid = st.session_state.get("omni_channel_id", "")
+                if sel_cid:
+                    playlists = list_user_youtube_playlists(cfg, db, channel_id=sel_cid)
+                    pl_map: Dict[str, str] = {"(No Playlist)": "NONE"}
+                    for pl in playlists:
+                        pl_map[f"📂 {pl['title']}"] = pl["id"]
+                    pl_keys = list(pl_map.keys())
+                    cur_pl_id = st.session_state.get("omni_playlist_id", "NONE")
+                    pl_idx = 0
+                    for pi, pk in enumerate(pl_keys):
+                        if pl_map[pk] == cur_pl_id:
+                            pl_idx = pi
+                            break
+                    picked_pl_lbl = st.selectbox(
+                        f"📂 Target Playlist ({len(playlists)} found on channel):",
+                        options=pl_keys,
+                        index=pl_idx,
+                        key=f"prestep_pl_sel_{sel_cid}",
+                    )
+                    st.session_state["omni_playlist_id"] = pl_map[picked_pl_lbl]
+                    st.session_state["omni_playlist_title"] = picked_pl_lbl.replace("📂 ", "")
+                else:
+                    st.selectbox("📂 Target Playlist:", options=["(Connect/Select Channel First)"], disabled=True, key="prestep_pl_disabled")
+
+            # Inline Create New Playlist widget for the selected channel
+            if st.session_state.get("omni_channel_id"):
+                with st.expander(f"➕ Create a New Playlist on {st.session_state.get('omni_channel_title')}", expanded=False):
+                    npl_c1, npl_c2, npl_c3 = st.columns([1.8, 0.9, 1.0])
+                    with npl_c1:
+                        new_pl_title = st.text_input("New Playlist Name:", placeholder="e.g., Khatu Shyam Katha, Class 10 Maths...", key="prestep_new_pl_title")
+                    with npl_c2:
+                        new_pl_priv = st.selectbox("Privacy:", options=["public", "unlisted", "private"], index=0, key="prestep_new_pl_priv")
+                    with npl_c3:
+                        st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
+                        if st.button("➕ Create Playlist", use_container_width=True, key="prestep_create_pl_btn"):
+                            created_pl, pl_msg = create_youtube_playlist(
+                                new_pl_title,
+                                privacy_status=new_pl_priv,
+                                channel_id=st.session_state.get("omni_channel_id"),
+                                config=cfg,
+                                db=db,
+                            )
+                            if created_pl:
+                                st.session_state["omni_playlist_id"] = created_pl["id"]
+                                st.session_state["omni_playlist_title"] = created_pl["title"]
+                                st.success(pl_msg)
+                                st.rerun()
+                            else:
+                                st.error(pl_msg)
+        else:
+            st.warning("🔒 **No YouTube Channel Connected Yet** — Connect your first channel below, or proceed to Step 1 in offline mode.")
+
+    # Multi-Channel OAuth Connect / Manage Drawer
+    with st.expander(
+        "➕ Connect Another YouTube Channel (Religious Stories / Any New Channel)",
+        expanded=(not all_connected_channels or bool(st.session_state.get("newly_connected_secret_toml"))),
+    ):
+        _render_connect_channel_drawer("prestep", all_connected_channels)
+
+    st.markdown("")
+    if st.button("Start Step 1: SEO, Hooks & Storyboard ➡️", type="primary", use_container_width=True):
+        st.session_state["omni_step"] = 1
+        if st.session_state.get("omni_project_id"):
+            db.update_project_stage(
+                st.session_state["omni_project_id"],
+                current_step=1,
+                target_channel_id=st.session_state.get("omni_channel_id", ""),
+                target_channel_title=st.session_state.get("omni_channel_title", ""),
+                target_playlist_id=st.session_state.get("omni_playlist_id", "NONE"),
+                target_playlist_title=st.session_state.get("omni_playlist_title", "(No Playlist)"),
+            )
+        st.rerun()
+
+
+# ==============================================================================
 # STEP 1 — AGENT 1: SEARCH, SEO & STORYBOARD AGENT
 # ==============================================================================
-if step == 1:
+elif step == 1:
     st.subheader("Step 1 • Agent 1: Search, SEO & High-Retention Storyboard")
 
     with st.container(border=True):
@@ -415,13 +687,26 @@ if step == 1:
                 )
                 pid = st.session_state.get("omni_project_id")
                 if not pid:
-                    pid = db.create_project(topic_val.strip(), niche_val, lang_val, float(dur_val))
+                    pid = db.create_project(
+                        topic_val.strip(),
+                        niche_val,
+                        lang_val,
+                        float(dur_val),
+                        target_channel_id=st.session_state.get("omni_channel_id", ""),
+                        target_channel_title=st.session_state.get("omni_channel_title", ""),
+                        target_playlist_id=st.session_state.get("omni_playlist_id", "NONE"),
+                        target_playlist_title=st.session_state.get("omni_playlist_title", "(No Playlist)"),
+                    )
                     st.session_state["omni_project_id"] = pid
                 db.update_project_stage(
                     pid,
                     current_step=1,
                     status="step1_ready",
                     agent1_data=a1_obj.model_dump(),
+                    target_channel_id=st.session_state.get("omni_channel_id", ""),
+                    target_channel_title=st.session_state.get("omni_channel_title", ""),
+                    target_playlist_id=st.session_state.get("omni_playlist_id", "NONE"),
+                    target_playlist_title=st.session_state.get("omni_playlist_title", "(No Playlist)"),
                 )
                 st.session_state["agent1_output"] = a1_obj.model_dump()
                 _clear_step1_widget_keys()
@@ -1135,47 +1420,44 @@ elif step == 4:
         if fresh_proj and fresh_proj.get("agent4_data"):
             st.session_state["agent4_output"] = fresh_proj["agent4_data"]
 
-        # 1. OAuth 2.0 Connection Status Card (Stored in SQLite)
-        creds, tok_rec = get_valid_youtube_credentials(cfg, db)
+        # 1. Multi-Channel OAuth 2.0 Selector & Connection Card (Synced from Step 0)
+        connected_chs_s4 = list_connected_youtube_channels(cfg, db)
+        active_ch_id_s4 = st.session_state.get("omni_channel_id", "")
         with st.container(border=True):
-            if creds and tok_rec:
-                st.success(
-                    f"🔐 **YouTube OAuth 2.0 Connected** — Channel: **{tok_rec.get('channel_title') or 'Authorized Channel'}** "
-                    f"(`{tok_rec.get('channel_id') or 'SQLite Token Active'}`)"
+            if connected_chs_s4:
+                ch_opts_s4: Dict[str, Dict[str, Any]] = {}
+                default_s4_idx = 0
+                for ci, ch in enumerate(connected_chs_s4):
+                    cid = ch.get("channel_id") or ""
+                    ctitle = ch.get("channel_title") or "Connected Channel"
+                    handle = ch.get("account_email") or (ch.get("token_dict") or {}).get("connected_custom_url") or ""
+                    lbl = f"📺 {ctitle}{' • ' + handle if handle else ''} ({cid})"
+                    ch_opts_s4[lbl] = ch
+                    if cid == active_ch_id_s4:
+                        default_s4_idx = ci
+                sel_ch_lbl_s4 = st.selectbox(
+                    "📺 Publish Target YouTube Channel (Pre-selected from Step 0):",
+                    options=list(ch_opts_s4.keys()),
+                    index=default_s4_idx,
+                    key="step4_channel_sel",
                 )
-            else:
-                st.warning("🔒 **YouTube OAuth 2.0 Not Connected Yet** — Authenticate below to enable 4MB chunked direct upload.")
-
-            with st.expander("🔑 Manage YouTube OAuth 2.0 Connection (`youtube.upload`)", expanded=(creds is None)):
-                auth_url, auth_msg = build_youtube_oauth_url(cfg.youtube_client_secrets, redirect_uri=cfg.youtube_redirect_uri)
-                if auth_url:
-                    st.markdown(f"[🌐 Click Here to Authorize YouTube Channel via Google OAuth 2.0 ↗]({auth_url})")
-                    code_in = st.text_input("Or paste OAuth Authorization Code here:", key="oauth_manual_code")
-                    if st.button("Verify & Save Refresh Token to SQLite", use_container_width=True):
-                        ok_ex, msg_ex = exchange_oauth_code_and_store(
-                            code_in, cfg.youtube_client_secrets, redirect_uri=cfg.youtube_redirect_uri, db=db
-                        )
-                        if ok_ex:
-                            st.success(msg_ex)
-                            st.rerun()
-                        else:
-                            st.error(msg_ex)
+                sel_ch_obj_s4 = ch_opts_s4[sel_ch_lbl_s4]
+                active_ch_id_s4 = sel_ch_obj_s4.get("channel_id") or ""
+                st.session_state["omni_channel_id"] = active_ch_id_s4
+                st.session_state["omni_channel_title"] = sel_ch_obj_s4.get("channel_title") or ""
+                creds, tok_rec = get_valid_youtube_credentials(cfg, db, channel_id=active_ch_id_s4)
+                if creds and tok_rec:
+                    st.success(
+                        f"🔐 **Ready to Publish** — Target Channel: **{tok_rec.get('channel_title')}** (`{tok_rec.get('channel_id')}`)"
+                    )
                 else:
-                    st.caption(f"Setup note: {auth_msg} Upload your OAuth token JSON below or place `client_secret.json` in `config/credentials/`.")
+                    st.warning("⚠️ Stored token for this channel needs re-authorization below.")
+            else:
+                creds, tok_rec = None, None
+                st.warning("🔒 **No YouTube Channel Connected Yet** — Authorize your channel below to enable 4MB chunked direct upload.")
 
-                up_tok = st.file_uploader("Import Authorized `youtube_oauth_token.json`:", type=["json"], key="upload_yt_tok")
-                if up_tok is not None:
-                    try:
-                        parsed_tok = json.loads(up_tok.getvalue().decode("utf-8"))
-                        db.save_oauth_token("youtube", parsed_tok, channel_title="Imported YouTube OAuth Token")
-                        st.success("Saved OAuth token into SQLite ✅")
-                        st.rerun()
-                    except Exception as tok_err:
-                        st.error(f"Invalid token JSON: {tok_err}")
-
-                if creds and st.button("Disconnect / Clear Stored YouTube Token"):
-                    db.delete_oauth_token("youtube")
-                    st.rerun()
+            with st.expander("➕ Connect / Manage Multiple YouTube Channels (`youtube.upload`)", expanded=(creds is None)):
+                _render_connect_channel_drawer("step4", connected_chs_s4)
 
         # 2. Publishing & Scheduling Form
         with st.container(border=True):
@@ -1202,16 +1484,30 @@ elif step == 4:
                 sched_date = st.date_input("Publish Date (IST):", value=datetime.date.today() + datetime.timedelta(days=1), disabled=not use_schedule)
                 sched_time = st.time_input("Publish Time (IST):", value=datetime.time(18, 30), disabled=not use_schedule)
             with pc3:
-                playlists = list_user_youtube_playlists(cfg, db) if creds else []
+                playlists = list_user_youtube_playlists(cfg, db, channel_id=active_ch_id_s4) if creds else []
                 pl_map = {"(No Playlist)": "NONE"}
                 for pl in playlists:
                     pl_map[pl["title"]] = pl["id"]
-                sel_pl_label = st.selectbox("📂 Playlist Routing:", options=list(pl_map.keys()), key="pub_playlist")
+                pl_keys_s4 = list(pl_map.keys())
+                pre_pl_id = st.session_state.get("omni_playlist_id", "NONE")
+                pl_s4_idx = 0
+                for pi, pk in enumerate(pl_keys_s4):
+                    if pl_map[pk] == pre_pl_id:
+                        pl_s4_idx = pi
+                        break
+                sel_pl_label = st.selectbox(
+                    "📂 Playlist Routing (Pre-selected from Step 0):",
+                    options=pl_keys_s4,
+                    index=pl_s4_idx,
+                    key=f"pub_playlist_{active_ch_id_s4}",
+                )
                 sel_pl_id = pl_map[sel_pl_label]
+                st.session_state["omni_playlist_id"] = sel_pl_id
+                st.session_state["omni_playlist_title"] = sel_pl_label
 
         is_uploading = worker.is_running(publish_task_key)
         submit_pub = st.button(
-            "🚀 Publish to YouTube (4MB Chunked Resumable Upload)",
+            f"🚀 Publish to {st.session_state.get('omni_channel_title') or 'YouTube'} (4MB Chunked Resumable Upload)",
             type="primary",
             use_container_width=True,
             disabled=(is_uploading or creds is None),
@@ -1235,7 +1531,7 @@ elif step == 4:
                 task_key=publish_task_key,
                 project_id=pid,
                 job_type="youtube_upload",
-                label=f"YouTube Upload: {pub_title[:34]}",
+                label=f"YouTube Upload ({st.session_state.get('omni_channel_title') or 'YT'}): {pub_title[:28]}",
                 fn=run_agent4_youtube_publish,
                 kwargs={
                     "project_id": pid,
@@ -1248,6 +1544,7 @@ elif step == 4:
                     "privacy_status": privacy_opt,
                     "scheduled_publish_at_iso": sched_iso,
                     "playlist_id": None if sel_pl_id == "NONE" else sel_pl_id,
+                    "channel_id": active_ch_id_s4 or None,
                     "config": cfg,
                     "db": db,
                 },
