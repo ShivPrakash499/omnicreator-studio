@@ -428,8 +428,8 @@ def _scrub_camera_gear_and_anachronisms(text: str) -> str:
     gear_replacements = [
         (
             r"\b(?:shot\s+)?on\s+ARRI\s+Alexa\s*\d*"
-            r"(?:[,\s]+(?:with\s+)?(?:Panavision\s+)?(?:\d+mm\s+)?(?:Panavision\s+)?"
-            r"(?:anamorphic\s+|telephoto\s+|wide\s+|macro\s+)?(?:prime\s+)?(?:glass|lens(?:es)?)?"
+            r"(?:(?:,\s*|\s+)(?:with\s+)?(?:Panavision\s+)?(?:\d+mm\s+)?(?:Panavision\s+)?"
+            r"(?:anamorphic|telephoto|wide|macro)(?:\s+prime)?(?:\s+(?:glass|lens(?:es)?))?"
             r"(?:\s+at\s+f/[\d.]+)?)?",
             "in widescreen theatrical film aesthetic",
         ),
@@ -439,7 +439,7 @@ def _scrub_camera_gear_and_anachronisms(text: str) -> str:
         (r"\bRED\s+V-Raptor\s*8K\b", "ultra-crisp cinema"),
         (r"\bKodak\s+Vision3\s*500T\b", "classic celluloid"),
         (r"\brobotic\s+Bolt\s+motion-control(?:\s+macro)?(?:\s+lens)?\b", "ultra-smooth macro close-up"),
-        (r"\bmotorized\s+(?:macro\s+)?(?:slider\s+)?(?:dolly\s+)?push-in\b", "ultra-smooth slow close-up glide"),
+        (r"\b(?:ultra-smooth\s+)?motorized\s+(?:macro\s+)?(?:slider\s+)?(?:dolly\s+)?push-in\b", "ultra-smooth slow close-up glide"),
         (r"\b(?:fluid\s+)?(?:orbital\s+)?(?:180[- ]degree\s+|180°\s+)?Steadicam(?:\s+arc|\s+orbits?|\s+shot|\s+push-ins?|\s+tracking)?\b", "smooth circular gliding perspective"),
         (r"\b(?:aerial\s+|stabilized\s+|low-angle\s+)?gimbal(?:\s+tracking|\s+choreography|\s+shot)?\b", "smooth gliding perspective"),
         (r"\b(?:top-down\s+|aerial\s+|stabilized\s+|nocturnal\s+)?drone(?:\s+pull-back|\s+descent|\s+shot|\s+reveals?|\s+pulls\s+back)?\b", "high aerial overhead view"),
