@@ -34,6 +34,7 @@ import imageio_ffmpeg
 from PIL import Image, ImageDraw, ImageFont
 
 from backend.config import (
+    DEFAULT_BGM_PRESET,
     DEFAULT_CINEMA_PRESET,
     IMAGE_CONTINUITY_MODEL,
     IMAGE_PRO_MODEL,
@@ -597,6 +598,8 @@ def run_agent3_media_pipeline(
     render_quality: str = "full_omni_video",
     force_ai_cinema: bool = True,
     cinema_preset: str = DEFAULT_CINEMA_PRESET,
+    bgm_preset: str = DEFAULT_BGM_PRESET,
+    custom_bgm_path: Optional[str] = None,
     bgm_duck_db: Optional[float] = None,
     enable_foley_sfx: bool = True,
     include_avatar_in_thumbnail: bool = False,
@@ -848,6 +851,8 @@ def run_agent3_media_pipeline(
         niche=agent1.niche,
         bgm_style_reference=agent1.bgm_style_reference,
         duration_sec=total_actual_duration,
+        bgm_preset=bgm_preset,
+        custom_bgm_path=Path(custom_bgm_path) if custom_bgm_path else None,
         config=cfg,
         use_lyria_api=(render_quality != "fast_studio_preview"),
     )

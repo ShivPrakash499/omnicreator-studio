@@ -105,6 +105,7 @@ SUPPORTED_NICHES: List[str] = [
     "Business & Startups",
     "History & Geopolitics",
     "Stories & Mysteries",
+    "Religious & Devotional",
     "Entertainment & Pop Culture",
     "Science & Space",
     "Health & Psychology",
@@ -201,6 +202,23 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
         "badge_prefix": "TRUE MYSTERY",
         "preferred_graphics": "timeline_chart",
     },
+    "Religious & Devotional": {
+        "visual_style": (
+            "Epic sacred Indian & global mythological cinema (IMAX theatrical grandeur), shot on ARRI Alexa 65 "
+            "with 35mm anamorphic prime lenses, golden-hour ancient temple architecture, radiant divine sunbeams "
+            "piercing swirling temple incense, glowing brass diyas and sacred river reflections, rich saffron-gold "
+            "and deep twilight indigo film color grade, majestic reverent atmosphere"
+        ),
+        "music_vibe": (
+            "Soulful Indian devotional cinematic film score with expressive bansuri bamboo flute melody, warm "
+            "meditative tanpura drone, resonant sitar and sarangi, subtle deep temple pakhawaj percussion, and "
+            "sweeping reverent orchestral strings, strictly instrumental, zero vocals"
+        ),
+        "accent_hex": "#FF9900",
+        "secondary_hex": "#FFD700",
+        "badge_prefix": "DIVINE KATHA",
+        "preferred_graphics": "timeline_chart",
+    },
     "Entertainment & Pop Culture": {
         "visual_style": (
             "A24 & Denis Villeneuve vibrant theatrical cinema, lush neon practical rim-lighting, fluid Steadicam "
@@ -276,6 +294,54 @@ CINEMA_STYLE_PRESETS: Dict[str, Dict[str, str]] = {
 }
 
 DEFAULT_CINEMA_PRESET: str = "🎬 Hollywood IMAX Documentary (Default)"
+
+# Dedicated Selectable Background Music / Film Score Styles (powered by Vertex AI `lyria-002` + Custom Upload)
+BGM_SCORE_PRESETS: Dict[str, str] = {
+    "🤖 Auto-Match Topic & Niche (Smart AI Composer)": "",
+    "🪔 Indian Devotional & Bhakti (Bansuri Flute, Tanpura, Sitar & Strings)": (
+        "Soulful Indian devotional cinematic orchestral score at 74 BPM, expressive bansuri bamboo flute leading a "
+        "reverent melody over a warm meditative tanpura drone, delicate sitar and sarangi harmonies, soft deep temple "
+        "pakhawaj rhythm, and sweeping emotional strings, majestic bhakti atmosphere, strictly instrumental, no vocals"
+    ),
+    "⚔️ Epic Mythological & Mahabharata War (Shankh, Pakhawaj, Taiko & Brass)": (
+        "Heroic Indian mythological epic cinema score at 92 BPM, resonant sacred shankh horn swells, thunderous deep "
+        "pakhawaj and orchestral taiko war drums, dramatic soaring strings, bold low brass motifs, and intense ancient "
+        "battlefield grandeur, strictly instrumental, no vocals"
+    ),
+    "🌿 Calm Spiritual Meditation & Healing (Soft Flute, Singing Bowls & Pads)": (
+        "Serene spiritual meditation soundtrack at 62 BPM, airy gentle bansuri flute phrases, warm crystalline Tibetan "
+        "singing bowl resonance, lush ethereal ambient string pads, deeply peaceful and uplifting temple morning mood, "
+        "strictly instrumental, no vocals"
+    ),
+    "🎻 Hollywood Hans Zimmer Epic (Deep Cello, Brass Swells & Percussion)": (
+        "Monumental Hollywood IMAX film score inspired by Hans Zimmer at 86 BPM, urgent deep cello ostinato, warm "
+        "French horn brass swells, pulsing orchestral percussion, soaring emotional string crescendos, rich theatrical "
+        "dynamic range, strictly instrumental, no vocals"
+    ),
+    "🕵️ Suspense & Dark Mystery (Ticking Pulse, Sub-Bass & Tense Strings)": (
+        "Gripping investigative thriller documentary score at 96 BPM, crisp subtle clockwork ticking percussion, "
+        "deep atmospheric sub-bass pulse, tense muted cello and dark piano motifs building continuous curiosity, "
+        "strictly instrumental, no vocals"
+    ),
+    "🚀 Sci-Fi & Future Tech (Blade Runner Synth, Arpeggio & Deep Bass)": (
+        "Futuristic Blade Runner style cyber-documentary soundtrack at 104 BPM, warm analog Vangelis-inspired synth "
+        "pads, sleek driving bassline, crisp crystalline arpeggios, sleek modern sci-fi atmosphere, strictly instrumental, no vocals"
+    ),
+    "💼 Executive Finance & Documentary (Sleek Piano, Strings & Modern Pulse)": (
+        "High-stakes modern financial documentary score at 100 BPM, crisp minimal grand piano motif, taut rhythmic "
+        "pizzicato strings, punchy muted electronic beat, authoritative and energetic corporate storytelling mood, "
+        "strictly instrumental, no vocals"
+    ),
+    "🎵 Upload My Own Custom BGM Track (.mp3 / .wav)": "__CUSTOM_UPLOAD__",
+}
+
+DEFAULT_BGM_PRESET: str = "🤖 Auto-Match Topic & Niche (Smart AI Composer)"
+
+
+def get_bgm_preset_prompt(preset_name: Optional[str]) -> str:
+    if preset_name and preset_name in BGM_SCORE_PRESETS:
+        return BGM_SCORE_PRESETS[preset_name]
+    return ""
 
 # Rotating 8-shot theatrical editing grammar enforcing authentic visual resets every 8-12 seconds
 CINEMATIC_SHOT_CHOREOGRAPHY: List[Dict[str, str]] = [

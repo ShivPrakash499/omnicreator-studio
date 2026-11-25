@@ -29,7 +29,9 @@ from backend.agent4_youtube_publisher import (
     run_agent4_youtube_publish,
 )
 from backend.config import (
+    BGM_SCORE_PRESETS,
     CINEMA_STYLE_PRESETS,
+    DEFAULT_BGM_PRESET,
     DEFAULT_CINEMA_PRESET,
     SUPPORTED_LANGUAGES,
     SUPPORTED_NICHES,
@@ -166,6 +168,8 @@ def _init_session_state() -> None:
         "omni_niche": SUPPORTED_NICHES[2],  # AI & Future Tech default
         "omni_language": SUPPORTED_LANGUAGES[0],
         "omni_cinema_preset": DEFAULT_CINEMA_PRESET,
+        "omni_bgm_preset": DEFAULT_BGM_PRESET,
+        "omni_custom_bgm_path": None,
         "omni_target_minutes": 6.0,
         "agent1_output": None,      # Dict matching Agent1Output
         "agent2_output": None,      # Dict matching Agent2Output
@@ -365,6 +369,17 @@ if step == 1:
                 help="5–8 minutes generates 30–50 granular scenes (8–12s visual reset rule).",
                 key="input_dur_field",
             )
+
+        bgm_presets_s1 = list(BGM_SCORE_PRESETS.keys())
+        cur_bgm_s1 = st.session_state.get("omni_bgm_preset", DEFAULT_BGM_PRESET)
+        bgm_val_s1 = st.selectbox(
+            "🎼 Background Score / Music Style (Like Niche — Dedicated Lyria-002 Soundtrack or Custom Upload):",
+            options=bgm_presets_s1,
+            index=bgm_presets_s1.index(cur_bgm_s1) if cur_bgm_s1 in bgm_presets_s1 else 0,
+            help="Auto-Match adapts automatically to your Niche & Topic (e.g. Religious & Devotional gets bansuri flute, tanpura, sitar & devotional strings), or pick any dedicated score style!",
+            key="input_bgm_preset_s1",
+        )
+        st.session_state["omni_bgm_preset"] = bgm_val_s1
 
         run_a1 = st.button(
             "🔎 Run Agent 1: Mine YouTube SEO, Hooks & Storyboard",
@@ -789,9 +804,19 @@ elif step == 3:
                     key="render_cinema_preset_sel",
                 )
                 st.session_state["omni_cinema_preset"] = cinema_preset_s3
+                bgm_presets_s3 = list(BGM_SCORE_PRESETS.keys())
+                cur_bgm_s3 = st.session_state.get("omni_bgm_preset", DEFAULT_BGM_PRESET)
+                selected_bgm_preset_s3 = st.selectbox(
+                    "🎼 Background Score / Soundtrack Style:",
+                    options=bgm_presets_s3,
+                    index=bgm_presets_s3.index(cur_bgm_s3) if cur_bgm_s3 in bgm_presets_s3 else 0,
+                    help="Pick a dedicated soundtrack (e.g. Indian Devotional & Bhakti, Epic Mythological War, Hans Zimmer Epic) or upload your own .mp3/.wav track!",
+                    key="render_bgm_preset_sel",
+                )
+                st.session_state["omni_bgm_preset"] = selected_bgm_preset_s3
             with rc2:
                 bgm_level_label = st.selectbox(
-                    "🎵 Topic Background Music Level (Lyria-002):",
+                    "🎵 Background Music Volume:",
                     options=[
                         "Cinema Balanced (-13.5 dB — Clearly Audible, Default)",
                         "Rich Dramatic Score (-10.5 dB — Bold Film Presence)",
@@ -823,6 +848,24 @@ elif step == 3:
                     value=False,
                     key="render_fast_tts",
                 )
+
+            custom_bgm_file_path: Optional[str] = None
+            if BGM_SCORE_PRESETS.get(selected_bgm_preset_s3) == "__CUSTOM_UPLOAD__":
+                bgm_dir = cfg.projects_dir / f"{pid}_{sanitize_slug(a1.topic)}" / "audio"
+                bgm_dir.mkdir(parents=True, exist_ok=True)
+                up_bgm = st.file_uploader(
+                    "🎵 Upload Your Custom Instrumental BGM Track (.mp3, .wav, .m4a):",
+                    type=["mp3", "wav", "m4a"],
+                    key="upload_custom_bgm_s3",
+                )
+                if up_bgm is not None:
+                    dst_bgm = bgm_dir / f"user_custom_bgm{Path(up_bgm.name).suffix.lower()}"
+                    dst_bgm.write_bytes(up_bgm.getvalue())
+                    st.session_state["omni_custom_bgm_path"] = str(dst_bgm)
+                    st.success(f"✅ Custom BGM attached: `{up_bgm.name}` (will loop smoothly & duck cleanly under narration)")
+                if st.session_state.get("omni_custom_bgm_path") and Path(st.session_state["omni_custom_bgm_path"]).exists():
+                    custom_bgm_file_path = st.session_state["omni_custom_bgm_path"]
+                    st.audio(Path(custom_bgm_file_path).read_bytes())
 
             st.markdown("**🧍 Creator Avatar / Likeness Opt-In Controls:**")
             av_c1, av_c2 = st.columns(2)
@@ -913,6 +956,8 @@ elif step == 3:
                     "render_quality": render_quality,
                     "force_ai_cinema": force_ai_cinema,
                     "cinema_preset": cinema_preset_s3,
+                    "bgm_preset": selected_bgm_preset_s3,
+                    "custom_bgm_path": custom_bgm_file_path,
                     "bgm_duck_db": selected_bgm_duck_db,
                     "enable_foley_sfx": enable_foley_sfx,
                     "include_avatar_in_thumbnail": include_avatar_thumb,

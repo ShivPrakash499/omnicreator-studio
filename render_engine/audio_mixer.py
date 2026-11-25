@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import hashlib
 import json
 import logging
 import math
@@ -31,12 +32,14 @@ import imageio_ffmpeg
 from google.auth.transport.requests import Request as GoogleAuthRequest
 
 from backend.config import (
+    DEFAULT_BGM_PRESET,
     FAST_AGENT_MODEL,
     MUSIC_LYRIA_MODEL,
     TTS_EXPRESSIVE_MODEL,
     VERTEX_LYRIA_MODEL,
     OmniStudioConfig,
     call_interaction_with_fallback,
+    get_bgm_preset_prompt,
     get_genai_client,
     get_language_voice_profile,
     get_niche_profile,
@@ -396,27 +399,72 @@ def generate_niche_bgm_stem(
     niche: str,
     bgm_style_reference: str,
     duration_sec: float,
+    bgm_preset: str = DEFAULT_BGM_PRESET,
+    custom_bgm_path: Optional[Path] = None,
     config: Optional[OmniStudioConfig] = None,
     use_lyria_api: bool = True,
 ) -> Path:
     """
-    Composes topic-matched, studio-quality instrumental background music tailored to the exact
-    subject & mood:
+    Composes or adapts studio-quality instrumental background music tailored to the user's chosen
+    Background Score Style, Niche (including dedicated Religious & Devotional), or custom upload:
+    - Priority 0: User's own uploaded `.mp3`/`.wav` BGM track (seamlessly looped & normalized!)
     - Priority 1 (Vertex AI ADC): Google Vertex AI `lyria-002` (`us-central1`, 2 seamless crossfaded variations!)
     - Priority 2 (AI Studio Key): `lyria-3.5` via Interactions API
-    - Priority 3 (Offline Fallback): Warm orchestral-style ambient drone & harmonic swells (zero toy beeps)
-    Loudness-normalized to -15 LUFS so the music is clearly audible, warm, and emotionally present!
+    - Priority 3 (Offline Fallback): Warm devotional tanpura/raag or orchestral ambient drone (normalized -15 dBFS)
     """
     cfg = config or OmniStudioConfig()
     output_wav_path.parent.mkdir(parents=True, exist_ok=True)
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     engine_meta_path = output_wav_path.with_suffix(".engine.txt")
 
+    preset_prompt = get_bgm_preset_prompt(bgm_preset)
+    custom_path_obj = Path(custom_bgm_path) if custom_bgm_path else None
+    using_custom = bool(custom_path_obj and custom_path_obj.exists())
+
+    # Build a deterministic signature so switching BGM presets in Step 3 ALWAYS regenerates fresh music!
+    sig_seed = (
+        f"custom:{custom_path_obj.resolve()}:{custom_path_obj.stat().st_mtime}"
+        if using_custom and custom_path_obj is not None
+        else f"preset:{bgm_preset}|niche:{niche}|topic:{topic}|ref:{bgm_style_reference}"
+    )
+    sig_hash = hashlib.sha1(sig_seed.encode("utf-8", errors="ignore")).hexdigest()[:10]
+
     if output_wav_path.exists() and output_wav_path.stat().st_size > 4096 and engine_meta_path.exists():
-        if get_wav_duration_sec(output_wav_path) >= duration_sec - 1.0:
+        meta_txt = engine_meta_path.read_text(encoding="utf-8", errors="ignore")
+        if f"[sig:{sig_hash}]" in meta_txt and get_wav_duration_sec(output_wav_path) >= duration_sec - 1.0:
             return output_wav_path
 
-    music_prompt = _compose_topic_lyria_prompt(topic, niche, bgm_style_reference, cfg)
+    # 0. Priority 0: User-Uploaded Custom BGM Track (.mp3 / .wav / .m4a)
+    if using_custom and custom_path_obj is not None:
+        try:
+            raw_long = output_wav_path.with_suffix(".custom_long.wav")
+            subprocess.run(
+                [
+                    ffmpeg_exe, "-y",
+                    "-stream_loop", "-1", "-i", str(custom_path_obj),
+                    "-t", f"{duration_sec + 6.0:.2f}",
+                    "-af", "afade=t=in:st=0:d=1.2",
+                    "-ar", "24000", "-ac", "1", "-c:a", "pcm_s16le",
+                    str(raw_long),
+                ],
+                check=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            _normalize_wav_lufs(raw_long, output_wav_path, target_i=-15.0)
+            raw_long.unlink(missing_ok=True)
+            if output_wav_path.exists() and output_wav_path.stat().st_size > 4096:
+                engine_meta_path.write_text(f"custom_bgm({custom_path_obj.name}) [sig:{sig_hash}]", encoding="utf-8")
+                return output_wav_path
+        except Exception as exc:
+            logger.info("Custom uploaded BGM conversion failed (%s); falling back to AI composer.", exc)
+
+    # Use explicit selected preset prompt if chosen; otherwise smart AI composition matched to topic + niche
+    if preset_prompt and preset_prompt != "__CUSTOM_UPLOAD__":
+        music_prompt = preset_prompt
+    else:
+        music_prompt = _compose_topic_lyria_prompt(topic, niche, bgm_style_reference, cfg)
+
     negative_music = (
         "vocals, singing, lyrics, spoken voice, speech, narration, cartoon sound effects, "
         "beeps, chime ting, harsh distortion, discordant noise"
@@ -479,7 +527,7 @@ def generate_niche_bgm_stem(
                 else:
                     _convert_any_audio_to_wav24k(stem_files[0], stitched_loop)
 
-                # Seamlessly loop to full video duration + normalize to -15 LUFS
+                # Seamlessly loop to full video duration + normalize to -15 dBFS
                 raw_long = output_wav_path.with_suffix(".lyria_long.wav")
                 subprocess.run(
                     [
@@ -498,7 +546,10 @@ def generate_niche_bgm_stem(
                 for p in stem_files + [stitched_loop, raw_long]:
                     p.unlink(missing_ok=True)
                 if output_wav_path.exists() and output_wav_path.stat().st_size > 4096:
-                    engine_meta_path.write_text(f"vertex_lyria({VERTEX_LYRIA_MODEL}) | {music_prompt[:140]}", encoding="utf-8")
+                    engine_meta_path.write_text(
+                        f"vertex_lyria({VERTEX_LYRIA_MODEL}) [sig:{sig_hash}] | {music_prompt[:140]}",
+                        encoding="utf-8",
+                    )
                     return output_wav_path
         except Exception as exc:
             logger.info("Vertex Lyria-002 BGM composition fell back (%s)", exc)
@@ -540,21 +591,25 @@ def generate_niche_bgm_stem(
                 tmp_stem.unlink(missing_ok=True)
                 raw_long.unlink(missing_ok=True)
                 if output_wav_path.exists() and output_wav_path.stat().st_size > 4096:
-                    engine_meta_path.write_text("ai_studio_lyria(lyria-3.5)", encoding="utf-8")
+                    engine_meta_path.write_text(f"ai_studio_lyria(lyria-3.5) [sig:{sig_hash}]", encoding="utf-8")
                     return output_wav_path
         except Exception as exc:
             logger.info("Lyria 3.5 BGM stem fell back to warm harmonic orchestral bed: %s", exc)
 
-    # 3. Priority 3: Warm atmospheric cinematic orchestral/tanpura drone bed (offline fallback, normalized -15 LUFS)
+    # 3. Priority 3: Warm atmospheric cinematic orchestral/tanpura drone bed (offline fallback, normalized -15 dBFS)
     sr = 24000
     loop_dur = min(32.0, max(16.0, duration_sec))
     n_loop = int(loop_dur * sr)
-    low_t = f"{topic} {niche} {bgm_style_reference}".lower()
+    low_t = f"{topic} {niche} {bgm_preset} {bgm_style_reference}".lower()
     is_indian_devotional = any(
-        k in low_t for k in ("shyam", "krishna", "khatu", "ram", "shiv", "mahabharat", "barbarik", "temple", "bhakti", "devotion", "spirit", "myth", "vedic", "gita")
+        k in low_t for k in (
+            "religious", "devotional", "bhakti", "shyam", "krishna", "khatu", "ram", "shiv",
+            "mahabharat", "barbarik", "temple", "spirit", "myth", "vedic", "gita", "bansuri", "tanpura",
+        )
     )
-    # Use warm resonant D-major tanpura/drone progression for Indian devotional/mythology, else warm cinematic strings
+    # Use warm resonant D-major tanpura/drone + gentle flute melody for Indian devotional/mythology, else warm strings
     chord_roots = [146.83, 146.83, 110.0, 130.81] if is_indian_devotional else [110.0, 130.81, 146.83, 98.0]
+    raag_bhupali = [293.66, 329.63, 369.99, 440.00, 493.88, 587.33]  # D major pentatonic (Raag Bhupali)
     buf = bytearray(n_loop * 2)
     for i in range(n_loop):
         t = i / float(sr)
@@ -564,12 +619,18 @@ def generate_niche_bgm_stem(
         third = root * (1.2599 if is_indian_devotional else 1.1892)
         swell = 0.68 + 0.32 * math.sin(2.0 * math.pi * 0.125 * t)
         pad = (
-            0.48 * math.sin(2.0 * math.pi * root * t)
-            + 0.30 * math.sin(2.0 * math.pi * fifth * t)
-            + 0.18 * math.sin(2.0 * math.pi * third * t)
+            0.46 * math.sin(2.0 * math.pi * root * t)
+            + 0.28 * math.sin(2.0 * math.pi * fifth * t)
+            + 0.16 * math.sin(2.0 * math.pi * third * t)
             + 0.10 * math.sin(2.0 * math.pi * (root * 0.5) * t)
         )
-        val = int(14000 * swell * pad)
+        flute = 0.0
+        if is_indian_devotional:
+            note_f = raag_bhupali[int(t // 2.0) % len(raag_bhupali)]
+            note_p = (t % 2.0) / 2.0
+            vib = 1.0 + 0.006 * math.sin(2.0 * math.pi * 5.2 * t)
+            flute = 0.22 * (math.sin(math.pi * note_p) ** 1.5) * math.sin(2.0 * math.pi * note_f * vib * t)
+        val = int(14000 * swell * (pad + flute))
         struct.pack_into("<h", buf, i * 2, max(-32767, min(32767, val)))
 
     loop_wav = output_wav_path.with_suffix(".loop.wav")
@@ -596,7 +657,7 @@ def generate_niche_bgm_stem(
     _normalize_wav_lufs(raw_long, output_wav_path, target_i=-15.0)
     loop_wav.unlink(missing_ok=True)
     raw_long.unlink(missing_ok=True)
-    engine_meta_path.write_text("warm_harmonic_fallback", encoding="utf-8")
+    engine_meta_path.write_text(f"warm_devotional_fallback [sig:{sig_hash}]" if is_indian_devotional else f"warm_harmonic_fallback [sig:{sig_hash}]", encoding="utf-8")
     return output_wav_path
 
 
