@@ -23,6 +23,7 @@ from backend.config import (
     FAST_AGENT_MODEL,
     REASONING_FALLBACK_MODEL,
     SCRIPT_FRONTIER_MODEL,
+    STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE,
     OmniStudioConfig,
     call_interaction_with_fallback,
     format_timestamp,
@@ -31,7 +32,6 @@ from backend.config import (
     resolve_current_model,
 )
 from backend.schemas import Agent1Output, Agent2Output, SceneClipSpec
-from render_engine.motion_graphics import detect_motion_graphic_type
 
 logger = logging.getLogger("omni_studio.agent2")
 
@@ -94,11 +94,10 @@ def _expand_deterministic_scenes(agent1: Agent1Output, desired_scene_count: int)
             sub_ratio = f"Part {sub_i + 1}/{q}" if q > 1 else "Core Shot"
             dur = round(max(7.5, min(12.0, b.duration_sec / float(q))), 1)
 
-            # Decide whether this sub-scene uses analytical motion graphics (every 4th scene or keyword match)
-            detected_mg = detect_motion_graphic_type(f"{b.beat_title} {b.narrative_summary} {b.visual_direction}", agent1.niche)
-            use_mg = bool(detected_mg and (sub_i == 1 or (scene_idx % 4 == 0)))
-            asset_mode = "motion_graphics" if use_mg else "ai_video"
-            mg_type = detected_mg if use_mg else "none"
+            # Default ALL scenes to seamless AI Cinema (`ai_video`) so no flat Python charts interrupt the video!
+            # Users can still manually toggle any individual scene to `motion_graphics` in Step 2 if desired.
+            asset_mode = "ai_video"
+            mg_type = "none"
 
             if b.phase == "Visual_Hook_0_45s" and sub_i == 0:
                 vo = agent1.hook_script_0_45s
@@ -134,15 +133,10 @@ def _expand_deterministic_scenes(agent1: Agent1Output, desired_scene_count: int)
                 f"for the topic '{agent1.topic}' in the {agent1.niche} niche. "
                 f"Visual direction: {b.visual_direction}. "
                 f"Style lock: {prof['visual_style']}. Camera: {cam}. "
-                f"No deformed text, no watermarks, zero visual hallucination."
+                f"{STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
             )
 
             mg_payload: Dict[str, Any] = {}
-            if use_mg:
-                mg_payload = {
-                    "labels": ["Stage 1", "Stage 2", "Stage 3", "Stage 4", "Impact"],
-                    "values": [18 + (scene_idx % 10), 36, 54, 78, 94],
-                }
 
             scenes.append(
                 SceneClipSpec(
@@ -224,9 +218,9 @@ def run_agent2_scene_scripting(
                 f"into razor-sharp, non-repetitive, high-retention scenes (8-12 seconds each):\n"
                 f"1. `voiceover_text`: Natural, punchy, non-repetitive narration strictly in {agent1.language_tone} (~18-26 spoken words per 10s scene so it matches the 8-12s cut length cleanly!).\n"
                 f"2. `ssml_voice_cues`: Same narration enhanced with emotion hints and `<break time=\"0.4s\"/>` dramatic pauses before twists.\n"
-                f"3. `visual_prompt_veo_omni`: Concrete, filmable single-shot prompt optimized for Vertex Veo 3.1 / Gemini Omni 1.2 Flash / Google Flow in the {agent1.niche} aesthetic (zero visual hallucination).\n"
-                f"4. For scenes containing numbers, comparisons, timelines, or formulas, set `asset_mode='motion_graphics'`, choose `motion_graphic_type` ('manim_formula'|'data_chart'|'comparison_chart'|'timeline_chart'), and fill realistic topic-specific `motion_graphic_payload` (`{{\"labels\": [...], \"values\": [...]}}`).\n"
-                f"5. Provide a crisp 3-6 word `on_screen_callout` for each scene.\n\n"
+                f"3. `visual_prompt_veo_omni`: Concrete, filmable single-shot prompt optimized for Vertex Veo 3.1 / Gemini Omni 1.2 Flash / Gemini 3 Pro Image in the {agent1.niche} aesthetic. {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}\n"
+                f"4. Keep `asset_mode='ai_video'` and `motion_graphic_type='none'` for EVERY scene so the entire video maintains cohesive cinema quality (visualize data, comparisons, and concepts as dramatic 3D visual metaphors, holograms, or real-world cinema rather than flat Python charts).\n"
+                f"5. Provide a crisp 3-6 word `on_screen_callout` in proper English for each scene.\n\n"
                 f"Baseline scaffold JSON:\n{json.dumps([s.model_dump() for s in slice_scenes], ensure_ascii=False)}"
             )
 
@@ -254,9 +248,13 @@ def run_agent2_scene_scripting(
                     continue
             enriched_scenes.extend(slice_scenes)
 
-        # Normalize sequential indices & timestamps
+        # Normalize sequential indices, enforce ai_video default & English-only visual rule
         for idx, sc in enumerate(enriched_scenes, start=1):
             sc.scene_index = idx
+            sc.asset_mode = "ai_video"
+            sc.motion_graphic_type = "none"
+            if "never render any chinese" not in sc.visual_prompt_veo_omni.lower():
+                sc.visual_prompt_veo_omni = f"{sc.visual_prompt_veo_omni.strip()} {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
         chapters_md = _compute_chapters_markdown(enriched_scenes)
         return Agent2Output(
             topic=agent1.topic,

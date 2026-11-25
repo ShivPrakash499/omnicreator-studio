@@ -200,6 +200,19 @@ NICHE_VISUAL_PROFILES: Dict[str, Dict[str, Any]] = {
 
 DEFAULT_NICHE_PROFILE: Dict[str, Any] = NICHE_VISUAL_PROFILES["AI & Future Tech"]
 
+# Global strict language & anti-hallucination guard applied to EVERY video & image generation call
+STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE: str = (
+    "STRICT VISUAL LANGUAGE RULE: NEVER render any Chinese, Mandarin, Kanji, Japanese, Korean, "
+    "Cyrillic, Arabic, or garbled gibberish characters anywhere on vehicles, windshields, license plates, "
+    "screens, billboards, signs, HUDs, or objects. Prefer completely textless photorealistic cinema; "
+    "if any real-world label or HUD text is shown, it MUST be ONLY clean, accurately spelled standard English."
+)
+
+VEO_STRICT_NEGATIVE_PROMPT: str = (
+    "Chinese text, Mandarin characters, Hanzi, Kanji, Japanese text, Korean Hangul, Cyrillic text, "
+    "gibberish letters, garbled text, distorted license plates, watermarks, low quality, flat 2D clipart"
+)
+
 
 def get_niche_profile(niche: str) -> Dict[str, Any]:
     return NICHE_VISUAL_PROFILES.get(niche, DEFAULT_NICHE_PROFILE)

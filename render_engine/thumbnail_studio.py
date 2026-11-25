@@ -36,6 +36,7 @@ from google.genai import types as genai_types
 from backend.config import (
     IMAGE_CONTINUITY_MODEL,
     IMAGE_PRO_MODEL,
+    STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE,
     OmniStudioConfig,
     call_interaction_with_fallback,
     get_genai_client,
@@ -356,6 +357,10 @@ def _call_ai_image_generation(
     """Calls `gemini-3-pro-image` (primary) -> `gemini-nano-banana-2.1` on Vertex AI ADC or Developer API."""
     if not config.has_valid_gemini_key:
         return None, ""
+
+    # Enforce zero Chinese/Japanese/Korean/foreign glyphs on every generated thumbnail artwork
+    guarded_prompt = f"{prompt} NEVER render Chinese, Mandarin, Japanese, Korean, or gibberish symbols anywhere."
+    prompt = guarded_prompt
 
     # Always prioritize `gemini-3-pro-image` first for top photographic fidelity & native text accuracy
     img_models = [

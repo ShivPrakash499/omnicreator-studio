@@ -701,22 +701,28 @@ elif step == 3:
                 quality_label = st.selectbox(
                     "🎞️ Visual Render Mode:",
                     options=[
-                        "AI Keyframes + Kinetic Motion (Recommended Fast & Crisp)",
-                        "Full Vertex Veo 3.1 / Omni AI Video (Premium Tier)",
-                        "Fast Studio Preview (Zero API Wait — Procedural + Plates)",
+                        "Full Gemini Omni 1.2 Flash + Veo 3.1 AI Video (Recommended Best Quality)",
+                        "AI Cinema Keyframes + Smooth 24fps Motion (Fast Gemini 3 Pro)",
+                        "Fast Studio Preview (Local Plates — Offline Test Only)",
                     ],
                     index=0,
                     key="render_quality_sel",
                 )
                 quality_map = {
-                    "AI Keyframes + Kinetic Motion (Recommended Fast & Crisp)": "ai_keyframes_kenburns",
-                    "Full Vertex Veo 3.1 / Omni AI Video (Premium Tier)": "full_omni_video",
-                    "Fast Studio Preview (Zero API Wait — Procedural + Plates)": "fast_studio_preview",
+                    "Full Gemini Omni 1.2 Flash + Veo 3.1 AI Video (Recommended Best Quality)": "full_omni_video",
+                    "AI Cinema Keyframes + Smooth 24fps Motion (Fast Gemini 3 Pro)": "ai_keyframes_kenburns",
+                    "Fast Studio Preview (Local Plates — Offline Test Only)": "fast_studio_preview",
                 }
                 render_quality = quality_map[quality_label]
             with rc2:
+                force_ai_cinema = st.checkbox(
+                    "🎬 100% AI Cinema (No Flat Python Charts)",
+                    value=True,
+                    help="Overrides any Python chart scenes to render with real Gemini Omni 1.2 Flash / Veo 3.1 / Gemini 3 Pro Cinema.",
+                    key="opt_force_ai_cinema",
+                )
                 fast_tts = st.checkbox(
-                    "⚡ Fast Local Edge-TTS (skip Cloud TTS latency)",
+                    "⚡ Fast Local Edge-TTS (skip Gemini 3.8 TTS)",
                     value=False,
                     key="render_fast_tts",
                 )
@@ -808,6 +814,7 @@ elif step == 3:
                     "agent1": a1,
                     "agent2": a2,
                     "render_quality": render_quality,
+                    "force_ai_cinema": force_ai_cinema,
                     "include_avatar_in_thumbnail": include_avatar_thumb,
                     "avatar_thumbnail_mode": avatar_thumb_mode,
                     "include_avatar_in_video": include_avatar_video,

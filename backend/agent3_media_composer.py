@@ -36,6 +36,8 @@ from PIL import Image, ImageDraw, ImageFont
 from backend.config import (
     IMAGE_CONTINUITY_MODEL,
     IMAGE_PRO_MODEL,
+    STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE,
+    VEO_STRICT_NEGATIVE_PROMPT,
     VERTEX_VEO_MODEL,
     VIDEO_OMNI_MODEL,
     OmniStudioConfig,
@@ -168,23 +170,34 @@ def _generate_ai_scene_visual(
     duration_sec: float,
     aspect_ratio: str,
     render_quality: str,
+    force_ai_cinema: bool = True,
     config: OmniStudioConfig,
 ) -> Tuple[Path, str]:
     """
-    Produces a single scene's visual MP4 clip:
+    Produces a single scene's visual MP4 clip with ZERO unwanted Python fallbacks & ZERO Chinese/foreign glyphs:
     - `custom_upload`: normalizes user's uploaded MP4/image directly.
-    - `motion_graphics`: calls zero-hallucination procedural motion graphics engine.
-    - `ai_video`:
-        - `full_omni_video`: calls `gemini-omni-1.2-flash` (`client.interactions.create`) for live AI video clips.
-        - `ai_keyframes_kenburns`: calls `gemini-nano-banana-2.1` / `gemini-3-pro-image` to generate sharp
-          AI keyframes and animates smooth 24fps camera motion via FFmpeg.
-        - `fast_studio_preview`: fast local kinetic broadcast plate + procedural graphics (zero API wait/cost).
+    - `motion_graphics`: ONLY used if `force_ai_cinema=False` AND user explicitly set `asset_mode='motion_graphics'`.
+    - `full_omni_video` (Dual Full-Motion AI Video Stack):
+        1. Primary: `gemini-omni-1.2-flash` via Vertex AI global (`interactions.create` plain input — verified live!)
+           or Developer API, with exponential backoff retry.
+        2. Backup Full Video: Vertex AI `veo-3.1-generate-001` (`us-central1`) with `negative_prompt=VEO_STRICT_NEGATIVE_PROMPT`.
+        3. Tertiary AI Cinema: `gemini-3-pro-image` / `gemini-nano-banana-2.1` keyframe + smooth 24fps motion (with retries).
+    - `ai_keyframes_kenburns`: `gemini-3-pro-image` / `gemini-nano-banana-2.1` with 3 retries + smooth 24fps motion.
     """
+    import time as _time
+
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     w, h = (1920, 1080) if aspect_ratio == "16:9" else (1080, 1920)
     fps = config.fps
     dur = max(2.5, float(duration_sec))
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
+
+    # Always sanitize prompt with strict English-only / zero-Chinese guard
+    base_prompt = scene.visual_prompt_veo_omni.strip()
+    if "never render any chinese" not in base_prompt.lower():
+        safe_prompt = f"{base_prompt} {STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
+    else:
+        safe_prompt = base_prompt
 
     # 1. Custom User Asset Override
     if scene.custom_asset_path and Path(scene.custom_asset_path).exists():
@@ -206,7 +219,7 @@ def _generate_ai_scene_visual(
             return output_mp4, "custom_uploaded_video"
         else:
             vf = (
-                f"scale={int(w*1.08)}:{int(h*1.08)}:force_original_aspect_ratio=increase,"
+                f"scale={int(w*1.06)}:{int(h*1.06)}:force_original_aspect_ratio=increase,"
                 f"crop={w}:{h}:x='(iw-ow)/2+((iw-ow)/4)*sin(2*PI*t/{dur:.2f})':y='(ih-oh)/2',format=yuv420p"
             )
             subprocess.run(
@@ -222,8 +235,13 @@ def _generate_ai_scene_visual(
             )
             return output_mp4, "custom_uploaded_image"
 
-    # 2. Procedural Motion Graphics (Manim / Matplotlib / Vector Telemetry — zero hallucination!)
-    if scene.asset_mode == "motion_graphics" and scene.motion_graphic_type and scene.motion_graphic_type != "none":
+    # 2. Procedural Motion Graphics (ONLY if explicitly opted in AND `force_ai_cinema=False`)
+    if (
+        not force_ai_cinema
+        and scene.asset_mode == "motion_graphics"
+        and scene.motion_graphic_type
+        and scene.motion_graphic_type != "none"
+    ):
         render_motion_graphic_clip(
             output_mp4,
             graphic_type=scene.motion_graphic_type,
@@ -237,65 +255,42 @@ def _generate_ai_scene_visual(
         )
         return output_mp4, f"procedural_{scene.motion_graphic_type}"
 
-    # 3. Full AI Video via Vertex Veo 3.1 (`veo-3.1-generate-001`) OR `gemini-omni-1.2-flash`
+    # 3. Full-Motion AI Video Stack (`gemini-omni-1.2-flash` Primary -> `veo-3.1-generate-001` Backup)
     if render_quality == "full_omni_video" and config.has_valid_gemini_key:
         v_creds, v_proj = get_vertex_adc_credentials()
-        if v_creds is not None and v_proj:
+        omni_dur = max(4, min(12, int(round(dur))))
+        aspect_phrase = "16:9 widescreen landscape" if aspect_ratio == "16:9" else "9:16 vertical portrait"
+
+        # 3A. Primary: Gemini Omni 1.2 Flash (Works live on BOTH Vertex AI global & AI Studio!)
+        omni_model = resolve_current_model(VIDEO_OMNI_MODEL, "gemini-omni-1.2-flash")
+        for attempt in range(1, 3):
             try:
-                import time as _time
-                v_us = get_genai_client(config.gemini_api_key, location="us-central1")
-                veo_dur = 8 if dur >= 7.0 else 6
-                op = v_us.models.generate_videos(
-                    model=VERTEX_VEO_MODEL,
-                    source=genai_types.GenerateVideosSource(
-                        prompt=f"{scene.visual_prompt_veo_omni} Single continuous 24fps shot, no garbled text."
-                    ),
-                    config=genai_types.GenerateVideosConfig(aspect_ratio=aspect_ratio, duration_seconds=veo_dur),
+                client = get_genai_client(config.gemini_api_key, location="global")
+                omni_text_prompt = (
+                    f"{safe_prompt} Single unbroken continuous {omni_dur}-second {aspect_phrase} "
+                    f"24fps cinematic shot. No dialogue, no garbled text, strictly zero Chinese or foreign letters."
                 )
-                deadline = _time.time() + 180.0
-                while not getattr(op, "done", False) and _time.time() < deadline:
-                    _time.sleep(6.0)
-                    op = v_us.operations.get(op)
-                gen_vids = getattr(getattr(op, "response", None), "generated_videos", None) or []
-                if gen_vids and getattr(gen_vids[0], "video", None) and getattr(gen_vids[0].video, "video_bytes", None):
-                    raw_tmp = output_mp4.with_suffix(".veo_raw.mp4")
-                    raw_tmp.write_bytes(gen_vids[0].video.video_bytes)
-                    subprocess.run(
-                        [
-                            ffmpeg_exe, "-y",
-                            "-stream_loop", "-1", "-i", str(raw_tmp),
-                            "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},format=yuv420p",
-                            "-t", f"{dur:.2f}", "-r", str(fps), "-an",
-                            "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
-                            str(output_mp4),
-                        ],
-                        check=True,
-                        stdout=subprocess.PIPE,
-                        stderr=subprocess.PIPE,
+                if v_creds is not None and v_proj:
+                    # Vertex AI global accepts clean plain-text prompt on `gemini-omni-1.2-flash`
+                    interaction = client.interactions.create(model=omni_model, input=omni_text_prompt)
+                else:
+                    interaction = client.interactions.create(
+                        model=omni_model,
+                        input=omni_text_prompt,
+                        response_format={
+                            "type": "video",
+                            "aspect_ratio": aspect_ratio,
+                            "resolution": "720p" if aspect_ratio == "9:16" else "1080p",
+                            "duration": f"{omni_dur}s",
+                        },
                     )
-                    raw_tmp.unlink(missing_ok=True)
-                    return output_mp4, f"vertex_veo({VERTEX_VEO_MODEL})"
-            except Exception as exc:
-                logger.info("Scene %d Vertex Veo 3.1 fell back to AI keyframe animation: %s", scene.scene_index, exc)
-        else:
-            try:
-                client = get_genai_client(config.gemini_api_key)
-                omni_dur = max(3, min(15, int(round(dur))))
-                interaction = call_interaction_with_fallback(
-                    client,
-                    models=[resolve_current_model(VIDEO_OMNI_MODEL, "gemini-omni-1.2-flash")],
-                    max_retries=2,
-                    input=f"{scene.visual_prompt_veo_omni} In a single continuous unbroken 24fps shot. No dialogue, no garbled text.",
-                    response_format={
-                        "type": "video",
-                        "aspect_ratio": aspect_ratio,
-                        "resolution": "720p" if aspect_ratio == "9:16" else "1080p",
-                        "duration": omni_dur,
-                    },
-                )
                 out_vid = getattr(interaction, "output_video", None)
+                raw_vid: Optional[bytes] = None
                 if out_vid and getattr(out_vid, "data", None):
                     raw_vid = base64.b64decode(out_vid.data) if isinstance(out_vid.data, str) else bytes(out_vid.data)
+                elif out_vid and getattr(out_vid, "uri", None):
+                    raw_vid = bytes(client.files.download(file=out_vid.uri))
+                if raw_vid and len(raw_vid) > 16384:
                     raw_tmp = output_mp4.with_suffix(".omni_raw.mp4")
                     raw_tmp.write_bytes(raw_vid)
                     subprocess.run(
@@ -312,26 +307,80 @@ def _generate_ai_scene_visual(
                         stderr=subprocess.PIPE,
                     )
                     raw_tmp.unlink(missing_ok=True)
-                    return output_mp4, f"gemini_omni({VIDEO_OMNI_MODEL})"
+                    return output_mp4, f"gemini_omni({omni_model})"
             except Exception as exc:
-                logger.info("Scene %d Omni video fell back to AI keyframe animation: %s", scene.scene_index, exc)
+                err_low = str(exc).lower()
+                if any(tok in err_low for tok in ("429", "resource_exhausted", "503", "timeout")) and attempt < 2:
+                    _time.sleep(4.0 * attempt)
+                    continue
+                logger.info("Scene %d Omni 1.2 Flash skipped (%s); trying Vertex Veo 3.1.", scene.scene_index, exc)
+                break
 
-    # 4. AI Keyframe Generation (`gemini-nano-banana-2.1` / `gemini-3-pro-image`) + Kinetic Camera Motion
+        # 3B. Secondary Full-Motion Video: Vertex AI `veo-3.1-generate-001` (with strict negative_prompt!)
+        if v_creds is not None and v_proj:
+            for attempt in range(1, 3):
+                try:
+                    v_us = get_genai_client(config.gemini_api_key, location="us-central1")
+                    veo_dur = 8 if dur >= 7.0 else 6
+                    op = v_us.models.generate_videos(
+                        model=VERTEX_VEO_MODEL,
+                        source=genai_types.GenerateVideosSource(
+                            prompt=f"{safe_prompt} Single continuous 24fps shot, clean visuals, proper English only."
+                        ),
+                        config=genai_types.GenerateVideosConfig(
+                            aspect_ratio=aspect_ratio,
+                            duration_seconds=veo_dur,
+                            negative_prompt=VEO_STRICT_NEGATIVE_PROMPT,
+                        ),
+                    )
+                    deadline = _time.time() + 180.0
+                    while not getattr(op, "done", False) and _time.time() < deadline:
+                        _time.sleep(6.0)
+                        op = v_us.operations.get(op)
+                    gen_vids = getattr(getattr(op, "response", None), "generated_videos", None) or []
+                    if gen_vids and getattr(gen_vids[0], "video", None) and getattr(gen_vids[0].video, "video_bytes", None):
+                        raw_tmp = output_mp4.with_suffix(".veo_raw.mp4")
+                        raw_tmp.write_bytes(gen_vids[0].video.video_bytes)
+                        subprocess.run(
+                            [
+                                ffmpeg_exe, "-y",
+                                "-stream_loop", "-1", "-i", str(raw_tmp),
+                                "-vf", f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},format=yuv420p",
+                                "-t", f"{dur:.2f}", "-r", str(fps), "-an",
+                                "-c:v", "libx264", "-preset", "ultrafast", "-crf", "20",
+                                str(output_mp4),
+                            ],
+                            check=True,
+                            stdout=subprocess.PIPE,
+                            stderr=subprocess.PIPE,
+                        )
+                        raw_tmp.unlink(missing_ok=True)
+                        return output_mp4, f"vertex_veo({VERTEX_VEO_MODEL})"
+                except Exception as exc:
+                    err_low = str(exc).lower()
+                    if any(tok in err_low for tok in ("429", "resource_exhausted", "quota", "503")) and attempt < 2:
+                        _time.sleep(8.0 * attempt)
+                        continue
+                    logger.info("Scene %d Vertex Veo 3.1 skipped (%s); falling back to AI keyframe.", scene.scene_index, exc)
+                    break
+
+    # 4. Photorealistic AI Keyframe Generation (`gemini-3-pro-image` -> `gemini-nano-banana-2.1`) with Retries!
     frame_png = output_mp4.with_suffix(".png")
-    source_tag = "kinetic_studio_plate"
+    source_tag = "python_studio_plate"
     if render_quality in ("full_omni_video", "ai_keyframes_kenburns") and config.has_valid_gemini_key:
-        try:
-            client = get_genai_client(config.gemini_api_key)
-            v_creds, v_proj = get_vertex_adc_credentials()
-            if v_creds is not None and v_proj:
-                for m_kf in (
-                    resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1"),
-                    resolve_current_model(IMAGE_PRO_MODEL, "gemini-3-pro-image"),
-                ):
+        v_creds, v_proj = get_vertex_adc_credentials()
+        kf_prompt = (
+            f"{safe_prompt} Photorealistic widescreen cinema still, completely clean textless photography "
+            f"(zero Chinese/Japanese/Korean characters, zero gibberish letters, zero watermarks)."
+        )
+        if v_creds is not None and v_proj:
+            for m_kf in ("gemini-3-pro-image", resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1")):
+                for attempt in range(1, 4):
                     try:
+                        client = get_genai_client(config.gemini_api_key, location="global")
                         resp = client.models.generate_content(
                             model=m_kf,
-                            contents=f"{scene.visual_prompt_veo_omni} Photorealistic widescreen frame, no text, no watermarks.",
+                            contents=kf_prompt,
                             config=genai_types.GenerateContentConfig(
                                 response_modalities=["IMAGE"],
                                 image_config=genai_types.ImageConfig(aspect_ratio=aspect_ratio),
@@ -347,26 +396,30 @@ def _generate_ai_scene_visual(
                                 break
                         if frame_png.exists():
                             break
-                    except Exception:
-                        continue
-            else:
+                    except Exception as kf_exc:
+                        if any(t in str(kf_exc).lower() for t in ("429", "resource_exhausted", "503", "timeout")) and attempt < 3:
+                            _time.sleep(3.0 * attempt)
+                            continue
+                        break
+                if frame_png.exists():
+                    break
+        else:
+            try:
+                client = get_genai_client(config.gemini_api_key)
                 interaction = call_interaction_with_fallback(
                     client,
-                    models=[
-                        resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1"),
-                        resolve_current_model(IMAGE_PRO_MODEL, "gemini-3-pro-image"),
-                    ],
-                    max_retries=2,
-                    input=f"{scene.visual_prompt_veo_omni} Photorealistic widescreen frame, no text, no watermarks.",
+                    models=["gemini-3-pro-image", resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1")],
+                    max_retries=3,
+                    input=kf_prompt,
                     response_format={"type": "image", "aspect_ratio": aspect_ratio, "image_size": "1K"},
                 )
                 out_img = getattr(interaction, "output_image", None)
                 if out_img and getattr(out_img, "data", None):
                     raw_img = base64.b64decode(out_img.data) if isinstance(out_img.data, str) else bytes(out_img.data)
                     frame_png.write_bytes(raw_img)
-                    source_tag = f"ai_keyframe({IMAGE_CONTINUITY_MODEL})"
-        except Exception as exc:
-            logger.info("Scene %d AI keyframe fell back to studio plate: %s", scene.scene_index, exc)
+                    source_tag = "ai_keyframe(gemini-3-pro-image)"
+            except Exception as exc:
+                logger.info("Scene %d AI keyframe fell back to studio plate: %s", scene.scene_index, exc)
 
     if not frame_png.exists():
         _render_kinetic_cinematic_plate(frame_png, scene=scene, topic=topic, niche=niche, size=(w, h))
@@ -528,7 +581,8 @@ def run_agent3_media_pipeline(
     agent1: Agent1Output,
     agent2: Agent2Output,
     *,
-    render_quality: str = "ai_keyframes_kenburns",
+    render_quality: str = "full_omni_video",
+    force_ai_cinema: bool = True,
     include_avatar_in_thumbnail: bool = False,
     avatar_thumbnail_mode: str = "real_photo",
     include_avatar_in_video: bool = False,
@@ -719,6 +773,7 @@ def run_agent3_media_pipeline(
             duration_sec=dur,
             aspect_ratio="16:9",
             render_quality=render_quality,
+            force_ai_cinema=force_ai_cinema,
             config=cfg,
         )
         # Apply optional presenter PIP badge cleanly on Opening Hook (Scene 1) & Final Outro scene
@@ -729,14 +784,19 @@ def run_agent3_media_pipeline(
             src = f"{src}+host_pip"
         return sc.scene_index, p, src
 
-    with ThreadPoolExecutor(max_workers=min(3, cfg.max_workers)) as pool:
+    # Keep AI video workers politely throttled (2 concurrent) so Vertex Omni/Veo never drops clips to Python fallback
+    vis_workers = 2 if render_quality == "full_omni_video" else min(3, cfg.max_workers)
+    engine_counts: Dict[str, int] = {}
+    with ThreadPoolExecutor(max_workers=vis_workers) as pool:
         futs = [pool.submit(_render_vis, sc) for sc in scenes]
         done_v = 0
         for fut in as_completed(futs):
             s_idx, vp, src = fut.result()
             visual_results[s_idx] = (vp, src)
+            engine_counts[src] = engine_counts.get(src, 0) + 1
             done_v += 1
             pct = int((done_v / float(total_scenes)) * 100)
+            summary_str = ", ".join(f"{cnt}x {eng}" for eng, cnt in engine_counts.items())
             database.upsert_job(
                 job_id=f"{project_id}_visuals_16x9",
                 project_id=project_id,
@@ -745,7 +805,7 @@ def run_agent3_media_pipeline(
                 label=stage_defs[2][1],
                 status="running" if done_v < total_scenes else "completed",
                 progress_pct=pct,
-                message=f"Processing ({pct}%) — {done_v}/{total_scenes} visual clips ready" if done_v < total_scenes else f"Completed ✅ ({total_scenes} 1080p visual clips)",
+                message=f"Processing ({pct}%) — {done_v}/{total_scenes} ({summary_str})" if done_v < total_scenes else f"Completed ✅ ({summary_str})",
             )
 
     # ------------------------------------------------------------------
