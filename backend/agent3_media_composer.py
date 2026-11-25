@@ -1018,23 +1018,36 @@ def estimate_render_cost_usd(
 ) -> Dict[str, Any]:
     """
     Computes a transparent pre-render Vertex AI credit estimate (USD) before the user clicks Generate:
+    - Custom/Google Flow uploaded clips (`asset_mode == 'custom_upload'` with file attached): $0.00!
     - `gemini-omni-1.2-flash` (720p cost-locked 6s-7s clip): ~$0.46/scene (~35% cheaper than 10s default!)
     - `gemini-3-pro-image` cinema keyframe + 24fps motion: ~$0.05/scene
-    - Voiceover + Thumbnail + Character Reference Portrait ($0.04) + Lyria-002 music: ~$0.26 (or ~$0.10 quick voice)
+    - Voiceover + Thumbnail + Character Reference Portrait ($0.04 if AI visuals needed) + Lyria-002 music: ~$0.26 (or ~$0.10 quick voice)
     """
     total = len(scenes)
-    remaining = max(0, total - max(0, int(cached_scene_count)))
+    custom_scenes = [
+        s for s in scenes
+        if s.asset_mode == "custom_upload" and bool((s.custom_asset_path or "").strip())
+    ]
+    custom_cnt = len(custom_scenes)
+    ai_eligible_scenes = [
+        s for s in scenes
+        if not (s.asset_mode == "custom_upload" and bool((s.custom_asset_path or "").strip()))
+    ]
+    remaining = max(0, len(ai_eligible_scenes) - max(0, int(cached_scene_count)))
     omni_clip_usd = 0.46
     kf_clip_usd = 0.05
-    base_overhead = 0.10 if use_fast_tts else 0.26
+    anchor_usd = 0.04 if (remaining > 0 and render_quality != "fast_studio_preview") else 0.0
+    base_overhead = (0.06 if use_fast_tts else 0.22) + anchor_usd
+    full_motion_ref = round(len(ai_eligible_scenes) * omni_clip_usd + (0.06 if use_fast_tts else 0.22) + (0.04 if ai_eligible_scenes else 0.0), 2)
 
     if remaining == 0:
         return {
             "total_usd": round(base_overhead, 2),
             "video_scenes": 0,
             "keyframe_scenes": 0,
-            "reused_scenes": total,
-            "full_motion_usd": round(total * omni_clip_usd + base_overhead, 2),
+            "custom_scenes": custom_cnt,
+            "reused_scenes": total - custom_cnt,
+            "full_motion_usd": full_motion_ref,
         }
 
     if render_quality == "fast_studio_preview":
@@ -1042,8 +1055,9 @@ def estimate_render_cost_usd(
             "total_usd": 0.0,
             "video_scenes": 0,
             "keyframe_scenes": 0,
-            "reused_scenes": total - remaining,
-            "full_motion_usd": round(total * omni_clip_usd + base_overhead, 2),
+            "custom_scenes": custom_cnt,
+            "reused_scenes": max(0, len(ai_eligible_scenes) - remaining),
+            "full_motion_usd": full_motion_ref,
         }
 
     if render_quality == "ai_keyframes_kenburns":
@@ -1052,22 +1066,24 @@ def estimate_render_cost_usd(
             "total_usd": round(est, 2),
             "video_scenes": 0,
             "keyframe_scenes": remaining,
-            "reused_scenes": total - remaining,
-            "full_motion_usd": round(total * omni_clip_usd + base_overhead, 2),
+            "custom_scenes": custom_cnt,
+            "reused_scenes": max(0, len(ai_eligible_scenes) - remaining),
+            "full_motion_usd": full_motion_ref,
         }
 
     if render_quality == "hybrid_cinema":
         hero_ids = select_hybrid_hero_scene_indices(scenes)
-        # Scale hero count proportionally to remaining scenes
-        hero_cnt = min(remaining, len(hero_ids))
+        ai_hero_cnt = sum(1 for s in ai_eligible_scenes if s.scene_index in hero_ids)
+        hero_cnt = min(remaining, ai_hero_cnt)
         kf_cnt = max(0, remaining - hero_cnt)
         est = hero_cnt * omni_clip_usd + kf_cnt * kf_clip_usd + base_overhead
         return {
             "total_usd": round(est, 2),
             "video_scenes": hero_cnt,
             "keyframe_scenes": kf_cnt,
-            "reused_scenes": total - remaining,
-            "full_motion_usd": round(total * omni_clip_usd + base_overhead, 2),
+            "custom_scenes": custom_cnt,
+            "reused_scenes": max(0, len(ai_eligible_scenes) - remaining),
+            "full_motion_usd": full_motion_ref,
         }
 
     # full_omni_video
@@ -1076,7 +1092,8 @@ def estimate_render_cost_usd(
         "total_usd": round(est, 2),
         "video_scenes": remaining,
         "keyframe_scenes": 0,
-        "reused_scenes": total - remaining,
+        "custom_scenes": custom_cnt,
+        "reused_scenes": max(0, len(ai_eligible_scenes) - remaining),
         "full_motion_usd": round(est, 2),
     }
 
@@ -1300,12 +1317,16 @@ def run_agent3_media_pipeline(
     hybrid_hero_ids = select_hybrid_hero_scene_indices(scenes) if render_quality == "hybrid_cinema" else set()
 
     # Character Identity Lock: Generate ONE Master Reference Portrait (~$0.04) once per project
-    # so the main protagonist keeps the EXACT SAME face, age, tilak & outfit across all scenes!
+    # (skipped if all scenes are custom/Google Flow uploads or fast draft preview — zero wasted credits!)
     character_anchor_bytes: Optional[bytes] = None
     effective_character_bible: str = (agent1.character_bible or "").strip()
     character_keywords: List[str] = []
     has_explicit_char_flags = any(bool(s.features_main_character) for s in scenes)
-    if render_quality != "fast_studio_preview" and cfg.has_valid_gemini_key:
+    needs_ai_visuals = any(
+        not (s.custom_asset_path and Path(s.custom_asset_path).exists())
+        for s in scenes
+    )
+    if render_quality != "fast_studio_preview" and needs_ai_visuals and cfg.has_valid_gemini_key:
         database.upsert_job(
             job_id=f"{project_id}_visuals_16x9",
             project_id=project_id,

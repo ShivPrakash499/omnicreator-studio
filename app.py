@@ -43,6 +43,7 @@ from backend.config import (
     SUPPORTED_LANGUAGES,
     SUPPORTED_NICHES,
     OmniStudioConfig,
+    format_flow_prompts_export_txt,
     format_timestamp,
     sanitize_slug,
     sync_streamlit_secrets_to_env,
@@ -1374,6 +1375,87 @@ elif step == 2:
                     rg_st.update(label="✅ Scenes regenerated!", state="complete", expanded=False)
                 st.rerun()
 
+        # Google AI Ultra / Google Flow Zero-Cloud-Video-Cost Bridge (Export clean prompts + Bulk upload clips!)
+        attached_flow_cnt = sum(
+            1 for s in a2.scenes if s.asset_mode == "custom_upload" and bool((s.custom_asset_path or "").strip())
+        )
+        flow_exp_lbl = (
+            f"🎬 Use Google AI Ultra / Flow Credits (₹0 Cloud Video Cost — {attached_flow_cnt}/{len(a2.scenes)} Clips Attached)"
+            if attached_flow_cnt > 0
+            else "🎬 Use Google AI Ultra / Flow Credits (₹0 Cloud Video Cost)"
+        )
+        with st.expander(flow_exp_lbl, expanded=False):
+            st.markdown(
+                "Have a **Google AI Ultra** subscription? Generate your full-motion clips inside "
+                "[Google Flow](https://labs.google/fx/tools/flow) using your included Ultra credits (**₹0 extra Google Cloud cost**), "
+                "then drop all clips here in one batch — OMNI STUDIO will automatically add Indian voiceover, music, active subtitles, "
+                "thumbnail, 16:9 HD + 9:16 Short & publish to YouTube (for only ~₹20 total)!"
+            )
+            fl_c1, fl_c2 = st.columns([1.0, 1.35])
+            with fl_c1:
+                cur_a1_for_flow = Agent1Output.model_validate(a1_data)
+                flow_txt = format_flow_prompts_export_txt(
+                    topic=a2.topic,
+                    niche=a2.niche,
+                    character_bible=cur_a1_for_flow.character_bible,
+                    scenes=a2.scenes,
+                    cinema_preset=sel_preset_s2,
+                )
+                st.download_button(
+                    "📥 Download Clean Flow Prompts (.txt)",
+                    data=flow_txt.encode("utf-8"),
+                    file_name=f"{sanitize_slug(a2.topic)}_google_flow_prompts.txt",
+                    mime="text/plain",
+                    use_container_width=True,
+                    key=f"dl_flow_prompts_{pid}",
+                )
+                flow_start_scene = st.number_input(
+                    "Assign sequential uploads starting at Scene #:",
+                    min_value=1,
+                    max_value=len(a2.scenes),
+                    value=1,
+                    step=1,
+                    help="Files named like scene_05.mp4 or 05.mp4 automatically match Scene 5; unnumbered clips fill sequentially from this scene.",
+                    key=f"flow_start_sc_{pid}",
+                )
+            with fl_c2:
+                bulk_flow_files = st.file_uploader(
+                    "📁 Bulk Drop Google Flow Clips (.mp4, .mov, .png, .jpg):",
+                    type=["mp4", "mov", "png", "jpg", "jpeg"],
+                    accept_multiple_files=True,
+                    key=f"bulk_flow_upload_{pid}",
+                )
+                if bulk_flow_files and st.button(
+                    f"✅ Attach {len(bulk_flow_files)} Clip(s) to Scenes",
+                    type="primary",
+                    use_container_width=True,
+                    key=f"apply_bulk_flow_{pid}",
+                ):
+                    import re as _re_flow
+
+                    upd_scenes_bulk = [s.model_dump() for s in a2.scenes]
+                    seq_cursor = int(flow_start_scene)
+                    mapped_msgs: List[str] = []
+                    for uf in sorted(bulk_flow_files, key=lambda f: f.name.lower()):
+                        m_num = _re_flow.search(r"(?:scene[_\-\s]*|^s?)(\d{1,2})\b", Path(uf.name).stem, flags=_re_flow.IGNORECASE)
+                        target_idx = int(m_num.group(1)) if (m_num and 1 <= int(m_num.group(1)) <= len(upd_scenes_bulk)) else seq_cursor
+                        if target_idx > len(upd_scenes_bulk):
+                            break
+                        dest_p = custom_dir / f"scene_{target_idx:03d}_{uf.name}"
+                        dest_p.write_bytes(uf.getvalue())
+                        upd_scenes_bulk[target_idx - 1]["custom_asset_path"] = str(dest_p)
+                        upd_scenes_bulk[target_idx - 1]["asset_mode"] = "custom_upload"
+                        st.session_state.pop(f"sc_mode_{target_idx}", None)
+                        mapped_msgs.append(f"Scene {target_idx:02d} ← `{uf.name}`")
+                        seq_cursor = max(seq_cursor + 1, target_idx + 1)
+                    if mapped_msgs:
+                        new_a2_dict = a2.model_dump()
+                        new_a2_dict["scenes"] = upd_scenes_bulk
+                        st.session_state["agent2_output"] = new_a2_dict
+                        db.update_project_stage(pid, agent2_data=new_a2_dict)
+                        st.success(f"✅ Attached {len(mapped_msgs)} clip(s): " + ", ".join(mapped_msgs[:6]) + ("..." if len(mapped_msgs) > 6 else ""))
+                        st.rerun()
+
         start_idx = (int(current_page) - 1) * per_page
         end_idx = min(len(a2.scenes), start_idx + per_page)
         scenes_dicts = [s.model_dump() for s in a2.scenes]
@@ -1685,19 +1767,27 @@ elif step == 3:
         est_inr = int(round(est_usd * 85.5))
         full_usd = fresh_est["full_motion_usd"]
         savings_usd = max(0.0, round(full_usd - est_usd, 2))
+        custom_cnt = int(fresh_est.get("custom_scenes", 0))
+        custom_prefix = f"{custom_cnt} Flow/uploaded clips (₹0 AI video cost) + " if custom_cnt > 0 else ""
         char_lock_note = (
             " · 🎭 Same-Face Character Lock Active"
-            if (a1.character_bible or "").strip()
-            else (" · 🎭 Auto Same-Face Lock Ready" if render_quality != "fast_studio_preview" else "")
+            if (a1.character_bible or "").strip() and (fresh_est["video_scenes"] + fresh_est["keyframe_scenes"] > 0)
+            else (
+                " · 🎭 Auto Same-Face Lock Ready"
+                if render_quality != "fast_studio_preview" and (fresh_est["video_scenes"] + fresh_est["keyframe_scenes"] > 0)
+                else ""
+            )
         )
-        if render_quality == "hybrid_cinema":
-            est_detail = f"{fresh_est['video_scenes']} full-motion hero clips + {fresh_est['keyframe_scenes']} AI cinema visuals + voice, thumbnail & Shorts{char_lock_note}"
+        if custom_cnt >= len(a2.scenes):
+            est_detail = f"All {custom_cnt} scenes use your Flow/uploaded clips (₹0 AI video cost) — only voiceover, music, thumbnail & Long+Short assembly"
+        elif render_quality == "hybrid_cinema":
+            est_detail = f"{custom_prefix}{fresh_est['video_scenes']} full-motion hero clips + {fresh_est['keyframe_scenes']} AI cinema visuals + voice, thumbnail & Shorts{char_lock_note}"
         elif render_quality == "ai_keyframes_kenburns":
-            est_detail = f"{fresh_est['keyframe_scenes']} AI cinema visual scenes with smooth motion + voice, thumbnail & Shorts{char_lock_note}"
+            est_detail = f"{custom_prefix}{fresh_est['keyframe_scenes']} AI cinema visual scenes with smooth motion + voice, thumbnail & Shorts{char_lock_note}"
         elif render_quality == "fast_studio_preview":
             est_detail = "Free offline draft preview (no AI video or image credits used)"
         else:
-            est_detail = f"All {fresh_est['video_scenes']} scenes rendered as full-motion AI video + voice, thumbnail & Shorts{char_lock_note}"
+            est_detail = f"{custom_prefix}{fresh_est['video_scenes']} full-motion AI video clips + voice, thumbnail & Shorts{char_lock_note}"
         cost_headline = (
             "💰 Estimated Credit Cost: Free (₹0)"
             if est_usd <= 0.0
