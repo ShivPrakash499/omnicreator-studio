@@ -11,14 +11,19 @@ Manages durable state across reruns and background workers:
 from __future__ import annotations
 
 import json
+import logging
 import os
 import sqlite3
+import tempfile
 import threading
+import time
 import uuid
 from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Iterator, List, Optional
+
+logger = logging.getLogger("omni_studio.db")
 
 
 def _utc_now() -> str:
@@ -33,13 +38,24 @@ class OmniDatabase:
         resolved.parent.mkdir(parents=True, exist_ok=True)
         self.db_path = resolved
         self._lock = threading.RLock()
-        self._init_schema()
+        try:
+            self._init_schema()
+        except sqlite3.OperationalError as exc:
+            # If deployed container mount is readonly, transparently fall back to writable temp DB
+            if "readonly" in str(exc).lower() and db_path is None:
+                fallback_p = Path(tempfile.gettempdir()) / "omni_studio.db"
+                logger.warning("SQLite path '%s' is readonly (%s); switching to writable '%s'.", self.db_path, exc, fallback_p)
+                self.db_path = fallback_p
+                self._init_schema()
+            else:
+                raise
 
     @contextmanager
     def _connect(self) -> Iterator[sqlite3.Connection]:
         with self._lock:
             conn = sqlite3.connect(str(self.db_path), timeout=30.0, check_same_thread=False)
             conn.row_factory = sqlite3.Row
+            conn.execute("PRAGMA busy_timeout = 30000;")
             conn.execute("PRAGMA journal_mode=WAL;")
             conn.execute("PRAGMA foreign_keys=ON;")
             try:
@@ -125,11 +141,25 @@ class OmniDatabase:
                 );
                 """
             )
-            # Safe idempotent migration for existing SQLite databases missing multi-channel columns
-            existing_cols = {r[1] for r in conn.execute("PRAGMA table_info(projects)").fetchall()}
+            # Safe, race-proof, retryable idempotent migration for existing SQLite databases
+            existing_cols = {r["name"] for r in conn.execute("PRAGMA table_info(projects)").fetchall()}
             for col_name in ("target_channel_id", "target_channel_title", "target_playlist_id", "target_playlist_title"):
-                if col_name not in existing_cols:
-                    conn.execute(f"ALTER TABLE projects ADD COLUMN {col_name} TEXT DEFAULT ''")
+                if col_name in existing_cols:
+                    continue
+                for attempt in range(6):
+                    try:
+                        conn.execute(f"ALTER TABLE projects ADD COLUMN {col_name} TEXT DEFAULT ''")
+                        existing_cols.add(col_name)
+                        break
+                    except sqlite3.OperationalError as op_err:
+                        err_low = str(op_err).lower()
+                        if "duplicate column" in err_low:
+                            existing_cols.add(col_name)
+                            break
+                        if ("locked" in err_low or "busy" in err_low) and attempt < 5:
+                            time.sleep(0.25 * (attempt + 1))
+                            continue
+                        raise
 
     # ------------------------------------------------------------------
     # Projects CRUD
@@ -524,10 +554,13 @@ class OmniDatabase:
 
 
 _DB_SINGLETON: Optional[OmniDatabase] = None
+_DB_SINGLETON_LOCK = threading.Lock()
 
 
 def get_db() -> OmniDatabase:
     global _DB_SINGLETON
     if _DB_SINGLETON is None:
-        _DB_SINGLETON = OmniDatabase()
+        with _DB_SINGLETON_LOCK:
+            if _DB_SINGLETON is None:
+                _DB_SINGLETON = OmniDatabase()
     return _DB_SINGLETON
