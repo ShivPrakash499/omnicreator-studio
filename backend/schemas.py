@@ -78,6 +78,14 @@ class Agent1Output(BaseModel):
         default="Glowing futuristic holographic infographic and 3D icons symbolizing the video topic",
         description="Concrete visual objects/diagrams drawn opposite @jwalashiva on the thumbnail.",
     )
+    character_bible: str = Field(
+        default="",
+        description="Immutable physical appearance sheet (age, face, skin tone, hair, markings/tilak, attire, props) for the recurring main character(s) so their face stays identical across every scene.",
+    )
+    character_anchor_prompt: str = Field(
+        default="",
+        description="Photorealistic neutral-backdrop studio portrait prompt of the main recurring character used as visual face reference for all scenes.",
+    )
 
 
 # ==============================================================================
@@ -103,6 +111,7 @@ class SceneClipSpec(BaseModel):
     )
     on_screen_callout: str = ""
     sfx_cue: str = "subtle whoosh transition"
+    features_main_character: bool = False
     custom_asset_path: Optional[str] = None
 
     @field_validator("duration_sec")

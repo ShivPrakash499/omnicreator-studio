@@ -436,6 +436,11 @@ def run_agent1_seo_and_storyboard(
             f"6. Craft `bgm_style_reference` specifically matched to the exact culture, era, and emotional soul of '{topic}' for Google Lyria-002 instrumental scoring (e.g. expressive bansuri flute, warm tanpura drone, sitar/sarangi, subtle temple pakhawaj & sweeping Indian orchestral strings for Indian devotional/mythological stories; deep cello & brass for history; analog synth for AI; strictly instrumental, zero vocals/singing).\n"
             f"7. Craft `thumbnail_hook_headline` (2-4 punchy words — use clean Roman English/Hinglish if language is English or Hinglish, or clean crisp Hindi Devanagari ONLY if language is Hindi), `thumbnail_badge_label` (1-2 crisp words in the same script), and "
             f"`thumbnail_graphic_concept` (dramatic, photorealistic, high-contrast theatrical subject/scene symbolizing '{topic}' with glowing volumetric rim light — zero flat clipart or garbled text).\n"
+            f"8. CRITICAL — CHARACTER IDENTITY LOCK (`character_bible` & `character_anchor_prompt`):\n"
+            f"   - If '{topic}' features a recurring main human, historical figure, warrior, deity, or protagonist (e.g., Barbarik, Shri Krishna, Shivaji, Nikola Tesla, etc.), you MUST fill BOTH:\n"
+            f"     (a) `character_bible`: A hyper-specific, immutable 45-70 word visual lock naming the main character (and secondary character if any) with EXACT age, facial bone structure, skin tone, eye shape, distinct forehead mark/tilak (if cultural/devotional), exact hair length & style, clean-shaven or exact beard style, exact costume colors/fabric/armor/jewelry, and signature props — so NO scene ever morphs their face or outfit!\n"
+            f"     (b) `character_anchor_prompt`: A crisp 45-65 word photorealistic 35mm cinema studio reference portrait prompt of the PRIMARY protagonist from waist-up in sharp three-quarter view against a neutral softly lit backdrop, capturing their exact face, tilak/markings, hairstyle, and iconic attire clearly (zero text, zero watermarks).\n"
+            f"   - If '{topic}' is purely abstract/technical with NO recurring character protagonist (e.g., Cryptocurrency, Quantum Computing), leave both `character_bible` and `character_anchor_prompt` as empty strings \"\".\n"
             f"Return STRICT JSON matching the Agent1Output schema."
         )
 

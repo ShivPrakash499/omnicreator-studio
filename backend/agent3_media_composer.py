@@ -24,8 +24,10 @@ from __future__ import annotations
 
 import base64
 import gc
+import json
 import logging
 import math
+import re
 import subprocess
 import threading
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -38,6 +40,7 @@ from PIL import Image, ImageDraw, ImageFont
 from backend.config import (
     DEFAULT_BGM_PRESET,
     DEFAULT_CINEMA_PRESET,
+    FAST_AGENT_MODEL,
     IMAGE_CONTINUITY_MODEL,
     IMAGE_PRO_MODEL,
     STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE,
@@ -258,6 +261,242 @@ def _normalize_video_clip_exact(
     return output_mp4
 
 
+_CHARACTER_STOPWORDS = {
+    "the", "and", "for", "with", "from", "into", "about", "behind", "story", "rahasya", "mystery",
+    "secret", "secrets", "truth", "hidden", "explained", "complete", "history", "katha", "video",
+    "mahabharata", "ramayana", "temple", "shrine", "baba", "shree", "shri", "lord", "king", "prince",
+    "queen", "warrior", "hero", "protagonist", "character", "young", "ancient", "indian", "male",
+    "female", "man", "woman", "boy", "girl", "early", "late", "mid", "20s", "30s", "40s", "skin",
+    "tone", "warm", "wheatish", "dark", "black", "gold", "golden", "saffron", "deep", "eyes", "hair",
+    "face", "sharp", "jawline", "wearing", "drape", "armor", "tilak", "forehead", "arrows", "glowing",
+    "main", "recurring", "sacred", "divine", "epic", "battlefield", "kurukshetra", "rajasthan",
+    "india", "how", "why", "what", "when", "where", "which", "that", "this", "their", "your",
+}
+
+_PERSON_PRESENCE_CUES = (
+    "warrior", "man", "young", "face", "eyes", "portrait", "kneeling", "standing", "riding",
+    "holding", "drawing", "aiming", "bow", "smiling", "looking", "gazing", "figure", "hero",
+    "protagonist", "character", "prince", "sage", "king", "queen", "woman", "boy", "girl",
+    "person", "hands", "silhouette", "close-up of his", "close-up of her",
+    "close up of his", "close up of her", "medium shot of", "low-angle shot of", "over-the-shoulder",
+)
+
+_NON_CHARACTER_SCENERY_CUES = (
+    "temple exterior", "aerial establishing", "empty battlefield", "empty landscape",
+    "architecture", "shrine exterior", "marble temple", "crowd of", "devotees", "village",
+    "statue", "idol", "resting on", "close-up of arrows", "three arrows floating",
+)
+
+
+def _extract_character_keywords(character_bible: str, topic: str = "") -> List[str]:
+    """
+    Extracts primary character proper-name keywords (e.g. `barbarik`, `barbar`, `shyam`, `krishna`)
+    so scenes featuring the protagonist receive visual reference anchoring while empty landscapes do not.
+    """
+    keywords: List[str] = []
+    seen: set = set()
+
+    def _add(tok: str) -> None:
+        t = re.sub(r"[^a-zA-Z]", "", tok).lower()
+        if len(t) >= 4 and t not in _CHARACTER_STOPWORDS and t not in seen:
+            seen.add(t)
+            keywords.append(t)
+
+    # Priority 1: Leading proper nouns from character_bible (first 140 chars / before colon/dash)
+    bible_head = (character_bible or "").strip()[:140]
+    if bible_head:
+        lead_segment = re.split(r"[:\-\(\n,.]", bible_head)[0]
+        for w in re.findall(r"[A-Za-z][a-zA-Z]{3,}", lead_segment):
+            _add(w)
+        # Also include capitalized proper names from first sentence of character_bible
+        first_sent = bible_head.split(".")[0]
+        for w in re.findall(r"\b[A-Z][a-z]{3,}\b", first_sent):
+            _add(w)
+
+    # Priority 2: Proper-name tokens from topic if bible yielded few keywords
+    if len(keywords) < 2 and topic:
+        for w in re.findall(r"[A-Za-z][a-zA-Z]{3,}", topic):
+            _add(w)
+
+    # Add common stem variant (e.g., "barbarik" -> also match "barbar")
+    extra: List[str] = []
+    for kw in keywords:
+        if kw.endswith("ik") and len(kw) >= 7:
+            stem = kw[:-2]
+            if stem not in seen:
+                seen.add(stem)
+                extra.append(stem)
+    keywords.extend(extra)
+    return keywords[:8]
+
+
+def _scene_mentions_character(
+    scene: SceneClipSpec,
+    character_keywords: List[str],
+    *,
+    has_explicit_flags: bool = False,
+) -> bool:
+    """
+    Determines whether a given scene actually depicts the locked main character on screen.
+    Prevents pasting a character portrait onto empty temple exteriors, aerial maps, or standalone objects.
+    """
+    if scene.features_main_character:
+        return True
+
+    vis_low = (scene.visual_prompt_veo_omni or "").lower()
+    if not vis_low:
+        return False
+
+    has_person_cue = any(cue in vis_low for cue in _PERSON_PRESENCE_CUES)
+    is_scenery_only = any(cue in vis_low for cue in _NON_CHARACTER_SCENERY_CUES) and not has_person_cue
+
+    if is_scenery_only:
+        return False
+
+    # Check explicit character name tokens inside the visual prompt
+    if any(re.search(rf"\b{re.escape(kw)}", vis_low) for kw in character_keywords):
+        return True
+
+    # For legacy projects (no explicit Agent 2 flags yet), lock shots explicitly depicting the hero/protagonist
+    if not has_explicit_flags and character_keywords:
+        if any(tok in vis_low for tok in ("protagonist", "main character", "young warrior", "divine warrior", "the warrior")):
+            return True
+
+    return False
+
+
+def _generate_character_anchor_portrait(
+    output_png: Path,
+    *,
+    agent1: Agent1Output,
+    agent2: Agent2Output,
+    reuse_existing: bool = False,
+    config: OmniStudioConfig,
+) -> Tuple[Optional[Path], str]:
+    """
+    Generates ONE high-detail neutral-backdrop studio reference portrait (`renders/character_anchor.png`, ~$0.04)
+    for the video's recurring main character so EVERY scene (both AI cinema keyframes AND Gemini Omni 1.2 Flash
+    full-motion video clips) locks the exact same face, age, tilak/markings, hair, and outfit!
+    Returns `(anchor_png_path_or_None, effective_character_bible)`.
+    """
+    import time as _time
+
+    bible = (agent1.character_bible or "").strip()
+    anchor_prompt = (agent1.character_anchor_prompt or "").strip()
+
+    # Auto-detect recurring protagonist on legacy projects (created before Character Lock existed!)
+    if not bible and not anchor_prompt and config.has_valid_gemini_key:
+        sample_scenes = [
+            f"Scene {s.scene_index}: {s.visual_prompt_veo_omni[:180]}"
+            for s in agent2.scenes[:8]
+        ]
+        try:
+            from pydantic import BaseModel as _PydBase
+
+            class _CharDetect(_PydBase):
+                has_recurring_character: bool
+                character_bible: str = ""
+                character_anchor_prompt: str = ""
+
+            client = get_genai_client(config.gemini_api_key, location="global")
+            detect_prompt = (
+                f"Analyze this video topic and sample scenes to check if there is ONE primary recurring human/mythological/historical "
+                f"protagonist who appears across multiple scenes (e.g., Barbarik / Khatu Shyam, Arjuna, Krishna, Chanakya, Tesla, Einstein).\n"
+                f"Topic: {agent1.topic} | Niche: {agent1.niche}\n"
+                f"Sample scenes:\n" + "\n".join(sample_scenes) + "\n\n"
+                f"- If YES: set `has_recurring_character=true`, write a hyper-specific 25-45 word immutable `character_bible` "
+                f"(name, exact age, facial structure, skin tone, hair, facial hair, forehead tilak/markings, exact costume & signature props), "
+                f"and a clean neutral-backdrop studio portrait prompt `character_anchor_prompt`.\n"
+                f"- If NO (abstract tech, vehicles, science diagrams, products, nature, or varied crowd scenes with no recurring lead): "
+                f"set `has_recurring_character=false` and empty strings."
+            )
+            inter = call_interaction_with_fallback(
+                client,
+                models=[resolve_current_model(FAST_AGENT_MODEL, "gemini-3.8-flash")],
+                max_retries=1,
+                input=detect_prompt,
+                response_format={
+                    "type": "text",
+                    "mime_type": "application/json",
+                    "schema": _CharDetect.model_json_schema(),
+                },
+            )
+            raw = (getattr(inter, "output_text", None) or "").strip()
+            if raw:
+                det = _CharDetect.model_validate_json(raw)
+                if det.has_recurring_character and (det.character_bible.strip() or det.character_anchor_prompt.strip()):
+                    bible = det.character_bible.strip()
+                    anchor_prompt = det.character_anchor_prompt.strip() or bible
+        except Exception as exc:
+            logger.info("Auto character detection skipped: %s", exc)
+
+    effective_bible = bible or anchor_prompt
+    if not effective_bible:
+        return None, ""
+
+    # Reuse existing anchor portrait on disk when resuming or if already generated for this project
+    if reuse_existing and output_png.exists() and output_png.stat().st_size > 16384:
+        return output_png, effective_bible
+
+    if not config.has_valid_gemini_key:
+        return None, effective_bible
+
+    portrait_desc = anchor_prompt or effective_bible
+    studio_prompt = (
+        f"Photorealistic 8K cinematic character reference portrait, head-and-shoulders three-quarter angle looking "
+        f"clearly toward camera, sharp unobstructed facial features, natural warm human skin texture, crisp expressive "
+        f"eyes, soft even studio key lighting against a clean plain warm dark-gray neutral studio backdrop (NO scenery, "
+        f"NO crowd, NO text, NO watermarks, single person only): {portrait_desc}. "
+        f"{STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE}"
+    )
+
+    output_png.parent.mkdir(parents=True, exist_ok=True)
+    v_creds, v_proj = get_vertex_adc_credentials()
+    if v_creds is not None and v_proj:
+        for m_kf in ("gemini-3-pro-image", resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1")):
+            for attempt in range(1, 3):
+                try:
+                    client = get_genai_client(config.gemini_api_key, location="global")
+                    resp = client.models.generate_content(
+                        model=m_kf,
+                        contents=studio_prompt,
+                        config=genai_types.GenerateContentConfig(
+                            response_modalities=["IMAGE"],
+                            image_config=genai_types.ImageConfig(aspect_ratio="1:1"),
+                        ),
+                    )
+                    for cand in getattr(resp, "candidates", []) or []:
+                        for part in getattr(getattr(cand, "content", None), "parts", []) or []:
+                            if getattr(part, "inline_data", None) and part.inline_data.data:
+                                output_png.write_bytes(bytes(part.inline_data.data))
+                                return output_png, effective_bible
+                except Exception as exc:
+                    if any(t in str(exc).lower() for t in ("429", "resource_exhausted", "503", "timeout")) and attempt < 2:
+                        _time.sleep(3.0)
+                        continue
+                    logger.info("Character anchor portrait (%s) skipped: %s", m_kf, exc)
+                    break
+    else:
+        try:
+            client = get_genai_client(config.gemini_api_key)
+            inter = call_interaction_with_fallback(
+                client,
+                models=["gemini-3-pro-image", resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1")],
+                max_retries=2,
+                input=studio_prompt,
+                response_format={"type": "image", "aspect_ratio": "1:1", "image_size": "1K"},
+            )
+            out_img = getattr(inter, "output_image", None)
+            if out_img and getattr(out_img, "data", None):
+                raw_img = base64.b64decode(out_img.data) if isinstance(out_img.data, str) else bytes(out_img.data)
+                output_png.write_bytes(raw_img)
+                return output_png, effective_bible
+        except Exception as exc:
+            logger.info("Character anchor portrait skipped: %s", exc)
+
+    return None, effective_bible
+
+
 def _generate_ai_scene_visual(
     scene: SceneClipSpec,
     output_mp4: Path,
@@ -271,12 +510,16 @@ def _generate_ai_scene_visual(
     force_ai_cinema: bool = True,
     cinema_preset: str = DEFAULT_CINEMA_PRESET,
     foley_out_wav: Optional[Path] = None,
+    character_anchor_bytes: Optional[bytes] = None,
+    character_bible: str = "",
+    use_character_anchor: bool = False,
     config: OmniStudioConfig,
 ) -> Tuple[Path, str]:
     """
     Produces a single scene's visual MP4 clip locked to EXACTLY `exact_frames` frames (0.000ms drift!)
-    with Hollywood cinematography, vocal-notched native Foley extraction, ZERO unwanted Python fallbacks
-    & ZERO Chinese/foreign glyphs.
+    with Hollywood cinematography, Character Identity Reference Lock (same face across all scenes!),
+    cost-optimized 6s–7s Omni video duration, vocal-notched native Foley extraction, ZERO unwanted
+    Python fallbacks & ZERO Chinese/foreign glyphs.
     """
     import time as _time
 
@@ -288,6 +531,8 @@ def _generate_ai_scene_visual(
     output_mp4.parent.mkdir(parents=True, exist_ok=True)
 
     # Always elevate scene prompt through the Hollywood DP cinematography, Foley sound-design & zero-foreign-text enhancer
+    # Match generated clip duration (`6s`/`7s` for cost-locked Omni video) so prompt text never contradicts response_format!
+    prompt_dur = (6.0 if dur <= 9.5 else 7.0) if render_quality == "full_omni_video" else dur
     safe_prompt = build_cinematic_video_prompt(
         scene.visual_prompt_veo_omni,
         niche=niche,
@@ -295,9 +540,12 @@ def _generate_ai_scene_visual(
         camera_cue=scene.camera_and_lighting_cue,
         sfx_cue=scene.sfx_cue,
         aspect_ratio=aspect_ratio,
-        duration_sec=dur,
+        duration_sec=prompt_dur,
         scene_index=scene.scene_index,
     )
+    has_char_ref = bool(use_character_anchor and character_anchor_bytes)
+    clean_bible = (character_bible or "").strip()
+    char_note = f" Character specification: {clean_bible}." if clean_bible else ""
 
     # 1. Custom User Asset Override
     if scene.custom_asset_path and Path(scene.custom_asset_path).exists():
@@ -354,28 +602,48 @@ def _generate_ai_scene_visual(
     # 3. Full-Motion AI Video Stack (`gemini-omni-1.2-flash` Primary -> `veo-3.1-generate-001` Backup)
     if render_quality == "full_omni_video" and config.has_valid_gemini_key:
         v_creds, v_proj = get_vertex_adc_credentials()
-        omni_dur = max(4, min(12, int(round(dur))))
+        # Cost-optimized 6s-7s 720p Omni generation (~35% cheaper than 10s default!)
+        # `_normalize_video_clip_exact` smoothly stretches <=2.15x with silky theatrical motion & zero ping-pong.
+        omni_dur = 6 if dur <= 9.5 else 7
+        omni_resp_fmt = {
+            "type": "video",
+            "aspect_ratio": aspect_ratio,
+            "resolution": "720p",
+            "duration": f"{omni_dur}s",
+        }
 
-        # 3A. Primary: Gemini Omni 1.2 Flash (Works live on BOTH Vertex AI global & AI Studio!)
+        # 3A. Primary: Gemini Omni 1.2 Flash (Works live on BOTH Vertex AI global & AI Studio with R2V Face Lock!)
         omni_model = resolve_current_model(VIDEO_OMNI_MODEL, "gemini-omni-1.2-flash")
+        use_r2v_this_call = has_char_ref
         for attempt in range(1, 3):
             try:
                 client = get_genai_client(config.gemini_api_key, location="global")
-                omni_text_prompt = safe_prompt
-                if v_creds is not None and v_proj:
-                    # Vertex AI global accepts clean plain-text prompt on `gemini-omni-1.2-flash`
-                    interaction = client.interactions.create(model=omni_model, input=omni_text_prompt)
-                else:
-                    interaction = client.interactions.create(
-                        model=omni_model,
-                        input=omni_text_prompt,
-                        response_format={
-                            "type": "video",
-                            "aspect_ratio": aspect_ratio,
-                            "resolution": "720p" if aspect_ratio == "9:16" else "1080p",
-                            "duration": f"{omni_dur}s",
-                        },
+                if use_r2v_this_call and character_anchor_bytes:
+                    anchor_b64 = base64.b64encode(character_anchor_bytes).decode("ascii")
+                    omni_ref_prompt = (
+                        "CHARACTER IDENTITY LOCK (CRITICAL): Use the provided reference image strictly as the "
+                        "exact character identity reference — preserve the EXACT SAME person's face, facial "
+                        "structure, eyes, age, hair, facial hair, forehead markings/tilak, and costume colors "
+                        "throughout the entire shot. Do NOT use the neutral studio backdrop from the reference "
+                        "image as a starting frame; place this exact person naturally inside the cinematic "
+                        f"scene described below.{char_note}\n\n{safe_prompt}"
                     )
+                    omni_input: Any = [
+                        {"type": "image", "data": anchor_b64, "mime_type": "image/png"},
+                        {"type": "text", "text": omni_ref_prompt},
+                    ]
+                else:
+                    omni_input = (
+                        f"CHARACTER APPEARANCE LOCK:{char_note} {safe_prompt}"
+                        if (use_character_anchor and char_note)
+                        else safe_prompt
+                    )
+
+                interaction = client.interactions.create(
+                    model=omni_model,
+                    input=omni_input,
+                    response_format=omni_resp_fmt,
+                )
                 out_vid = getattr(interaction, "output_video", None)
                 raw_vid: Optional[bytes] = None
                 if out_vid and getattr(out_vid, "data", None):
@@ -390,24 +658,35 @@ def _generate_ai_scene_visual(
                         extract_native_video_foley(raw_tmp, foley_out_wav, target_duration_sec=dur)
                     _normalize_video_clip_exact(raw_tmp, output_mp4, w=w, h=h, fps=fps, exact_frames=n_frames)
                     raw_tmp.unlink(missing_ok=True)
-                    return output_mp4, f"gemini_omni({omni_model})"
+                    ref_suffix = ",ref_lock" if use_r2v_this_call else ""
+                    return output_mp4, f"gemini_omni({omni_model}{ref_suffix})"
             except Exception as exc:
                 err_low = str(exc).lower()
                 if any(tok in err_low for tok in ("429", "resource_exhausted", "503", "timeout")) and attempt < 2:
                     _time.sleep(4.0 * attempt)
+                    continue
+                if use_r2v_this_call and attempt < 2:
+                    # Cleanly retry once with text-only character-locked prompt if R2V payload rejected
+                    logger.info("Scene %d Omni R2V retry as text-locked (%s).", scene.scene_index, exc)
+                    use_r2v_this_call = False
                     continue
                 logger.info("Scene %d Omni 1.2 Flash skipped (%s); trying Vertex Veo 3.1.", scene.scene_index, exc)
                 break
 
         # 3B. Secondary Full-Motion Video: Vertex AI `veo-3.1-generate-001` (with strict negative_prompt!)
         if v_creds is not None and v_proj:
+            veo_prompt = (
+                f"CHARACTER APPEARANCE LOCK:{char_note} {safe_prompt}"
+                if (use_character_anchor and char_note)
+                else safe_prompt
+            )
             for attempt in range(1, 3):
                 try:
                     v_us = get_genai_client(config.gemini_api_key, location="us-central1")
-                    veo_dur = 8 if dur >= 7.0 else 6
+                    veo_dur = 6
                     op = v_us.models.generate_videos(
                         model=VERTEX_VEO_MODEL,
-                        source=genai_types.GenerateVideosSource(prompt=safe_prompt),
+                        source=genai_types.GenerateVideosSource(prompt=veo_prompt),
                         config=genai_types.GenerateVideosConfig(
                             aspect_ratio=aspect_ratio,
                             duration_seconds=veo_dur,
@@ -436,7 +715,7 @@ def _generate_ai_scene_visual(
                     logger.info("Scene %d Vertex Veo 3.1 skipped (%s); falling back to AI keyframe.", scene.scene_index, exc)
                     break
 
-    # 4. Photorealistic AI Keyframe Generation (`gemini-3-pro-image` -> `gemini-nano-banana-2.1`) with Retries!
+    # 4. Photorealistic AI Keyframe Generation (`gemini-3-pro-image` -> `gemini-nano-banana-2.1`) with Face Lock!
     frame_png = output_mp4.with_suffix(".png")
     source_tag = "python_studio_plate"
     if render_quality in ("full_omni_video", "ai_keyframes_kenburns") and config.has_valid_gemini_key:
@@ -445,14 +724,28 @@ def _generate_ai_scene_visual(
             f"{safe_prompt} Photorealistic widescreen cinema still, completely clean textless photography "
             f"(zero Chinese/Japanese/Korean characters, zero gibberish letters, zero watermarks)."
         )
+        kf_ref_prompt = (
+            "CHARACTER IDENTITY LOCK: Generate a photorealistic 16:9 cinematic movie still featuring the "
+            "EXACT SAME person shown in the attached reference portrait — preserve the identical face, eyes, "
+            "jawline, age, hair, facial hair, forehead markings/tilak, and traditional attire/colors, placed "
+            f"naturally inside the full scene below (do NOT copy the plain studio backdrop).{char_note}\n\n{kf_prompt}"
+        )
         if v_creds is not None and v_proj:
             for m_kf in ("gemini-3-pro-image", resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1")):
                 for attempt in range(1, 4):
                     try:
                         client = get_genai_client(config.gemini_api_key, location="global")
+                        kf_contents: Any = (
+                            [
+                                genai_types.Part.from_bytes(data=character_anchor_bytes, mime_type="image/png"),
+                                kf_ref_prompt,
+                            ]
+                            if (has_char_ref and character_anchor_bytes)
+                            else kf_prompt
+                        )
                         resp = client.models.generate_content(
                             model=m_kf,
-                            contents=kf_prompt,
+                            contents=kf_contents,
                             config=genai_types.GenerateContentConfig(
                                 response_modalities=["IMAGE"],
                                 image_config=genai_types.ImageConfig(aspect_ratio=aspect_ratio),
@@ -462,7 +755,8 @@ def _generate_ai_scene_visual(
                             for part in getattr(getattr(cand, "content", None), "parts", []) or []:
                                 if getattr(part, "inline_data", None) and part.inline_data.data:
                                     frame_png.write_bytes(bytes(part.inline_data.data))
-                                    source_tag = f"vertex_keyframe({m_kf})"
+                                    ref_suffix = ",ref_lock" if has_char_ref else ""
+                                    source_tag = f"vertex_keyframe({m_kf}{ref_suffix})"
                                     break
                             if frame_png.exists():
                                 break
@@ -478,18 +772,27 @@ def _generate_ai_scene_visual(
         else:
             try:
                 client = get_genai_client(config.gemini_api_key)
+                if has_char_ref and character_anchor_bytes:
+                    anchor_b64 = base64.b64encode(character_anchor_bytes).decode("ascii")
+                    kf_input: Any = [
+                        {"type": "image", "data": anchor_b64, "mime_type": "image/png"},
+                        {"type": "text", "text": kf_ref_prompt},
+                    ]
+                else:
+                    kf_input = kf_prompt
                 interaction = call_interaction_with_fallback(
                     client,
                     models=["gemini-3-pro-image", resolve_current_model(IMAGE_CONTINUITY_MODEL, "gemini-nano-banana-2.1")],
                     max_retries=3,
-                    input=kf_prompt,
+                    input=kf_input,
                     response_format={"type": "image", "aspect_ratio": aspect_ratio, "image_size": "1K"},
                 )
                 out_img = getattr(interaction, "output_image", None)
                 if out_img and getattr(out_img, "data", None):
                     raw_img = base64.b64decode(out_img.data) if isinstance(out_img.data, str) else bytes(out_img.data)
                     frame_png.write_bytes(raw_img)
-                    source_tag = "ai_keyframe(gemini-3-pro-image)"
+                    ref_suffix = ",ref_lock" if has_char_ref else ""
+                    source_tag = f"ai_keyframe(gemini-3-pro-image{ref_suffix})"
             except Exception as exc:
                 logger.info("Scene %d AI keyframe fell back to studio plate: %s", scene.scene_index, exc)
 
@@ -715,13 +1018,15 @@ def estimate_render_cost_usd(
 ) -> Dict[str, Any]:
     """
     Computes a transparent pre-render Vertex AI credit estimate (USD) before the user clicks Generate:
-    - `gemini-omni-1.2-flash` (720p ~10s clip): ~$0.70/scene
+    - `gemini-omni-1.2-flash` (720p cost-locked 6s-7s clip): ~$0.46/scene (~35% cheaper than 10s default!)
     - `gemini-3-pro-image` cinema keyframe + 24fps motion: ~$0.05/scene
-    - Voiceover + Thumbnail + Lyria-002 music overhead: ~$0.20 (or ~$0.06 with quick voice)
+    - Voiceover + Thumbnail + Character Reference Portrait ($0.04) + Lyria-002 music: ~$0.26 (or ~$0.10 quick voice)
     """
     total = len(scenes)
     remaining = max(0, total - max(0, int(cached_scene_count)))
-    base_overhead = 0.06 if use_fast_tts else 0.22
+    omni_clip_usd = 0.46
+    kf_clip_usd = 0.05
+    base_overhead = 0.10 if use_fast_tts else 0.26
 
     if remaining == 0:
         return {
@@ -729,7 +1034,7 @@ def estimate_render_cost_usd(
             "video_scenes": 0,
             "keyframe_scenes": 0,
             "reused_scenes": total,
-            "full_motion_usd": round(total * 0.70 + base_overhead, 2),
+            "full_motion_usd": round(total * omni_clip_usd + base_overhead, 2),
         }
 
     if render_quality == "fast_studio_preview":
@@ -738,17 +1043,17 @@ def estimate_render_cost_usd(
             "video_scenes": 0,
             "keyframe_scenes": 0,
             "reused_scenes": total - remaining,
-            "full_motion_usd": round(total * 0.70 + base_overhead, 2),
+            "full_motion_usd": round(total * omni_clip_usd + base_overhead, 2),
         }
 
     if render_quality == "ai_keyframes_kenburns":
-        est = remaining * 0.05 + base_overhead
+        est = remaining * kf_clip_usd + base_overhead
         return {
             "total_usd": round(est, 2),
             "video_scenes": 0,
             "keyframe_scenes": remaining,
             "reused_scenes": total - remaining,
-            "full_motion_usd": round(total * 0.70 + base_overhead, 2),
+            "full_motion_usd": round(total * omni_clip_usd + base_overhead, 2),
         }
 
     if render_quality == "hybrid_cinema":
@@ -756,17 +1061,17 @@ def estimate_render_cost_usd(
         # Scale hero count proportionally to remaining scenes
         hero_cnt = min(remaining, len(hero_ids))
         kf_cnt = max(0, remaining - hero_cnt)
-        est = hero_cnt * 0.70 + kf_cnt * 0.05 + base_overhead
+        est = hero_cnt * omni_clip_usd + kf_cnt * kf_clip_usd + base_overhead
         return {
             "total_usd": round(est, 2),
             "video_scenes": hero_cnt,
             "keyframe_scenes": kf_cnt,
             "reused_scenes": total - remaining,
-            "full_motion_usd": round(total * 0.70 + base_overhead, 2),
+            "full_motion_usd": round(total * omni_clip_usd + base_overhead, 2),
         }
 
     # full_omni_video
-    est = remaining * 0.70 + base_overhead
+    est = remaining * omni_clip_usd + base_overhead
     return {
         "total_usd": round(est, 2),
         "video_scenes": remaining,
@@ -994,6 +1299,35 @@ def run_agent3_media_pipeline(
 
     hybrid_hero_ids = select_hybrid_hero_scene_indices(scenes) if render_quality == "hybrid_cinema" else set()
 
+    # Character Identity Lock: Generate ONE Master Reference Portrait (~$0.04) once per project
+    # so the main protagonist keeps the EXACT SAME face, age, tilak & outfit across all scenes!
+    character_anchor_bytes: Optional[bytes] = None
+    effective_character_bible: str = (agent1.character_bible or "").strip()
+    character_keywords: List[str] = []
+    has_explicit_char_flags = any(bool(s.features_main_character) for s in scenes)
+    if render_quality != "fast_studio_preview" and cfg.has_valid_gemini_key:
+        database.upsert_job(
+            job_id=f"{project_id}_visuals_16x9",
+            project_id=project_id,
+            job_type="media_stage",
+            scene_index=3,
+            label=stage_defs[2][1],
+            status="running",
+            progress_pct=6,
+            message="Locking main character appearance across scenes...",
+        )
+        anchor_path, effective_character_bible = _generate_character_anchor_portrait(
+            renders_dir / "character_anchor.png",
+            agent1=agent1,
+            agent2=agent2,
+            reuse_existing=reuse_existing_clips,
+            config=cfg,
+        )
+        if anchor_path and anchor_path.exists():
+            character_anchor_bytes = anchor_path.read_bytes()
+        if effective_character_bible:
+            character_keywords = _extract_character_keywords(effective_character_bible, agent1.topic)
+
     def _render_vis(sc: SceneClipSpec) -> Tuple[int, Path, str]:
         dur = voice_results[sc.scene_index][1]
         n_frames = scene_frame_counts[sc.scene_index]
@@ -1025,6 +1359,14 @@ def run_agent3_media_pipeline(
                 if render_quality == "hybrid_cinema"
                 else render_quality
             )
+            use_char_lock = bool(
+                character_anchor_bytes
+                and _scene_mentions_character(
+                    sc,
+                    character_keywords,
+                    has_explicit_flags=has_explicit_char_flags,
+                )
+            )
             p, src = _generate_ai_scene_visual(
                 sc,
                 out_mp4,
@@ -1037,6 +1379,9 @@ def run_agent3_media_pipeline(
                 force_ai_cinema=force_ai_cinema,
                 cinema_preset=cinema_preset,
                 foley_out_wav=foley_wav,
+                character_anchor_bytes=character_anchor_bytes,
+                character_bible=effective_character_bible,
+                use_character_anchor=use_char_lock,
                 config=cfg,
             )
         # Apply optional presenter PIP badge cleanly on Opening Hook (Scene 1) & Final Outro scene

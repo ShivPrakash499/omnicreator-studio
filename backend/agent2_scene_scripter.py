@@ -225,6 +225,14 @@ def run_agent2_scene_scripting(
 
         for b_start in range(0, len(baseline.scenes), batch_size):
             slice_scenes = baseline.scenes[b_start : b_start + batch_size]
+            char_bible_block = (
+                f"LOCKED CHARACTER IDENTITY BIBLE (CRITICAL — ZERO FACE DRIFT ACROSS ALL SCENES!):\n"
+                f"  {agent1.character_bible}\n"
+                f"  - Whenever the main protagonist appears on screen, set `features_main_character = true` AND describe them strictly matching the EXACT age, face, forehead markings/tilak, hairstyle, facial hair, and costume colors above (NEVER change their age, add/remove beards, or alter their outfit).\n"
+                f"  - Whenever a scene is purely a wide landscape, temple exterior, crowd, or object close-up without the main protagonist in frame, set `features_main_character = false`.\n\n"
+                if (agent1.character_bible or "").strip()
+                else ""
+            )
             prompt = (
                 f"You are Agent 2 — an Award-Winning Film Director of Photography & Vocal Scriptwriter inside OMNI STUDIO.\n"
                 f"Topic: {agent1.topic} | Niche: {agent1.niche} | Language & Tone: {agent1.language_tone}\n"
@@ -237,6 +245,7 @@ def run_agent2_scene_scripting(
                 f"Selected Title: {agent1.selected_title}\n"
                 f"Opening Hook Direction: {agent1.hook_script_0_45s}\n"
                 f"Climax Misconception Reveal: {agent1.climax_misconception_aha}\n\n"
+                f"{char_bible_block}"
                 f"Rewrite and elevate these {len(slice_scenes)} consecutive scenes (indices {slice_scenes[0].scene_index} to {slice_scenes[-1].scene_index}) "
                 f"into breathtaking, filmable, high-retention cinema (8-12 seconds each):\n"
                 f"1. `voiceover_text`: Natural, punchy, non-repetitive narration strictly in {agent1.language_tone} (~18-26 spoken words per 10s scene so it aligns tightly with 8-12s cuts).\n"
@@ -315,17 +324,19 @@ def enhance_all_scenes_to_cinema(
     agent2: Agent2Output,
     *,
     cinema_preset: str = DEFAULT_CINEMA_PRESET,
+    character_bible: str = "",
     config: Optional[OmniStudioConfig] = None,
 ) -> Agent2Output:
     """
     Upgrades ALL scene visual prompts in an existing `Agent2Output` in-place to Hollywood-grade
     cinematography while strictly preserving the user's edited voiceovers, SSML cues, durations,
-    and custom uploads. Uses Gemini when available, with deterministic DP polish fallback.
+    and custom uploads. Enforces `character_bible` across every protagonist scene when provided.
     """
     cfg = config or OmniStudioConfig()
     prof = get_niche_profile(agent2.niche)
     preset = get_cinema_preset(cinema_preset)
     upgraded_scenes = [SceneClipSpec.model_validate(s.model_dump()) for s in agent2.scenes]
+    clean_bible = (character_bible or "").strip()
 
     if cfg.has_valid_gemini_key:
         try:
@@ -341,9 +352,22 @@ def enhance_all_scenes_to_cinema(
                 visual_prompt_veo_omni: str
                 camera_and_lighting_cue: str
                 sfx_cue: str
+                features_main_character: Optional[bool] = None
 
             class _CinemaRewriteBatch(_PydBase):
                 items: List[_CinemaRewriteItem]
+
+            char_bible_block = (
+                f"LOCKED CHARACTER IDENTITY BIBLE (CRITICAL — ZERO FACE DRIFT ACROSS ALL SCENES!):\n"
+                f"  {clean_bible}\n"
+                f"  - Whenever the main protagonist appears on screen, set `features_main_character = true` AND "
+                f"describe them strictly matching the EXACT age, face, forehead markings/tilak, hairstyle, facial hair, "
+                f"and costume colors above (NEVER change age, add/remove beards, or alter attire).\n"
+                f"  - Whenever a scene is purely a landscape, temple exterior, crowd, or prop close-up without the "
+                f"main protagonist in frame, set `features_main_character = false`.\n\n"
+                if clean_bible
+                else ""
+            )
 
             batch_size = 18
             for b_start in range(0, len(upgraded_scenes), batch_size):
@@ -356,6 +380,7 @@ def enhance_all_scenes_to_cinema(
                         "voiceover_text": s.voiceover_text,
                         "current_visual_prompt": s.visual_prompt_veo_omni,
                         "current_sfx_cue": s.sfx_cue,
+                        "features_main_character": s.features_main_character,
                     }
                     for s in chunk
                 ]
@@ -365,8 +390,10 @@ def enhance_all_scenes_to_cinema(
                     f"Topic: {agent2.topic} | Niche: {agent2.niche} | Cinema Look: {cinema_preset}\n"
                     f"Rig & Grade: {preset['camera_rig']}; {preset['lighting_signature']}; {preset['color_grade']}\n"
                     f"Niche Visual Grammar: {prof['visual_style']}\n\n"
-                    f"Rewrite `visual_prompt_veo_omni`, `camera_and_lighting_cue`, and `sfx_cue` for each scene below into "
-                    f"jaw-dropping 55-90 word photorealistic single-take cinema prompts with frame-accurate Foley SFX:\n"
+                    f"{char_bible_block}"
+                    f"Rewrite `visual_prompt_veo_omni`, `camera_and_lighting_cue`, `sfx_cue`, and `features_main_character` "
+                    f"for each scene below into jaw-dropping 55-90 word photorealistic single-take cinema prompts with "
+                    f"frame-accurate Foley SFX:\n"
                     f"- Alternate shot scales across consecutive scenes (Wide Establishing, Low-Angle Tracking, 100mm Macro, "
                     f"Orbital Steadicam, Aerial Top-Down, 120fps Slow-Mo, Foreground Parallax, Horizon Pull-Back).\n"
                     f"- Replace any chart, slide, text card, infographic, or wireframe grid imagery with vivid physical "
@@ -397,6 +424,8 @@ def enhance_all_scenes_to_cinema(
                             s.camera_and_lighting_cue = by_idx[s.scene_index].camera_and_lighting_cue
                             if by_idx[s.scene_index].sfx_cue.strip():
                                 s.sfx_cue = by_idx[s.scene_index].sfx_cue.strip()
+                            if by_idx[s.scene_index].features_main_character is not None:
+                                s.features_main_character = bool(by_idx[s.scene_index].features_main_character)
         except Exception as exc:
             logger.info("LLM batch cinema prompt enhancer fell back to deterministic DP polish: %s", exc)
 

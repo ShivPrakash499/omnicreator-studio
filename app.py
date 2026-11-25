@@ -1183,6 +1183,17 @@ elif step == 1:
                 value=a1.bgm_style_reference,
                 key="a1_bgm_style",
             )
+            edited_char_bible = st.text_area(
+                "🎭 Main Character Look Lock (Same Face Across Every Scene):",
+                value=a1.character_bible,
+                height=82,
+                placeholder=(
+                    "Leave blank for non-character topics, or describe exact face, age, hair, forehead markings & outfit "
+                    "(e.g., Barbarik: young Indian warrior, early 20s, sharp jawline, red-saffron tilak, golden armor, saffron drape, 3 glowing arrows)."
+                ),
+                help="Locks one consistent face & costume across every AI scene and video clip. Leave empty if your video has no recurring main character.",
+                key="a1_char_bible",
+            )
 
         with st.expander("🎬 Storyboard & Key Moments", expanded=True):
             edited_hook = st.text_area("⚡ Opening Hook (First 45 Seconds):", value=a1.hook_script_0_45s, height=90, key="a1_hook_edit")
@@ -1240,6 +1251,10 @@ elif step == 1:
             edited_a1_dict["thumbnail_badge_label"] = edited_thumb_badge.strip() or a1.thumbnail_badge_label
             edited_a1_dict["thumbnail_graphic_concept"] = edited_thumb_concept.strip() or a1.thumbnail_graphic_concept
             edited_a1_dict["bgm_style_reference"] = edited_bgm_style.strip() or a1.bgm_style_reference
+            new_bible = edited_char_bible.strip()
+            edited_a1_dict["character_bible"] = new_bible
+            if new_bible != (a1.character_bible or "").strip():
+                edited_a1_dict["character_anchor_prompt"] = new_bible
             edited_a1_dict["storyboard_beats"] = updated_beats
 
             committed_a1 = Agent1Output.model_validate(edited_a1_dict)
@@ -1308,8 +1323,14 @@ elif step == 2:
             st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
             if st.button("✨ Enhance All Scene Visuals", use_container_width=True):
                 with st.status("✨ Upgrading all scene visuals to cinema grade...", expanded=True) as up_st:
-                    st.write("🎥 Polishing camera framing, lighting & sound cues across all scenes...")
-                    boosted_a2 = enhance_all_scenes_to_cinema(a2, cinema_preset=sel_preset_s2, config=cfg)
+                    st.write("🎥 Polishing camera framing, character lock, lighting & sound cues across all scenes...")
+                    cur_char_bible = Agent1Output.model_validate(a1_data).character_bible
+                    boosted_a2 = enhance_all_scenes_to_cinema(
+                        a2,
+                        cinema_preset=sel_preset_s2,
+                        character_bible=cur_char_bible,
+                        config=cfg,
+                    )
                     st.session_state["agent2_output"] = boosted_a2.model_dump()
                     db.update_project_stage(pid, agent2_data=boosted_a2.model_dump())
                     for s_i in range(1, len(boosted_a2.scenes) + 1):
@@ -1317,6 +1338,7 @@ elif step == 2:
                         st.session_state.pop(f"sc_sfx_{s_i}", None)
                         st.session_state.pop(f"sc_mode_{s_i}", None)
                         st.session_state.pop(f"sc_mg_{s_i}", None)
+                        st.session_state.pop(f"sc_char_{s_i}", None)
                     up_st.update(label="✅ All scene visuals enhanced!", state="complete", expanded=False)
                 st.rerun()
 
@@ -1403,8 +1425,14 @@ elif step == 2:
                 new_mg = sc.get("motion_graphic_type") or "none"
                 new_ssml = sc.get("ssml_voice_cues", "")
                 new_callout = sc.get("on_screen_callout", "")
+                new_feat_char = bool(sc.get("features_main_character", False))
 
                 with st.expander("⚙️ Advanced Scene Options", expanded=False):
+                    new_feat_char = st.checkbox(
+                        "🎭 Lock Main Character Face in This Scene",
+                        value=new_feat_char,
+                        key=f"sc_char_{s_num}",
+                    )
                     ac1, ac2 = st.columns(2)
                     with ac1:
                         modes = ["ai_video", "motion_graphics", "custom_upload"]
@@ -1450,6 +1478,7 @@ elif step == 2:
                 sc["ssml_voice_cues"] = new_ssml
                 sc["sfx_cue"] = new_sfx
                 sc["on_screen_callout"] = new_callout
+                sc["features_main_character"] = bool(new_feat_char)
 
         a2_updated_dict = a2.model_dump()
         a2_updated_dict["scenes"] = scenes_dicts
@@ -1653,22 +1682,33 @@ elif step == 3:
         # Transparent Live Credit Cost Estimator Card (shown BEFORE clicking Generate!)
         fresh_est = estimate_render_cost_usd(a2.scenes, render_quality, cached_scene_count=0, use_fast_tts=fast_tts)
         est_usd = fresh_est["total_usd"]
+        est_inr = int(round(est_usd * 85.5))
         full_usd = fresh_est["full_motion_usd"]
         savings_usd = max(0.0, round(full_usd - est_usd, 2))
+        char_lock_note = (
+            " · 🎭 Same-Face Character Lock Active"
+            if (a1.character_bible or "").strip()
+            else (" · 🎭 Auto Same-Face Lock Ready" if render_quality != "fast_studio_preview" else "")
+        )
         if render_quality == "hybrid_cinema":
-            est_detail = f"{fresh_est['video_scenes']} full-motion hero clips + {fresh_est['keyframe_scenes']} AI cinema visual scenes + narration, thumbnail & music"
+            est_detail = f"{fresh_est['video_scenes']} full-motion hero clips + {fresh_est['keyframe_scenes']} AI cinema visuals + voice, thumbnail & Shorts{char_lock_note}"
         elif render_quality == "ai_keyframes_kenburns":
-            est_detail = f"{fresh_est['keyframe_scenes']} AI cinema visual scenes with smooth motion + narration, thumbnail & music"
+            est_detail = f"{fresh_est['keyframe_scenes']} AI cinema visual scenes with smooth motion + voice, thumbnail & Shorts{char_lock_note}"
         elif render_quality == "fast_studio_preview":
             est_detail = "Free offline draft preview (no AI video or image credits used)"
         else:
-            est_detail = f"All {fresh_est['video_scenes']} scenes rendered as full-motion AI video + narration, thumbnail & music"
+            est_detail = f"All {fresh_est['video_scenes']} scenes rendered as full-motion AI video + voice, thumbnail & Shorts{char_lock_note}"
+        cost_headline = (
+            "💰 Estimated Credit Cost: Free (₹0)"
+            if est_usd <= 0.0
+            else f"💰 Estimated Credit Cost: ~${est_usd:.2f} (≈ ₹{est_inr:,}) — includes Long + Short"
+        )
         save_badge = f'<span class="omni-cost-save">Saves ~${savings_usd:.2f} vs Full Motion</span>' if savings_usd >= 0.50 else ""
         st.markdown(
             f"""
             <div class="omni-cost-card">
                 <div>
-                    <div class="omni-cost-main">💰 Estimated Credit Cost: ~${est_usd:.2f}</div>
+                    <div class="omni-cost-main">{cost_headline}</div>
                     <div class="omni-cost-sub">{est_detail}</div>
                 </div>
                 {save_badge}
@@ -1876,6 +1916,10 @@ elif step == 3:
                 with sh_c2:
                     st.markdown("**Video Chapters:**")
                     st.code(a3.exact_chapters_text, language="text")
+                    char_anchor_img = Path(a3.project_dir) / "renders" / "character_anchor.png"
+                    if char_anchor_img.exists():
+                        st.markdown("**🎭 Locked Character Reference Face:**")
+                        st.image(str(char_anchor_img), width=220)
 
             st.markdown("")
             if st.button("Continue to Publish ➡️", type="primary", use_container_width=True):
