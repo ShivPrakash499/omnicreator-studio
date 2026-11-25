@@ -591,31 +591,65 @@ def format_flow_prompts_export_txt(
     character_bible: str,
     scenes: List[Any],
     cinema_preset: Optional[str] = None,
+    character_anchor_prompt: str = "",
 ) -> str:
     """
     Exports all scenes into a clean, ready-to-paste text sheet for Google Flow (Google AI Ultra),
-    pre-scrubbed of camera hardware terms and anchored with the locked character profile.
+    pre-scrubbed of camera hardware terms, carrying the inline Character Identity Lock, Step 0 Master
+    Portrait prompt for Flow's 'Ingredients to Video', anatomical realism fixes, and Negative Blacklist.
     """
+    clean_bible = (character_bible or "").strip()
+    clean_anchor = (character_anchor_prompt or clean_bible).strip()
+
+    # Build simple character-name detection so even legacy saved projects get [MAIN CHARACTER] tags
+    char_tokens: List[str] = []
+    if clean_bible:
+        lead = re.split(r"[:\-\(\n,.]", clean_bible[:140])[0]
+        stop_w = {
+            "the", "and", "for", "with", "young", "indian", "warrior", "man", "woman",
+            "ancient", "hero", "main", "character", "lord", "king", "prince", "baba",
+        }
+        for w in re.findall(r"[A-Za-z]{4,}", lead):
+            wl = w.lower()
+            if wl not in stop_w and wl not in char_tokens:
+                char_tokens.append(wl)
+                if wl.endswith("ik") and len(wl) >= 7:
+                    char_tokens.append(wl[:-2])
+
     lines: List[str] = [
-        f"OMNI STUDIO -> GOOGLE FLOW (AI ULTRA) PRODUCTION SHEET",
+        "OMNI STUDIO -> GOOGLE FLOW (AI ULTRA) PRODUCTION SHEET",
         f"Topic: {topic} | Category: {niche} | Total Scenes: {len(scenes)}",
         "=" * 78,
         "HOW TO USE WITH GOOGLE AI ULTRA (ZERO EXTRA GOOGLE CLOUD VIDEO COST):",
         "1. Open Google Flow (https://labs.google/fx/tools/flow) signed into your Ultra account.",
-        "2. If a Main Character Look Lock is listed below, generate/save 1 portrait first and attach",
-        "   it in Flow's 'Ingredients to Video' for scenes marked [MAIN CHARACTER] so the face stays identical!",
-        "3. Save downloaded clips named scene_01.mp4, scene_02.mp4 ... and bulk-drop them into OMNI STUDIO Step 2.",
+        "2. STEP 0 (Same-Face Lock): Generate 1 portrait image using the MASTER CHARACTER PORTRAIT",
+        "   prompt below and save/pin it as an Ingredient in Google Flow.",
+        "3. For every scene marked [MAIN CHARACTER - ATTACH FACE INGREDIENT], switch Flow to",
+        "   'Ingredients to Video', attach that 1 portrait, and paste the scene's FLOW PROMPT.",
+        "4. Save downloaded clips named scene_01.mp4, scene_02.mp4 ... and bulk-drop them into",
+        "   OMNI STUDIO Step 2 (automatic voiceover, music, subtitles, thumbnail & YouTube publish!).",
         "=" * 78,
         "",
     ]
-    if (character_bible or "").strip():
+    if clean_bible or clean_anchor:
+        portrait_prompt = (
+            "Photorealistic 8K theatrical character reference portrait, head-and-shoulders three-quarter "
+            "angle looking clearly forward, crisp unobstructed facial features, natural warm skin texture, "
+            "soft even neutral lighting against a plain warm dark-gray backdrop (no scenery, no crowd, "
+            f"single person only): {clean_anchor}. {STRICT_PHYSICAL_REALISM_AND_NO_CAMERA_RULE} "
+            f"{STRICT_ENGLISH_NO_FOREIGN_TEXT_RULE} {NEGATIVE_PROMPT_BLACKLIST}"
+        )
         lines.extend([
-            "MAIN CHARACTER LOOK LOCK (USE FOR PORTRAIT INGREDIENT IN FLOW):",
-            character_bible.strip(),
+            "STEP 0 — MASTER CHARACTER REFERENCE PORTRAIT PROMPT (GENERATE ONCE & PIN IN FLOW):",
+            portrait_prompt,
             "",
-            "-" * 78,
+            "LOCKED CHARACTER BIBLE (ENFORCED INSIDE EVERY MAIN CHARACTER SCENE BELOW):",
+            clean_bible or clean_anchor,
+            "",
+            "=" * 78,
             "",
         ])
+
     for sc in scenes:
         s_idx = sc.scene_index if hasattr(sc, "scene_index") else sc.get("scene_index", 1)
         ch_lbl = sc.chapter_label if hasattr(sc, "chapter_label") else sc.get("chapter_label", "")
@@ -624,7 +658,13 @@ def format_flow_prompts_export_txt(
         sfx_c = sc.sfx_cue if hasattr(sc, "sfx_cue") else sc.get("sfx_cue", "")
         dur_s = sc.duration_sec if hasattr(sc, "duration_sec") else sc.get("duration_sec", 8.0)
         vo_txt = sc.voiceover_text if hasattr(sc, "voiceover_text") else sc.get("voiceover_text", "")
-        feat_c = sc.features_main_character if hasattr(sc, "features_main_character") else sc.get("features_main_character", False)
+        feat_c = bool(sc.features_main_character if hasattr(sc, "features_main_character") else sc.get("features_main_character", False))
+        if not feat_c and char_tokens:
+            vp_low = (raw_vp or "").lower()
+            is_scenery = any(k in vp_low for k in ("temple exterior", "aerial establishing", "crowd of", "devotees", "empty landscape"))
+            if not is_scenery and any(re.search(rf"\b{re.escape(tok)}", vp_low) for tok in char_tokens):
+                feat_c = True
+
         clean_p = build_cinematic_video_prompt(
             raw_vp,
             niche=niche,
@@ -634,12 +674,21 @@ def format_flow_prompts_export_txt(
             duration_sec=min(8.0, float(dur_s)),
             scene_index=int(s_idx),
         )
-        char_tag = " [MAIN CHARACTER - ATTACH FACE REFERENCE]" if feat_c else ""
+        if feat_c and clean_bible:
+            clean_p = (
+                "CHARACTER IDENTITY LOCK: Use the attached character reference portrait strictly for the "
+                "EXACT SAME person's face, age, eye shape, forehead markings/tilak, hairstyle, and attire "
+                "(do NOT copy the plain studio backdrop from the portrait). "
+                f"Locked look: {clean_bible}. "
+                f"{clean_p}"
+            )
+
+        char_tag = " [MAIN CHARACTER - ATTACH FACE INGREDIENT]" if feat_c else ""
         lines.extend([
             f"SCENE {int(s_idx):02d} — {ch_lbl}{char_tag}",
             f"Filename to save: scene_{int(s_idx):02d}.mp4",
             f"Voiceover cue: {vo_txt}",
-            f"FLOW PROMPT:",
+            "FLOW PROMPT:",
             clean_p,
             "",
             "-" * 78,

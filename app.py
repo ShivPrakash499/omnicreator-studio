@@ -1406,6 +1406,7 @@ elif step == 2:
                     character_bible=cur_a1_for_flow.character_bible,
                     scenes=a2.scenes,
                     cinema_preset=sel_preset_s2,
+                    character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
                 )
                 st.download_button(
                     "📥 Download Clean Flow Prompts (.txt)",
