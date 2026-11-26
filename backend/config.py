@@ -425,7 +425,7 @@ def get_cinema_preset(preset_name: Optional[str] = None) -> Dict[str, str]:
     return CINEMA_STYLE_PRESETS[DEFAULT_CINEMA_PRESET]
 
 
-FLOW_SANITIZER_VERSION: str = "pg13-safe-v2"
+FLOW_SANITIZER_VERSION: str = "pg13-safe-v3"
 
 
 def sanitize_policy_safe_visual_text(text: str) -> str:
@@ -783,8 +783,8 @@ def format_flow_agent_memory_block(
     lines: List[str] = [
         f"PROJECT: {topic} ({niche})",
         f"VISUAL STYLE: 16:9 widescreen theatrical cinema, {preset['camera_rig']}. {prof['visual_style']}.",
-        "VIDEO DEFAULTS: Veo 3.1, 16:9 landscape, 1 output per scene, 8-second single unbroken continuous shot (strictly NO scene cuts, NO split screens, NO UI overlays).",
-        "AUDIO RULE: Realistic frame-synced environmental foley ONLY. Strictly NO spoken dialogue, NO lip-syncing, NO human voices, NO singing, NO background music (voiceover & score are added later).",
+        "VIDEO DEFAULTS: Use Omni 1.2 Flash (8s, 16:9 landscape, 1 output/scene) for character-referenced scenes for best face consistency, and Veo 3.1 or Omni 1.2 Flash (8s, 16:9, 1 output/scene) for scenery scenes. Single unbroken continuous shot (strictly NO scene cuts, NO split screens, NO UI overlays).",
+        "AUDIO RULE: Realistic frame-synced environmental foley ONLY. Strictly NO spoken dialogue, NO lip-syncing, NO human voices, NO singing, NO background music (OMNI STUDIO adds the locked narrator voiceover & continuous BGM after sewing).",
     ]
     if chars:
         lines.append("CHARACTER LOCK (ALWAYS USE SAVED 'Characters' PORTRAITS — NEVER COPY PLAIN STUDIO BACKDROP INTO SCENES):")
@@ -800,6 +800,88 @@ def format_flow_agent_memory_block(
         "tech, morphing faces, floating text, Chinese or foreign letters, or watermarks."
     )
     return "\n".join(lines)
+
+
+def format_flow_phase3_sew_prompt(
+    topic: str,
+    total_scenes: int,
+) -> str:
+    """
+    Ready-to-paste Phase 3 prompt telling Google Flow Agent to sew all generated clips
+    in exact order (`scene_01` -> `scene_XX`) inside Flow's `Scenes` builder into ONE
+    single 16:9 master MP4 ready to download and enrich with audio/BGM/captions in OMNI STUDIO.
+    """
+    return (
+        f"PHASE 3 — SEW ALL {total_scenes} SCENES INTO ONE MASTER VIDEO (IN FLOW 'Scenes' BUILDER) for \"{topic}\":\n"
+        f"1. Open the project's Scenes timeline and place all {total_scenes} generated video clips in exact sequential order "
+        f"from scene_01.mp4 through scene_{total_scenes:02d}.mp4 (verify no scene is skipped, duplicated, or out of order).\n"
+        f"2. Join consecutive clips with clean, seamless theatrical cuts (either crisp straight cuts or subtle 0.25-second "
+        f"soft cross-dissolves where scenes shift location). Keep every clip at its full original 8-second duration and 16:9 landscape framing.\n"
+        f"3. AUDIO PRESERVATION: Keep each clip's subtle native environmental Foley sound effects ONLY. Do NOT add any spoken "
+        f"voiceover, background music track, or on-screen text/subtitles (OMNI STUDIO will enrich this stitched master video with "
+        f"studio narration, continuous BGM, sound polish, and active captions).\n"
+        f"4. Render and prepare the single complete stitched 16:9 HD video (named final_flow_video_16x9.mp4) so I can download it."
+    )
+
+
+def format_flow_phase4_thumbnails_prompt(
+    topic: str,
+    niche: str,
+    character_bible: str = "",
+    character_anchor_prompt: str = "",
+    *,
+    thumbnail_hook_headline: str = "",
+    thumbnail_badge_label: str = "",
+    thumbnail_graphic_concept: str = "",
+    language_tone: str = "",
+) -> str:
+    """
+    Ready-to-paste Phase 4 prompt telling Google Flow Agent (using `Nano Banana Pro` + saved
+    `@Characters`) to generate BOTH a 16:9 YouTube Long Video thumbnail and a 9:16 vertical
+    YouTube Shorts thumbnail in PG-13 policy-safe, ultra-high-CTR theatrical quality.
+    """
+    prof = get_niche_profile(niche)
+    chars = parse_characters_from_bible(character_bible, character_anchor_prompt)
+    safe_concept = sanitize_policy_safe_visual_text(
+        _scrub_camera_gear_and_anachronisms(thumbnail_graphic_concept or f"Dramatic epic cinematic key art representing {topic}")
+    )
+    headline = (thumbnail_hook_headline or "").strip()
+    badge = (thumbnail_badge_label or prof.get("badge_prefix", "")).strip()
+    char_clause = (
+        f"Attach and lock our saved Characters ({' + '.join(c['tag'] for c in chars)}) so the exact same faces, "
+        f"markings, crowns, hair, and costumes appear crisply with intense, dramatic theatrical expressions."
+        if chars
+        else "Create an iconic, high-impact focal subject in ultra-sharp photorealistic cinema lighting."
+    )
+    headline_16 = (
+        f'Render bold, ultra-legible high-CTR headline text "{headline}" in clean bright saffron-gold and pure white '
+        f"letters with thick dark outline and soft glow inside the opposite visual third (100% inside safe margins, zero cut-off letters)"
+        + (f', with a compact top-corner badge reading "{badge}".' if badge else ".")
+        if headline
+        else "Keep the composition dramatic and clean with generous negative space on one side for bold YouTube title text."
+    )
+    headline_9 = (
+        f'Render bold, centered high-CTR headline text "{headline}" in bright golden-white with thick dark outline '
+        f"positioned cleanly in the upper-middle safe zone (keep the bottom 25% of the frame visually uncluttered so "
+        f"YouTube Shorts captions and buttons never overlap text or faces)."
+        if headline
+        else "Keep the top and bottom 20% clean so YouTube Shorts UI never covers faces or key action."
+    )
+
+    return (
+        f"PHASE 4 — GENERATE BOTH YOUTUBE THUMBNAILS (16:9 LONG + 9:16 SHORTS) for \"{topic}\":\n"
+        f"Use Nano Banana Pro (1 output each). {char_clause}\n"
+        f"Keep BOTH thumbnails strictly PG-13 epic mythological/theatrical cinema — natural lifelike proportions, "
+        f"zero video cameras, zero modern items, zero watermarks, zero garbled extra text.\n\n"
+        f"THUMBNAIL 1 — 16:9 LANDSCAPE (YouTube Full-Length Video | Download as: thumbnail_16x9.png):\n"
+        f"Aspect Ratio: 16:9 Landscape. High-CTR theatrical movie-poster YouTube thumbnail. Visual scene: {safe_concept}. "
+        f"Visual style: {prof['visual_style']}. Dramatic high-contrast volumetric backlighting, glowing golden embers, "
+        f"razor-sharp subject separation against deep twilight shadows, intense emotional storytelling. {headline_16}\n\n"
+        f"THUMBNAIL 2 — 9:16 VERTICAL PORTRAIT (YouTube Shorts Cover | Download as: thumbnail_9x16.png):\n"
+        f"Aspect Ratio: 9:16 Vertical Portrait. Full-bleed high-CTR vertical YouTube Shorts cover matching the exact same "
+        f"cinematic color palette, characters, and epic lighting as Thumbnail 1. Visual scene: {safe_concept}. "
+        f"Place the main character(s) powerfully framed in the center with radiant volumetric rim light and glowing embers. {headline_9}"
+    )
 
 
 def format_flow_agent_kickoff_prompt(
@@ -818,23 +900,25 @@ def format_flow_agent_kickoff_prompt(
     if chars:
         tag_list = ", ".join(ch["tag"] for ch in chars)
         return (
-            f"I uploaded our complete {total_scenes}-scene production blueprint for \"{topic}\". "
-            f"Follow our Project Memory rules and execute in 2 strict phases:\n"
+            f"I uploaded our complete 4-phase production blueprint ({total_scenes} scenes + sewing + 16:9 & 9:16 thumbnails) for \"{topic}\". "
+            f"Follow our Project Memory rules and execute in 4 strict phases:\n"
             f"1) PHASE 1 ONLY RIGHT NOW: Generate 1 clean 16:9 studio reference portrait (Nano Banana Pro, 1 output each) "
             f"for each locked character listed in Phase 1 ({tag_list}), save them into the project's Characters library "
-            f"under those exact names, and STOP so I can inspect and approve the faces before spending any video credits.\n"
+            f"under those exact names, and STOP so I can approve the faces before spending video credits.\n"
             f"2) PHASE 2 (AFTER MY APPROVAL): Generate the {total_scenes} clips sequentially in batches of {batch_size} "
-            f"(start with Batch 1: scene_01 to scene_{first_end:02d}, then wait for my \"next\" for each following batch) "
-            f"using Veo 3.1 (16:9, 1 output per scene). Strictly obey each scene's ATTACH CHARACTERS tag (attach ONLY the "
-            f"listed saved Character(s), or NONE for scenery scenes), keep foley-only audio (zero speech/music), zero cameras/modern gear, "
-            f"and label every generated clip scene_01 through scene_{total_scenes:02d}."
+            f"(Batch 1: scene_01 to scene_{first_end:02d}, then wait for my \"next\" for each batch) using Omni 1.2 Flash "
+            f"(16:9, 8s, 1 output) for character scenes and Veo 3.1 / Omni 1.2 Flash for scenery. Strictly obey ATTACH CHARACTERS, "
+            f"foley-only audio (zero speech/music), PG-13 visuals, zero cameras/text, labeled scene_01..scene_{total_scenes:02d}.\n"
+            f"3) PHASE 3 (AFTER ALL SCENES COMPLETE): Sew scene_01..scene_{total_scenes:02d} sequentially in the Scenes builder "
+            f"into one complete 16:9 video (`final_flow_video_16x9.mp4`) keeping native foley only (no voiceover/BGM).\n"
+            f"4) PHASE 4: Generate BOTH thumbnails (16:9 `thumbnail_16x9.png` + 9:16 `thumbnail_9x16.png`) with Nano Banana Pro using our locked Characters."
         )
     return (
-        f"I uploaded our complete {total_scenes}-scene production blueprint for \"{topic}\". "
-        f"Follow our Project Memory rules and generate the {total_scenes} video clips sequentially in batches of {batch_size} "
-        f"(start with Batch 1: scene_01 to scene_{first_end:02d}, then wait for my \"next\" before queuing each next batch) "
-        f"using Veo 3.1 (16:9, 1 output per scene). Strictly obey every scene prompt, keep foley-only audio (zero speech/music), "
-        f"zero cameras/modern gear, zero text, and label every clip scene_01 through scene_{total_scenes:02d}."
+        f"I uploaded our complete production blueprint ({total_scenes} scenes + sewing + 16:9 & 9:16 thumbnails) for \"{topic}\". "
+        f"Follow our Project Memory rules: generate the {total_scenes} clips sequentially in batches of {batch_size} "
+        f"(Batch 1: scene_01 to scene_{first_end:02d}, then wait for my \"next\" for each batch) using Veo 3.1 / Omni 1.2 Flash "
+        f"(16:9, 8s, 1 output), foley-only audio (zero speech/music), zero cameras/text, labeled scene_01..scene_{total_scenes:02d}. "
+        f"Then execute Phase 3 (sew all {total_scenes} clips in Scenes into one 16:9 video) and Phase 4 (generate 16:9 & 9:16 thumbnails with Nano Banana Pro)."
     )
 
 
@@ -912,6 +996,11 @@ def build_flow_agent_copy_blocks(
     cinema_preset: Optional[str] = None,
     character_anchor_prompt: str = "",
     batch_size: int = 6,
+    *,
+    thumbnail_hook_headline: str = "",
+    thumbnail_badge_label: str = "",
+    thumbnail_graphic_concept: str = "",
+    language_tone: str = "",
 ) -> Dict[str, Any]:
     """
     Builds ready-to-copy 1-click prompt blocks for Google Flow Agent Mode side-by-side workflow:
@@ -919,6 +1008,8 @@ def build_flow_agent_copy_blocks(
     - `phase1_prompt`: Self-contained Phase 1 prompt to generate & save locked `@Character` portraits first
     - `batches`: List of self-contained 6-scene batch prompts (`Batch 1 (01-06)` .. `Batch N`) ready to paste
       straight into Flow's `Describe your goal` / `Use side panel` even without uploading a `.txt` file!
+    - `phase3_sew_prompt`: Prompt instructing Flow Agent to sew all clips sequentially in `Scenes` into 1 MP4
+    - `phase4_thumbnails_prompt`: Prompt instructing Flow Agent to generate BOTH 16:9 & 9:16 thumbnails with Nano Banana Pro
     - `kickoff`: Short kickoff prompt when uploading the full Master `.txt` file via `+`
     """
     chars = parse_characters_from_bible(character_bible, character_anchor_prompt)
@@ -968,16 +1059,17 @@ def build_flow_agent_copy_blocks(
         )
 
         char_rule = (
+            "Use Omni 1.2 Flash (8s, 16:9, 1 output) for character-referenced scenes and Veo 3.1 or Omni 1.2 Flash for scenery scenes. "
             "Strictly obey each scene's ATTACH CHARACTERS tag using our saved Characters portraits "
             "(and attach NO character portrait on scenes marked NONE)."
             if chars
-            else "Generate pure Text-to-Video scenes (no recurring character lock)."
+            else "Use Veo 3.1 or Omni 1.2 Flash (8s, 16:9, 1 output) for pure Text-to-Video scenes (no recurring character lock)."
         )
         b_lines: List[str] = [
             f"PHASE 2 — BATCH {b_num} OF {num_batches} (SCENES {int(first_s):02d}–{int(last_s):02d}) for \"{topic}\":",
-            f"Generate ONLY these {len(slice_scenes)} clips sequentially using Veo 3.1 (16:9 landscape, 1 output per scene, 8s continuous single shot). "
+            f"Generate ONLY these {len(slice_scenes)} clips sequentially (8s continuous single shot each). "
             f"{char_rule} Follow our Project Memory rules strictly: realistic physical foley ONLY (ZERO spoken dialogue, ZERO voices, ZERO music), "
-            f"ZERO cameras/tripods/film crew/modern gear, ZERO foreign or garbled text. Label every clip clearly as scene_{int(first_s):02d}.mp4 through scene_{int(last_s):02d}.mp4.",
+            f"PG-13 visuals, ZERO cameras/tripods/film crew/modern gear, ZERO foreign or garbled text. Label every clip clearly as scene_{int(first_s):02d}.mp4 through scene_{int(last_s):02d}.mp4.",
             "",
         ]
         for offset, sc in enumerate(slice_scenes):
@@ -1001,6 +1093,17 @@ def build_flow_agent_copy_blocks(
             "prompt_text": "\n".join(b_lines).strip(),
         })
 
+    phase3_sew_prompt = format_flow_phase3_sew_prompt(topic=topic, total_scenes=total_scenes)
+    phase4_thumbnails_prompt = format_flow_phase4_thumbnails_prompt(
+        topic=topic,
+        niche=niche,
+        character_bible=character_bible,
+        character_anchor_prompt=character_anchor_prompt,
+        thumbnail_hook_headline=thumbnail_hook_headline,
+        thumbnail_badge_label=thumbnail_badge_label,
+        thumbnail_graphic_concept=thumbnail_graphic_concept,
+        language_tone=language_tone,
+    )
     kickoff_txt = format_flow_agent_kickoff_prompt(
         topic=topic,
         total_scenes=total_scenes,
@@ -1013,6 +1116,8 @@ def build_flow_agent_copy_blocks(
         "memory": memory_txt,
         "phase1_prompt": phase1_prompt,
         "batches": batches,
+        "phase3_sew_prompt": phase3_sew_prompt,
+        "phase4_thumbnails_prompt": phase4_thumbnails_prompt,
         "kickoff": kickoff_txt,
     }
 
@@ -1025,15 +1130,18 @@ def format_flow_prompts_export_txt(
     cinema_preset: Optional[str] = None,
     character_anchor_prompt: str = "",
     batch_size: int = 6,
+    *,
+    thumbnail_hook_headline: str = "",
+    thumbnail_badge_label: str = "",
+    thumbnail_graphic_concept: str = "",
+    language_tone: str = "",
 ) -> str:
     """
-    Exports a Holistic Google Flow Agent Master Production Blueprint (.txt) designed to be
-    uploaded directly into Google Flow Agent Mode (`+` attachment or `Use side panel`),
-    while also working cleanly for manual copy-paste:
+    Exports a Holistic 4-Phase Google Flow Agent Master Production Blueprint (.txt):
     - Phase 1: Dedicated studio reference portrait prompt for EVERY parsed character (`Characters` lock)
-    - Phase 2: All scenes cleanly grouped into batches of 6 with exact per-scene `ATTACH CHARACTERS`
-      routing (`@Char1`, `@Char2`, `@Char1 + @Char2`, or `NONE`), deduplicated camera-free prompts,
-      pure-foley audio cues, and concise negative guardrails.
+    - Phase 2: All scenes cleanly grouped into batches of 6 (`Omni 1.2 Flash` / `Veo 3.1`, Foley-only, PG-13 safe)
+    - Phase 3: Sewing prompt to assemble all clips in Flow's `Scenes` builder into ONE 16:9 master MP4
+    - Phase 4: Thumbnail prompts for BOTH 16:9 Long Video & 9:16 Shorts covers (`Nano Banana Pro`)
     """
     chars = parse_characters_from_bible(character_bible, character_anchor_prompt)
     memory_block = format_flow_agent_memory_block(
@@ -1048,17 +1156,21 @@ def format_flow_prompts_export_txt(
 
     lines: List[str] = [
         "==============================================================================",
-        "OMNI STUDIO -> GOOGLE FLOW AGENT HOLISTIC MASTER PRODUCTION FILE",
+        "OMNI STUDIO -> GOOGLE FLOW AGENT HOLISTIC 4-PHASE PRODUCTION FILE",
         f"Topic: {topic} | Category: {niche} | Total Scenes: {total_scenes} ({num_batches} Batches of {batch_size})",
         "==============================================================================",
         "AGENT EXECUTION PROTOCOL (READ BEFORE GENERATING):",
-        "- SETTINGS: Video = Veo 3.1 (Fast or Quality), 16:9 Landscape, 1 output/scene.",
-        "- IMAGE PORTRAITS: Nano Banana Pro, 16:9, 1 output per character.",
+        "- VIDEO MODEL: Use Omni 1.2 Flash (8s, 16:9, 1 output) for character-referenced scenes,",
+        "  and Veo 3.1 or Omni 1.2 Flash (8s, 16:9, 1 output) for pure scenery scenes.",
+        "- IMAGES & THUMBNAILS: Nano Banana Pro (1 output each).",
         "- SAFETY: Keep 'Confirm before generating' = Always so credits are confirmed per batch.",
-        "- AUDIO: Realistic physical foley ONLY. Strictly NO spoken dialogue, NO singing, NO music.",
-        "- VISUALS: Single unbroken 8-second continuous shot per scene, ZERO cameras/tripods/film crew,",
-        "  100% realistic anatomy, ZERO modern objects (when historical/devotional), ZERO on-screen text.",
-        "- NAMING: Label/save every video clip strictly as scene_01.mp4 .. scene_{:02d}.mp4.".format(total_scenes),
+        "- AUDIO: Realistic physical foley ONLY. Strictly NO spoken dialogue, NO singing, NO music",
+        "  (OMNI STUDIO enriches the final stitched video with locked Hindi/English narration, continuous BGM & captions).",
+        "- VISUALS: PG-13 epic cinema, single unbroken 8s shot per scene, ZERO cameras/tripods/film crew, ZERO text.",
+        "- DELIVERABLES TO DOWNLOAD & UPLOAD TO OMNI STUDIO STEP 3:",
+        "  1) final_flow_video_16x9.mp4 (from Phase 3 Scenes sew)",
+        "  2) thumbnail_16x9.png        (from Phase 4)",
+        "  3) thumbnail_9x16.png        (from Phase 4)",
         "",
         "--- PROJECT MEMORY SUMMARY (ALSO PASTE INTO 'Agent settings -> Memory') ---",
         memory_block,
@@ -1089,7 +1201,7 @@ def format_flow_prompts_export_txt(
         f"PHASE 2 — SEQUENTIAL VIDEO QUEUE ({total_scenes} SCENES IN {num_batches} BATCHES OF {batch_size})",
         "Instructions for Flow Agent: Generate ONLY ONE BATCH AT A TIME unless the user explicitly",
         "says 'generate all remaining batches'. For each scene, obey ATTACH CHARACTERS strictly:",
-        "- If @Character tag(s) are listed -> attach ONLY those saved Character(s) from 'Characters'.",
+        "- If @Character tag(s) are listed -> use Omni 1.2 Flash + attach ONLY those saved Character(s).",
         "- If 'NONE' is listed -> pure Text-to-Video (do NOT attach any Character reference).",
         "==============================================================================",
         "",
@@ -1113,6 +1225,34 @@ def format_flow_prompts_export_txt(
                 chars=chars,
             )
         )
+
+    lines.extend([
+        "==============================================================================",
+        "PHASE 3 — SEW ALL CLIPS INTO ONE MASTER VIDEO (FLOW 'Scenes' BUILDER)",
+        "==============================================================================",
+        format_flow_phase3_sew_prompt(topic=topic, total_scenes=total_scenes),
+        "",
+        "==============================================================================",
+        "PHASE 4 — GENERATE BOTH 16:9 & 9:16 THUMBNAILS (NANO BANANA PRO)",
+        "==============================================================================",
+        format_flow_phase4_thumbnails_prompt(
+            topic=topic,
+            niche=niche,
+            character_bible=character_bible,
+            character_anchor_prompt=character_anchor_prompt,
+            thumbnail_hook_headline=thumbnail_hook_headline,
+            thumbnail_badge_label=thumbnail_badge_label,
+            thumbnail_graphic_concept=thumbnail_graphic_concept,
+            language_tone=language_tone,
+        ),
+        "",
+        "==============================================================================",
+        "FINAL STEP: Download (1) final_flow_video_16x9.mp4, (2) thumbnail_16x9.png, and",
+        "(3) thumbnail_9x16.png -> Upload all 3 in OMNI STUDIO Step 3 ('Upload Sewn Flow Video')",
+        "to automatically add Hindi/English Voiceover, Continuous Devotional BGM, Active Captions,",
+        "and the 10-20s Hook Short (~Rs 15), then publish straight to YouTube in Step 4!",
+        "==============================================================================",
+    ])
 
     return "\n".join(lines)
 

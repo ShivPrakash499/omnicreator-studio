@@ -203,21 +203,25 @@ def _normalize_video_clip_exact(
     fps: int,
     exact_frames: int,
     trim_source_sec: Optional[float] = None,
+    start_offset_sec: Optional[float] = None,
 ) -> Path:
     """
-    Normalizes ANY source video clip (Omni 1.2 Flash, Veo 3.1, Custom Upload, Motion Graphic)
+    Normalizes ANY source video clip (Omni 1.2 Flash, Veo 3.1, Custom Upload, Sewn Flow Master, Motion Graphic)
     to EXACTLY `exact_frames` closed-GOP zero-B-frame CFR frames at `fps` with uniform bt709
     pixel format & 24000 timescale — ZERO hard loop jumps, ZERO frame drift, ZERO overlap!
     """
     ffmpeg_exe = imageio_ffmpeg.get_ffmpeg_exe()
     target_dur = exact_frames / float(fps)
     full_src_dur = _probe_video_duration_sec(raw_src)
+    seek_val = max(0.0, float(start_offset_sec or 0.0))
+    avail_after_seek = max(0.5, full_src_dur - seek_val) if full_src_dur > 0.0 else 0.0
+    in_seek_args: List[str] = ["-ss", f"{seek_val:.4f}"] if seek_val > 0.01 else []
     in_trim_args: List[str] = []
-    if trim_source_sec and trim_source_sec > 1.0 and (full_src_dur <= 0.0 or trim_source_sec < full_src_dur - 0.1):
+    if trim_source_sec and trim_source_sec > 0.5 and (avail_after_seek <= 0.0 or trim_source_sec < avail_after_seek - 0.05):
         in_trim_args = ["-t", f"{trim_source_sec:.4f}"]
-        src_dur = min(full_src_dur, trim_source_sec) if full_src_dur > 0.0 else trim_source_sec
+        src_dur = min(avail_after_seek, trim_source_sec) if avail_after_seek > 0.0 else trim_source_sec
     else:
-        src_dur = full_src_dur
+        src_dur = avail_after_seek if avail_after_seek > 0.0 else full_src_dur
     scale_crop = f"scale={w}:{h}:force_original_aspect_ratio=increase,crop={w}:{h},setsar=1"
 
     if src_dur > 0.4 and src_dur < target_dur - 0.08:
@@ -225,7 +229,7 @@ def _normalize_video_clip_exact(
         if stretch <= 2.15:
             # Smooth theatrical slow-motion stretch + tpad safety clone (zero ping-pong reversal & exact frame count!)
             vf = f"{scale_crop},setpts={stretch:.5f}*(PTS-STARTPTS),fps={fps},tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p"
-            cmd = [ffmpeg_exe, "-y", *in_trim_args, "-i", str(raw_src), "-vf", vf]
+            cmd = [ffmpeg_exe, "-y", *in_seek_args, *in_trim_args, "-i", str(raw_src), "-vf", vf]
         else:
             # Extreme fallback (>2.15x): forward + reverse ping-pong with gentle slow-mo
             half_stretch = max(1.0, min(2.0, target_dur / (2.0 * src_dur)))
@@ -235,10 +239,10 @@ def _normalize_video_clip_exact(
                 f"[a][r]concat=n=2:v=1:a=0,setpts={half_stretch:.5f}*(PTS-STARTPTS),fps={fps},"
                 f"tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p[vout]"
             )
-            cmd = [ffmpeg_exe, "-y", *in_trim_args, "-i", str(raw_src), "-filter_complex", fc, "-map", "[vout]"]
+            cmd = [ffmpeg_exe, "-y", *in_seek_args, *in_trim_args, "-i", str(raw_src), "-filter_complex", fc, "-map", "[vout]"]
     else:
         vf = f"{scale_crop},setpts=PTS-STARTPTS,fps={fps},tpad=stop_mode=clone:stop_duration=1.5,format=yuv420p"
-        cmd = [ffmpeg_exe, "-y", *in_trim_args, "-i", str(raw_src), "-vf", vf]
+        cmd = [ffmpeg_exe, "-y", *in_seek_args, *in_trim_args, "-i", str(raw_src), "-vf", vf]
 
     # Always pad last frame via tpad safety if source was a hair short, then cut to EXACT `exact_frames`
     # Using uniform closed-GOP `-bf 0 -g fps -video_track_timescale 24000` guarantees zero concat bleed!
@@ -893,6 +897,8 @@ def _generate_ai_scene_visual(
     if scene.custom_asset_path and Path(scene.custom_asset_path).exists():
         custom_p = Path(scene.custom_asset_path)
         if custom_p.suffix.lower() in (".mp4", ".mov", ".mkv", ".webm"):
+            if foley_out_wav is not None:
+                extract_native_video_foley(custom_p, foley_out_wav, target_duration_sec=dur)
             _normalize_video_clip_exact(custom_p, output_mp4, w=w, h=h, fps=fps, exact_frames=n_frames)
             return output_mp4, "custom_uploaded_video"
         else:
@@ -1534,6 +1540,9 @@ def run_agent3_media_pipeline(
     use_ai_thumbnail: bool = True,
     animate_scene_indices: Optional[set] = None,
     cost_limit_usd: Optional[float] = None,
+    sewn_master_video_path: Optional[str] = None,
+    custom_thumbnail_16x9_path: Optional[str] = None,
+    custom_thumbnail_9x16_path: Optional[str] = None,
     config: Optional[OmniStudioConfig] = None,
     db: Optional[OmniDatabase] = None,
 ) -> Agent3Output:
@@ -1673,7 +1682,19 @@ def run_agent3_media_pipeline(
         message="Designing video thumbnail...",
     )
     thumb_path = renders_dir / "thumbnail_16x9.png"
-    if reuse_existing_clips and thumb_path.exists() and thumb_path.stat().st_size > 16384:
+    thumb_9x16_path_str = ""
+    custom_t16 = Path(custom_thumbnail_16x9_path) if custom_thumbnail_16x9_path else None
+    custom_t9 = Path(custom_thumbnail_9x16_path) if custom_thumbnail_9x16_path else None
+
+    if custom_t16 and custom_t16.exists() and custom_t16.stat().st_size > 2048:
+        try:
+            with Image.open(custom_t16) as im_t16:
+                im_t16.convert("RGB").save(thumb_path, format="PNG")
+            thumb_engine = "custom_flow_thumbnail_16x9"
+        except Exception:
+            thumb_path.write_bytes(custom_t16.read_bytes())
+            thumb_engine = "custom_flow_thumbnail_16x9"
+    elif reuse_existing_clips and thumb_path.exists() and thumb_path.stat().st_size > 16384:
         thumb_engine = "cached_thumbnail"
     else:
         thumb_path, thumb_engine = generate_high_ctr_thumbnail(
@@ -1689,6 +1710,18 @@ def run_agent3_media_pipeline(
             config=cfg,
             use_ai_image_api=use_ai_thumbnail,
         )
+
+    if custom_t9 and custom_t9.exists() and custom_t9.stat().st_size > 2048:
+        t9_dest = renders_dir / "thumbnail_9x16_short.png"
+        try:
+            with Image.open(custom_t9) as im_t9:
+                im_t9.convert("RGB").save(t9_dest, format="PNG")
+        except Exception:
+            t9_dest.write_bytes(custom_t9.read_bytes())
+        thumb_9x16_path_str = str(t9_dest)
+    elif (renders_dir / "thumbnail_9x16_short.png").exists() and (renders_dir / "thumbnail_9x16_short.png").stat().st_size > 2048:
+        thumb_9x16_path_str = str(renders_dir / "thumbnail_9x16_short.png")
+
     database.upsert_job(
         job_id=f"{project_id}_thumbnail",
         project_id=project_id,
@@ -1697,13 +1730,19 @@ def run_agent3_media_pipeline(
         label=stage_defs[1][1],
         status="completed",
         progress_pct=100,
-        message="Thumbnail ready",
+        message="Custom Flow 16:9 + 9:16 thumbnails ready" if (thumb_engine.startswith("custom_flow") and thumb_9x16_path_str) else "Thumbnail ready",
         output_path=str(thumb_path),
     )
 
     # ------------------------------------------------------------------
     # STAGE 3: Visual Generation & Procedural Motion Graphics (16:9)
     # ------------------------------------------------------------------
+    sewn_p = Path(sewn_master_video_path) if sewn_master_video_path else None
+    using_sewn_master = bool(sewn_p and sewn_p.exists() and sewn_p.stat().st_size > 16384)
+    sewn_total_dur = _probe_video_duration_sec(sewn_p) if (using_sewn_master and sewn_p is not None) else 0.0
+    if using_sewn_master and sewn_total_dur < 2.0:
+        using_sewn_master = False
+
     database.upsert_job(
         job_id=f"{project_id}_visuals_16x9",
         project_id=project_id,
@@ -1712,7 +1751,7 @@ def run_agent3_media_pipeline(
         label=stage_defs[2][1],
         status="running",
         progress_pct=5,
-        message=f"Creating scenes (0/{total_scenes})...",
+        message=f"Aligning sewn Google Flow video across {total_scenes} scenes..." if using_sewn_master else f"Creating scenes (0/{total_scenes})...",
     )
     visual_results: Dict[int, Tuple[Path, str]] = {}
 
@@ -1734,12 +1773,12 @@ def run_agent3_media_pipeline(
     hybrid_hero_ids = select_hybrid_hero_scene_indices(scenes) if render_quality == "hybrid_cinema" else set()
 
     # Character Identity Lock: Generate ONE Master Reference Portrait (~$0.04) once per project
-    # (skipped if all scenes are custom/Google Flow uploads or fast draft preview — zero wasted credits!)
+    # (skipped if using sewn Flow master video, all custom uploads, or fast draft preview — zero wasted credits!)
     character_anchor_bytes: Optional[bytes] = None
     effective_character_bible: str = (agent1.character_bible or "").strip()
     character_keywords: List[str] = []
     has_explicit_char_flags = any(bool(s.features_main_character) for s in scenes)
-    needs_ai_visuals = any(
+    needs_ai_visuals = (not using_sewn_master) and any(
         not (s.custom_asset_path and Path(s.custom_asset_path).exists())
         for s in scenes
     )
@@ -1778,7 +1817,30 @@ def run_agent3_media_pipeline(
         out_mp4 = clips_16_dir / f"scene_{sc.scene_index:03d}_vis.mp4"
         approved_kf = clips_16_dir / f"scene_{sc.scene_index:03d}_keyframe.png"
         foley_wav = (audio_dir / f"scene_{sc.scene_index:03d}_foley_native.wav") if enable_foley_sfx else None
-        if reuse_existing_clips and out_mp4.exists() and out_mp4.stat().st_size > 16384:
+        if using_sewn_master and sewn_p is not None and not (sc.custom_asset_path and Path(sc.custom_asset_path).exists()):
+            # Single-pass proportional slice directly from the sewn Google Flow master video (ZERO double-encode, ZERO drift!)
+            seg_len = sewn_total_dur / float(max(1, total_scenes))
+            seg_start = max(0.0, (sc.scene_index - 1) * seg_len)
+            if foley_wav is not None:
+                extract_native_video_foley(
+                    sewn_p,
+                    foley_wav,
+                    target_duration_sec=dur,
+                    start_offset_sec=seg_start,
+                    source_slice_sec=seg_len,
+                )
+            _normalize_video_clip_exact(
+                sewn_p,
+                out_mp4,
+                w=1920,
+                h=1080,
+                fps=cfg.fps,
+                exact_frames=n_frames,
+                start_offset_sec=seg_start,
+                trim_source_sec=seg_len,
+            )
+            p, src = out_mp4, "sewn_google_flow_master"
+        elif reuse_existing_clips and out_mp4.exists() and out_mp4.stat().st_size > 16384:
             cached_dur = _probe_video_duration_sec(out_mp4)
             if abs(cached_dur - dur) > 0.08:
                 resync_tmp = out_mp4.with_suffix(".resync_tmp.mp4")
@@ -1844,10 +1906,10 @@ def run_agent3_media_pipeline(
             src = f"{src}+host_pip"
         return sc.scene_index, p, src
 
-    # Run 1 sequential worker during Fast Resume (zero parallel FFmpeg RAM spikes on 1 GB cloud containers);
+    # Run 1 sequential worker during Fast Resume or Sewn Flow Slicing (zero parallel FFmpeg RAM spikes on 1 GB cloud containers);
     # keep 2 concurrent workers during fresh AI video generation (FFmpeg itself is serialized by _FFMPEG_ENCODE_LOCK).
     gc.collect()
-    vis_workers = 1 if reuse_existing_clips else 2
+    vis_workers = 1 if (reuse_existing_clips or using_sewn_master) else 2
     engine_counts: Dict[str, int] = {}
     with ThreadPoolExecutor(max_workers=vis_workers) as pool:
         futs = [pool.submit(_render_vis, sc) for sc in scenes]
@@ -2171,6 +2233,7 @@ def run_agent3_media_pipeline(
         video_16x9_path=str(final_16x9_mp4),
         video_9x16_shorts_path=str(final_9x16_mp4),
         thumbnail_16x9_path=str(thumb_path),
+        thumbnail_9x16_path=thumb_9x16_path_str,
         ass_subtitles_16x9_path=str(ass_16_path),
         ass_subtitles_9x16_path=str(ass_9_path),
         bgm_stem_path=str(bgm_stem_path),
@@ -2179,7 +2242,7 @@ def run_agent3_media_pipeline(
         short_hook_script=short_hook_text,
         scene_count_rendered=total_scenes,
         exact_chapters_text=exact_chapters_text,
-        generation_mode=render_quality,
+        generation_mode="sewn_google_flow_enriched" if using_sewn_master else render_quality,
         scene_artifacts=scene_artifacts,
     )
     out_dict = out.model_dump()

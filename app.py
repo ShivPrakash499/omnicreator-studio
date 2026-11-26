@@ -1428,10 +1428,11 @@ elif step == 2:
         )
         with st.expander(flow_exp_lbl, expanded=False):
             st.markdown(
-                "Have a **Google AI Ultra** subscription? Run **Google Flow Agent Mode** side-by-side (**₹0 Cloud video cost**, "
+                "Have a **Google AI Ultra** subscription? Run the complete **4-Phase Google Flow Workflow** side-by-side (**₹0 Cloud video & thumbnail cost**, "
                 f"🛡️ PG-13 policy-safe prompts `{FLOW_SANITIZER_VERSION}`): "
-                "**(1)** click **Open Google Flow**, **(2)** 1-click Copy → Paste **Memory**, **Phase 1: Characters**, and each **6-scene Batch** "
-                "below straight into Flow's `Describe your goal` box (no `.txt` upload needed!), then **(3)** bulk-drop the finished `.mp4` clips here!"
+                "**(1)** paste Memory + Phase 1 Characters + Phase 2 Batches (`Omni 1.2 Flash` / `Veo 3.1`), "
+                "**(2)** run **Phase 3 (Sew Video)** & **Phase 4 (16:9 + 9:16 Thumbnails)** inside Flow, then "
+                "**(3)** upload all **3 downloaded files** in **Step 3 (`🎞️ Studio`)** so OMNI STUDIO enriches your video with locked voiceover, continuous BGM, captions & 10–20s Hook Short (~₹15)!"
             )
             fl_c1, fl_c2 = st.columns([1.15, 1.25])
             with fl_c1:
@@ -1443,6 +1444,10 @@ elif step == 2:
                     scenes=a2.scenes,
                     cinema_preset=sel_preset_s2,
                     character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
+                    thumbnail_hook_headline=cur_a1_for_flow.thumbnail_hook_headline,
+                    thumbnail_badge_label=cur_a1_for_flow.thumbnail_badge_label,
+                    thumbnail_graphic_concept=cur_a1_for_flow.thumbnail_graphic_concept,
+                    language_tone=cur_a1_for_flow.language_tone,
                 )
                 flow_blocks = build_flow_agent_copy_blocks(
                     topic=a2.topic,
@@ -1451,6 +1456,10 @@ elif step == 2:
                     scenes=a2.scenes,
                     cinema_preset=sel_preset_s2,
                     character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
+                    thumbnail_hook_headline=cur_a1_for_flow.thumbnail_hook_headline,
+                    thumbnail_badge_label=cur_a1_for_flow.thumbnail_badge_label,
+                    thumbnail_graphic_concept=cur_a1_for_flow.thumbnail_graphic_concept,
+                    language_tone=cur_a1_for_flow.language_tone,
                 )
                 fb_btn1, fb_btn2 = st.columns(2)
                 with fb_btn1:
@@ -1523,8 +1532,12 @@ elif step == 2:
             if has_p1_chars:
                 top_tab_labels.append(f"🎭 2. Phase 1: Characters ({len(flow_blocks['characters'])})")
                 top_tab_labels.append(f"🎬 3. Phase 2: Batches (1–{len(flow_batches)})")
+                top_tab_labels.append("🧵 4. Phase 3: Sew Video")
+                top_tab_labels.append("🖼️ 5. Phase 4: Thumbnails (16:9 + 9:16)")
             else:
                 top_tab_labels.append(f"🎬 2. Copy Batches (1–{len(flow_batches)})")
+                top_tab_labels.append("🧵 3. Sew Video")
+                top_tab_labels.append("🖼️ 4. Thumbnails (16:9 + 9:16)")
             top_tab_labels.append("📎 Full File Kickoff")
 
             top_tabs = st.tabs(top_tab_labels)
@@ -1558,7 +1571,17 @@ elif step == 2:
             t_idx += 1
 
             with top_tabs[t_idx]:
-                st.caption("Optional: If you upload the downloaded Master `.txt` file using `+` in Flow, paste this short kickoff prompt:")
+                st.caption("After all scenes finish generating in Flow, paste this prompt so Flow sews `scene_01` → `scene_{:02d}` inside **Scenes** into ONE downloadable 16:9 master video (`final_flow_video_16x9.mp4`):".format(len(a2.scenes)))
+                st.code(flow_blocks["phase3_sew_prompt"], language="text", wrap_lines=True)
+            t_idx += 1
+
+            with top_tabs[t_idx]:
+                st.caption("Paste into Google Flow to generate BOTH high-CTR thumbnails (**16:9 Long Video** + **9:16 YouTube Shorts**) using `Nano Banana Pro` + your locked Characters:")
+                st.code(flow_blocks["phase4_thumbnails_prompt"], language="text", wrap_lines=True)
+            t_idx += 1
+
+            with top_tabs[t_idx]:
+                st.caption("Optional: If you upload the downloaded 4-Phase Master `.txt` file using `+` in Flow, paste this short kickoff prompt:")
                 st.code(flow_blocks["kickoff"], language="text", wrap_lines=True)
 
         start_idx = (int(current_page) - 1) * per_page
@@ -1913,6 +1936,119 @@ elif step == 3:
                     st.rerun()
 
         active_daily_limit = float(new_daily_limit)
+
+        # ------------------------------------------------------------------
+        # 🎬 GOOGLE FLOW 3-FILE UPLOAD & ENRICHMENT BRIDGE (Sewn Video + 16:9 & 9:16 Thumbnails!)
+        # ------------------------------------------------------------------
+        flow_custom_dir = proj_dir_s3 / "custom_assets"
+        flow_custom_dir.mkdir(parents=True, exist_ok=True)
+        sewn_saved_p = flow_custom_dir / "flow_sewn_master_16x9.mp4"
+        t16_saved_p = flow_custom_dir / "flow_thumb_16x9.png"
+        t9_saved_p = flow_custom_dir / "flow_thumb_9x16.png"
+
+        has_sewn_ready = sewn_saved_p.exists() and sewn_saved_p.stat().st_size > 16384
+        has_t16_ready = t16_saved_p.exists() and t16_saved_p.stat().st_size > 2048
+        has_t9_ready = t9_saved_p.exists() and t9_saved_p.stat().st_size > 2048
+
+        with st.expander(
+            "🎬 Upload Sewn Google Flow Video + 16:9 & 9:16 Thumbnails → Enrich with Audio, BGM & Hook Short (~₹15)"
+            + (" — ✅ Video Ready!" if has_sewn_ready else ""),
+            expanded=has_sewn_ready,
+        ):
+            st.markdown(
+                "Generated & sewed all scenes inside **Google Flow**? Upload your **3 downloads** below — "
+                "OMNI STUDIO will keep **₹0 Cloud video & thumbnail cost**, align your stitched video cleanly across all "
+                f"**{len(a2.scenes)} scenes**, and enrich it with **locked Indian voiceover, continuous devotional/cinematic BGM, "
+                "preserved Foley SFX, active captions, and a 10–20s Hook Short**, ready to publish straight to YouTube in Step 4!"
+            )
+            fu1, fu2, fu3 = st.columns(3)
+            with fu1:
+                up_sewn_vid = st.file_uploader(
+                    "🎥 1. Sewn Flow Video (16:9 .mp4/.mov):",
+                    type=["mp4", "mov", "mkv", "webm"],
+                    key=f"up_flow_sewn_{pid}",
+                )
+                if up_sewn_vid is not None:
+                    sewn_saved_p.write_bytes(up_sewn_vid.getvalue())
+                    has_sewn_ready = True
+                if has_sewn_ready:
+                    mb_sz = sewn_saved_p.stat().st_size / (1024 * 1024)
+                    st.success(f"✅ Sewn video saved ({mb_sz:.1f} MB)")
+            with fu2:
+                up_flow_t16 = st.file_uploader(
+                    "🖼️ 2. Flow 16:9 Long Thumbnail (.png/.jpg):",
+                    type=["png", "jpg", "jpeg", "webp"],
+                    key=f"up_flow_t16_{pid}",
+                )
+                if up_flow_t16 is not None:
+                    t16_saved_p.write_bytes(up_flow_t16.getvalue())
+                    has_t16_ready = True
+                if has_t16_ready:
+                    st.image(str(t16_saved_p), caption="16:9 Long Thumbnail", use_container_width=True)
+            with fu3:
+                up_flow_t9 = st.file_uploader(
+                    "📱 3. Flow 9:16 Shorts Thumbnail (.png/.jpg):",
+                    type=["png", "jpg", "jpeg", "webp"],
+                    key=f"up_flow_t9_{pid}",
+                )
+                if up_flow_t9 is not None:
+                    t9_saved_p.write_bytes(up_flow_t9.getvalue())
+                    has_t9_ready = True
+                if has_t9_ready:
+                    st.image(str(t9_saved_p), caption="9:16 Shorts Thumbnail", use_container_width=True)
+
+            if has_sewn_ready:
+                enrich_est_inr = 15 if (has_t16_ready) else 19
+                enrich_btn = st.button(
+                    f"✨ Enrich Sewn Flow Video with Voiceover, BGM, Captions & Hook Short (~₹{enrich_est_inr})",
+                    type="primary",
+                    use_container_width=True,
+                    disabled=any_busy,
+                    key=f"btn_enrich_sewn_{pid}",
+                )
+                if enrich_btn:
+                    st.session_state["agent3_output"] = None
+                    try:
+                        launched = worker.submit_task(
+                            task_key=render_task_key,
+                            project_id=pid,
+                            job_type="master_render",
+                            label=f"Enrich Flow Video: {a1.topic[:32]}",
+                            fn=run_agent3_media_pipeline,
+                            kwargs={
+                                "project_id": pid,
+                                "agent1": a1,
+                                "agent2": a2,
+                                "render_quality": "hybrid_cinema",
+                                "force_ai_cinema": True,
+                                "cinema_preset": cinema_preset_s3,
+                                "bgm_preset": selected_bgm_preset_s3,
+                                "custom_bgm_path": custom_bgm_file_path,
+                                "bgm_duck_db": selected_bgm_duck_db,
+                                "enable_foley_sfx": enable_foley_sfx,
+                                "reuse_existing_clips": False,
+                                "include_avatar_in_thumbnail": include_avatar_thumb,
+                                "avatar_thumbnail_mode": avatar_thumb_mode,
+                                "include_avatar_in_video": include_avatar_video,
+                                "creator_side": creator_side,
+                                "prefer_fast_local_tts": fast_tts,
+                                "use_ai_thumbnail": not has_t16_ready,
+                                "cost_limit_usd": active_daily_limit,
+                                "sewn_master_video_path": str(sewn_saved_p),
+                                "custom_thumbnail_16x9_path": str(t16_saved_p) if has_t16_ready else None,
+                                "custom_thumbnail_9x16_path": str(t9_saved_p) if has_t9_ready else None,
+                                "config": cfg,
+                                "db": db,
+                            },
+                            estimated_cost_usd=0.18 if has_t16_ready else 0.22,
+                            cost_limit_usd=active_daily_limit,
+                        )
+                        if launched:
+                            st.session_state["render_task_key"] = render_task_key
+                            st.toast("Enriching your Google Flow master video!", icon="✨")
+                            st.rerun()
+                    except BudgetLimitExceededError as b_err:
+                        st.error(f"🛑 {b_err}")
 
         # Resolve per-scene I2V animation selection (defaults cleanly to Hybrid Hero / All / None)
         ai_scenes_s3 = [
@@ -2387,6 +2523,9 @@ elif step == 3:
                 with sh_c2:
                     st.markdown("**Video Chapters:**")
                     st.code(a3.exact_chapters_text, language="text")
+                    if a3.thumbnail_9x16_path and Path(a3.thumbnail_9x16_path).exists():
+                        st.markdown("**📱 9:16 Shorts Thumbnail:**")
+                        st.image(a3.thumbnail_9x16_path, width=200)
                     char_anchor_img = Path(a3.project_dir) / "renders" / "character_anchor.png"
                     if char_anchor_img.exists():
                         st.markdown("**🎭 Locked Character Reference Face:**")
@@ -2737,14 +2876,18 @@ elif step == 4:
         # ======================================================================
         with st.container(border=True):
             short_dur_str = f"{a3.shorts_duration_sec:.1f}s"
+            resolved_short_thumb_p = (
+                Path(a3.thumbnail_9x16_path)
+                if (getattr(a3, "thumbnail_9x16_path", "") and Path(a3.thumbnail_9x16_path).exists())
+                else Path(a3.thumbnail_16x9_path)
+            )
             if resolved_short_url:
                 st.markdown(f"#### ✅ Step 2 of 2: Hook Short (9:16 · {short_dur_str}) — Published")
                 st.success(
                     f"📱 **Hook Short Live:** [{resolved_short_url}]({resolved_short_url})  ·  "
                     f"[Open in Studio]({resolved_short_studio})"
                 )
-                short_thumb_p = Path(a3.thumbnail_16x9_path)
-                if resolved_short_vid and short_thumb_p.exists() and creds is not None:
+                if resolved_short_vid and resolved_short_thumb_p.exists() and creds is not None:
                     if st.button(
                         "🖼️ Attach / Update 9:16 Thumbnail on Published Short",
                         use_container_width=True,
@@ -2754,7 +2897,7 @@ elif step == 4:
                         with st.spinner("Creating 9:16 vertical cover & attaching to your YouTube Short..."):
                             ok_sth, msg_sth = attach_thumbnail_to_published_video(
                                 resolved_short_vid,
-                                short_thumb_p,
+                                resolved_short_thumb_p,
                                 is_short=True,
                                 channel_id=active_ch_id_s4 or None,
                                 config=cfg,
@@ -2863,7 +3006,7 @@ elif step == 4:
                     kwargs={
                         "project_id": pid,
                         "video_path": Path(a3.video_9x16_shorts_path),
-                        "thumbnail_path": Path(a3.thumbnail_16x9_path),
+                        "thumbnail_path": resolved_short_thumb_p,
                         "title": short_title,
                         "description": short_desc,
                         "exact_chapters_text": "",

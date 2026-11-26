@@ -156,6 +156,7 @@ class Agent3Output(BaseModel):
     video_16x9_path: str
     video_9x16_shorts_path: str
     thumbnail_16x9_path: str
+    thumbnail_9x16_path: str = ""
     ass_subtitles_16x9_path: str
     ass_subtitles_9x16_path: str
     bgm_stem_path: str

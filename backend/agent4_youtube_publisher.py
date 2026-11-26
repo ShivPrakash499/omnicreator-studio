@@ -714,33 +714,42 @@ def _prepare_youtube_thumbnail_bytes(
         with Image.open(BytesIO(raw)) as im:
             rgb = im.convert("RGB")
             if is_short:
-                # Build crisp 1080x1920 vertical Shorts cover with zero cut-off headline letters
                 cw, ch = 1080, 1920
-                scale_bg = max(cw / float(rgb.width), ch / float(rgb.height))
-                bg_w, bg_h = int(round(rgb.width * scale_bg)), int(round(rgb.height * scale_bg))
-                bg = rgb.resize((bg_w, bg_h), Image.Resampling.LANCZOS)
-                left = (bg_w - cw) // 2
-                top = (bg_h - ch) // 2
-                bg = bg.crop((left, top, left + cw, top + ch))
-                bg = bg.filter(ImageFilter.GaussianBlur(radius=38))
-                bg = ImageEnhance.Brightness(bg).enhance(0.46)
+                if rgb.height > rgb.width:
+                    # Native vertical 9:16 Shorts thumbnail (e.g., generated in Google Flow) -> full-bleed 1080x1920!
+                    scale_v = max(cw / float(rgb.width), ch / float(rgb.height))
+                    vw, vh = int(round(rgb.width * scale_v)), int(round(rgb.height * scale_v))
+                    v_img = rgb.resize((vw, vh), Image.Resampling.LANCZOS)
+                    lx = (vw - cw) // 2
+                    ty = (vh - ch) // 2
+                    out_img = v_img.crop((lx, ty, lx + cw, ty + ch))
+                else:
+                    # Landscape 16:9 artwork -> lush 1080x1920 vertical Shorts cover with zero cut-off headline letters
+                    scale_bg = max(cw / float(rgb.width), ch / float(rgb.height))
+                    bg_w, bg_h = int(round(rgb.width * scale_bg)), int(round(rgb.height * scale_bg))
+                    bg = rgb.resize((bg_w, bg_h), Image.Resampling.LANCZOS)
+                    left = (bg_w - cw) // 2
+                    top = (bg_h - ch) // 2
+                    bg = bg.crop((left, top, left + cw, top + ch))
+                    bg = bg.filter(ImageFilter.GaussianBlur(radius=38))
+                    bg = ImageEnhance.Brightness(bg).enhance(0.46)
 
-                # Place full uncropped 16:9 artwork centered cleanly inside Shorts safe zone
-                fg_w = 1040
-                fg_h = int(round(fg_w * (rgb.height / float(rgb.width))))
-                fg = rgb.resize((fg_w, fg_h), Image.Resampling.LANCZOS)
-                px = (cw - fg_w) // 2
-                py = max(240, (ch - fg_h) // 2 - 70)
+                    # Place full uncropped 16:9 artwork centered cleanly inside Shorts safe zone
+                    fg_w = 1040
+                    fg_h = int(round(fg_w * (rgb.height / float(rgb.width))))
+                    fg = rgb.resize((fg_w, fg_h), Image.Resampling.LANCZOS)
+                    px = (cw - fg_w) // 2
+                    py = max(240, (ch - fg_h) // 2 - 70)
 
-                # Soft shadow + crisp subtle luminous border frame
-                draw = ImageDraw.Draw(bg)
-                draw.rounded_rectangle(
-                    [px - 6, py - 6, px + fg_w + 6, py + fg_h + 6],
-                    radius=14,
-                    fill=(245, 200, 95),
-                )
-                bg.paste(fg, (px, py))
-                out_img = bg
+                    # Soft shadow + crisp subtle luminous border frame
+                    draw = ImageDraw.Draw(bg)
+                    draw.rounded_rectangle(
+                        [px - 6, py - 6, px + fg_w + 6, py + fg_h + 6],
+                        radius=14,
+                        fill=(245, 200, 95),
+                    )
+                    bg.paste(fg, (px, py))
+                    out_img = bg
             else:
                 out_img = (
                     rgb.resize((1280, 720), Image.Resampling.LANCZOS)

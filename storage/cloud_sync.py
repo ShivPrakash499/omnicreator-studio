@@ -237,6 +237,7 @@ def upload_project_renders_to_gcs(project_id: str, agent3_dict: Dict[str, Any]) 
     uploaded = 0
     targets = [
         ("thumbnail_16x9_path", "thumbnail_16x9.png", "image/png"),
+        ("thumbnail_9x16_path", "thumbnail_9x16_short.png", "image/png"),
         ("video_16x9_path", "OMNI_FINAL_16x9_1080p.mp4", "video/mp4"),
         ("video_9x16_shorts_path", "OMNI_SHORTS_9x16.mp4", "video/mp4"),
         ("ass_subtitles_16x9_path", "subtitles_16x9.ass", "text/plain"),
@@ -258,6 +259,7 @@ def ensure_project_renders_local(project_id: str, agent3_dict: Optional[Dict[str
         return
     targets = [
         ("thumbnail_16x9_path", "thumbnail_16x9.png"),
+        ("thumbnail_9x16_path", "thumbnail_9x16_short.png"),
         ("video_16x9_path", "OMNI_FINAL_16x9_1080p.mp4"),
         ("video_9x16_shorts_path", "OMNI_SHORTS_9x16.mp4"),
         ("ass_subtitles_16x9_path", "subtitles_16x9.ass"),

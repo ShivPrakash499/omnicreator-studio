@@ -57,12 +57,15 @@ def extract_native_video_foley(
     output_foley_wav: Path,
     *,
     target_duration_sec: float,
+    start_offset_sec: float = 0.0,
+    source_slice_sec: Optional[float] = None,
 ) -> Optional[Path]:
     """
-    Extracts frame-accurate native Foley SFX ONCE from an Omni 1.2 Flash or Veo 3.1 MP4 clip
-    (NEVER loops audio mid-scene!). Applies vocal-formant notch EQ (suppressing any accidental
-    model speech/singing so it never overlaps our narrator!), pads trailing silence to exact
-    scene duration, and adds clean 60ms fade-in / 250ms fade-out.
+    Extracts frame-accurate native Foley SFX ONCE from an Omni 1.2 Flash, Veo 3.1, or sewn Google Flow
+    MP4 clip (NEVER loops audio mid-scene!). Supports optional `[start_offset_sec, start_offset_sec + source_slice_sec]`
+    slicing when enriching a single pre-stitched Google Flow master video. Applies vocal-formant notch EQ
+    (suppressing any accidental model speech/singing so it never overlaps our narrator!), pads trailing
+    silence to exact scene duration, and adds clean 60ms fade-in / 250ms fade-out.
     Returns `output_foley_wav` if real non-silent audio was present, else `None`.
     """
     if not raw_video_path.exists():
@@ -88,7 +91,10 @@ def extract_native_video_foley(
     m_dur = _re.search(r"Duration:\s*(\d+):(\d+):(\d+(?:\.\d+)?)", stderr_txt)
     if m_dur:
         src_dur = int(m_dur.group(1)) * 3600 + int(m_dur.group(2)) * 60 + float(m_dur.group(3))
-    play_dur = max(0.5, min(dur, src_dur))
+    avail_src = max(0.5, src_dur - max(0.0, float(start_offset_sec)))
+    if source_slice_sec and source_slice_sec > 0.4:
+        avail_src = min(avail_src, float(source_slice_sec))
+    play_dur = max(0.5, min(dur, avail_src))
     fade_out_d = min(0.28, play_dur * 0.25)
     fade_out_st = max(0.05, play_dur - fade_out_d)
 
@@ -103,13 +109,16 @@ def extract_native_video_foley(
         f"afade=t=out:st={fade_out_st:.3f}:d={fade_out_d:.3f},"
         f"apad=whole_dur={dur:.4f}"
     )
+    in_seek_args: List[str] = ["-ss", f"{float(start_offset_sec):.4f}"] if start_offset_sec > 0.01 else []
+    in_read_dur = min(dur, avail_src) if source_slice_sec else dur
     try:
         subprocess.run(
             [
                 ffmpeg_exe, "-y",
+                *in_seek_args,
                 "-i", str(raw_video_path),
                 "-vn",
-                "-t", f"{dur:.4f}",
+                "-t", f"{in_read_dur:.4f}",
                 "-af", af_chain,
                 "-ar", str(SAMPLE_RATE), "-ac", "1", "-c:a", "pcm_s16le",
                 str(output_foley_wav),
