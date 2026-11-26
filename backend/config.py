@@ -425,6 +425,9 @@ def get_cinema_preset(preset_name: Optional[str] = None) -> Dict[str, str]:
     return CINEMA_STYLE_PRESETS[DEFAULT_CINEMA_PRESET]
 
 
+FLOW_SANITIZER_VERSION: str = "pg13-safe-v2"
+
+
 def sanitize_policy_safe_visual_text(text: str) -> str:
     """
     Translates graphic gore, open-wound, blood, self-harm, or extreme-violence phrasing

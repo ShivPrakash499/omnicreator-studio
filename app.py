@@ -51,6 +51,7 @@ from backend.config import (
     CINEMA_STYLE_PRESETS,
     DEFAULT_BGM_PRESET,
     DEFAULT_CINEMA_PRESET,
+    FLOW_SANITIZER_VERSION,
     SUPPORTED_LANGUAGES,
     SUPPORTED_NICHES,
     OmniStudioConfig,
@@ -1427,7 +1428,8 @@ elif step == 2:
         )
         with st.expander(flow_exp_lbl, expanded=False):
             st.markdown(
-                "Have a **Google AI Ultra** subscription? Run **Google Flow Agent Mode** side-by-side (**₹0 Cloud video cost**): "
+                "Have a **Google AI Ultra** subscription? Run **Google Flow Agent Mode** side-by-side (**₹0 Cloud video cost**, "
+                f"🛡️ PG-13 policy-safe prompts `{FLOW_SANITIZER_VERSION}`): "
                 "**(1)** click **Open Google Flow**, **(2)** 1-click Copy → Paste **Memory**, **Phase 1: Characters**, and each **6-scene Batch** "
                 "below straight into Flow's `Describe your goal` box (no `.txt` upload needed!), then **(3)** bulk-drop the finished `.mp4` clips here!"
             )
