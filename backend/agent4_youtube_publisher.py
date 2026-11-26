@@ -864,6 +864,150 @@ def _attach_thumbnail(
         return False, str(exc)
 
 
+_SHORT_DETECT_CACHE: Dict[str, bool] = {}
+
+
+def extract_youtube_video_id(url_or_id: str) -> str:
+    """Extracts an 11-character YouTube video ID from any watch/shorts/studio/youtu.be URL or raw ID."""
+    import re as _re
+
+    raw = (url_or_id or "").strip()
+    if not raw:
+        return ""
+    if _re.fullmatch(r"[A-Za-z0-9_-]{11}", raw):
+        return raw
+    for pat in (
+        r"[?&]v=([A-Za-z0-9_-]{11})",
+        r"youtu\.be/([A-Za-z0-9_-]{11})",
+        r"/shorts/([A-Za-z0-9_-]{11})",
+        r"/video/([A-Za-z0-9_-]{11})",
+        r"/embed/([A-Za-z0-9_-]{11})",
+    ):
+        m = _re.search(pat, raw)
+        if m:
+            return m.group(1)
+    return ""
+
+
+def is_youtube_short_video(video_id: str) -> bool:
+    """
+    Accurately classifies whether an existing YouTube `video_id` is a YouTube Short (`True`) or
+    a regular Long-Form Video (`False`) via lightweight HEAD check on `/shorts/{video_id}`
+    (YouTube returns HTTP 200 for Shorts and HTTP 303 redirect to `/watch?v=...` for Long videos).
+    """
+    vid = extract_youtube_video_id(video_id)
+    if not vid:
+        return False
+    if vid in _SHORT_DETECT_CACHE:
+        return _SHORT_DETECT_CACHE[vid]
+    try:
+        resp = requests.head(
+            f"https://www.youtube.com/shorts/{vid}",
+            allow_redirects=False,
+            timeout=6.0,
+        )
+        is_sh = (resp.status_code == 200)
+        _SHORT_DETECT_CACHE[vid] = is_sh
+        return is_sh
+    except Exception:
+        return False
+
+
+def _parse_iso8601_duration_sec(iso_dur: str) -> int:
+    import re as _re
+
+    m = _re.match(r"^PT(?:(\d+)H)?(?:(\d+)M)?(?:(\d+)S)?$", (iso_dur or "").strip())
+    if not m:
+        return 0
+    return int(m.group(1) or 0) * 3600 + int(m.group(2) or 0) * 60 + int(m.group(3) or 0)
+
+
+def list_recent_channel_videos(
+    config: Optional[OmniStudioConfig] = None,
+    db: Optional[OmniDatabase] = None,
+    *,
+    channel_id: Optional[str] = None,
+    max_results: int = 12,
+) -> List[Dict[str, Any]]:
+    """
+    Fetches the connected YouTube channel's recent uploaded videos (including private/unlisted/public)
+    with exact duration & Long-vs-Short classification so the user can pick any already-published
+    Long Video to attach a thumbnail or link from Step 2 Shorts!
+    """
+    cfg = config or OmniStudioConfig()
+    database = db or get_db()
+    creds, _ = get_valid_youtube_credentials(cfg, database, channel_id=channel_id)
+    if creds is None:
+        return []
+    hdrs = {"Authorization": f"Bearer {creds.token}"}
+    try:
+        ch_r = requests.get(
+            "https://www.googleapis.com/youtube/v3/channels",
+            params={"part": "contentDetails", "mine": "true"},
+            headers=hdrs,
+            timeout=15.0,
+        )
+        if ch_r.status_code != 200:
+            return []
+        ch_items = (ch_r.json() or {}).get("items") or []
+        uploads_pl = (
+            ch_items[0].get("contentDetails", {}).get("relatedPlaylists", {}).get("uploads")
+            if ch_items
+            else None
+        )
+        if not uploads_pl:
+            return []
+        pl_r = requests.get(
+            "https://www.googleapis.com/youtube/v3/playlistItems",
+            params={"part": "contentDetails", "playlistId": uploads_pl, "maxResults": min(25, max_results)},
+            headers=hdrs,
+            timeout=15.0,
+        )
+        if pl_r.status_code != 200:
+            return []
+        vids = [
+            it.get("contentDetails", {}).get("videoId")
+            for it in ((pl_r.json() or {}).get("items") or [])
+            if it.get("contentDetails", {}).get("videoId")
+        ]
+        if not vids:
+            return []
+        vd_r = requests.get(
+            "https://www.googleapis.com/youtube/v3/videos",
+            params={"part": "snippet,contentDetails,status", "id": ",".join(vids)},
+            headers=hdrs,
+            timeout=15.0,
+        )
+        if vd_r.status_code != 200:
+            return []
+        results: List[Dict[str, Any]] = []
+        for item in (vd_r.json() or {}).get("items") or []:
+            vid = str(item.get("id") or "")
+            snip = item.get("snippet") or {}
+            cdet = item.get("contentDetails") or {}
+            stat = item.get("status") or {}
+            dur_s = _parse_iso8601_duration_sec(str(cdet.get("duration") or ""))
+            title = str(snip.get("title") or "Untitled")
+            is_sh = (dur_s > 0 and dur_s <= 62) or ("#shorts" in title.lower())
+            if vid:
+                _SHORT_DETECT_CACHE[vid] = is_sh
+            results.append(
+                {
+                    "video_id": vid,
+                    "title": title,
+                    "duration_sec": dur_s,
+                    "is_short": is_sh,
+                    "privacy": str(stat.get("privacyStatus") or ""),
+                    "watch_url": f"https://www.youtube.com/shorts/{vid}" if is_sh else f"https://www.youtube.com/watch?v={vid}",
+                    "studio_url": f"https://studio.youtube.com/video/{vid}/edit",
+                }
+            )
+        return results
+    except Exception as exc:
+        logger.info("Recent channel videos lookup skipped: %s", exc)
+        return []
+
+
 def attach_thumbnail_to_published_video(
     video_id: str,
     thumbnail_path: Path,

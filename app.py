@@ -36,10 +36,13 @@ from backend.agent4_youtube_publisher import (
     build_youtube_oauth_url,
     create_youtube_playlist,
     exchange_oauth_code_and_store,
+    extract_youtube_video_id,
     format_channel_streamlit_secret_toml,
     get_valid_youtube_credentials,
     import_youtube_token_json,
+    is_youtube_short_video,
     list_connected_youtube_channels,
+    list_recent_channel_videos,
     list_user_youtube_playlists,
     run_agent4_youtube_publish,
 )
@@ -1112,7 +1115,12 @@ elif step == 1:
                 )
                 st.write("📝 Saving titles, hooks & chapter storyboard to your workspace...")
                 pid = st.session_state.get("omni_project_id")
-                if not pid:
+                existing_proj_s1 = db.get_project(pid) if pid else None
+                # Start a fresh project record if the user entered a brand-new topic (never overwrite an older video!)
+                if not pid or (
+                    existing_proj_s1
+                    and sanitize_slug(existing_proj_s1.get("topic") or "") != sanitize_slug(topic_val.strip())
+                ):
                     pid = db.create_project(
                         topic_val.strip(),
                         niche_val,
@@ -2333,41 +2341,53 @@ elif step == 4:
         if fresh_proj and fresh_proj.get("agent4_data"):
             st.session_state["agent4_output"] = fresh_proj["agent4_data"]
 
-        # Resolve latest published Long Video & Short Video records cleanly from SQLite
+        # Resolve latest published Long Video & Short Video cleanly (using live YouTube Short detection so a Short NEVER appears in Step 1!)
         pub_logs = db.get_publish_records(project_id=pid, limit=12)
-        long_pub_rec = next(
-            (
-                r for r in pub_logs
-                if r.get("video_id")
-                and "short" not in str(r.get("status") or "").lower()
-                and "/shorts/" not in str(r.get("watch_url") or "").lower()
-                and "#shorts" not in str(r.get("title") or "").lower()
-            ),
-            None,
-        )
-        short_pub_rec = next(
-            (
-                r for r in pub_logs
-                if r.get("video_id")
-                and (
-                    "short" in str(r.get("status") or "").lower()
-                    or "/shorts/" in str(r.get("watch_url") or "").lower()
-                    or "#shorts" in str(r.get("title") or "").lower()
-                )
-            ),
-            None,
-        )
+
+        def _rec_is_short(rec: Dict[str, Any]) -> bool:
+            st_l = str(rec.get("status") or "").lower()
+            wu_l = str(rec.get("watch_url") or "").lower()
+            ti_l = str(rec.get("title") or "").lower()
+            if "short" in st_l or "/shorts/" in wu_l or "#shorts" in ti_l:
+                return True
+            if "full video" in st_l:
+                return False
+            vid_chk = str(rec.get("video_id") or "").strip()
+            return is_youtube_short_video(vid_chk) if vid_chk else False
+
+        long_pub_rec = next((r for r in pub_logs if r.get("video_id") and not _rec_is_short(r)), None)
+        short_pub_rec = next((r for r in pub_logs if r.get("video_id") and _rec_is_short(r)), None)
+
         resolved_long_vid = ""
         resolved_long_url = ""
         resolved_long_studio = ""
+        resolved_short_vid = ""
+        resolved_short_url = ""
+        resolved_short_studio = ""
+
         if long_pub_rec and long_pub_rec.get("video_id"):
             resolved_long_vid = str(long_pub_rec["video_id"]).strip()
             resolved_long_url = f"https://www.youtube.com/watch?v={resolved_long_vid}"
             resolved_long_studio = long_pub_rec.get("studio_url") or f"https://studio.youtube.com/video/{resolved_long_vid}/edit"
-        elif fresh_proj and fresh_proj.get("youtube_video_id"):
-            resolved_long_vid = str(fresh_proj["youtube_video_id"]).strip()
-            resolved_long_url = f"https://www.youtube.com/watch?v={resolved_long_vid}"
-            resolved_long_studio = f"https://studio.youtube.com/video/{resolved_long_vid}/edit"
+
+        if short_pub_rec and short_pub_rec.get("video_id"):
+            resolved_short_vid = str(short_pub_rec["video_id"]).strip()
+            resolved_short_url = f"https://www.youtube.com/shorts/{resolved_short_vid}"
+            resolved_short_studio = short_pub_rec.get("studio_url") or f"https://studio.youtube.com/video/{resolved_short_vid}/edit"
+
+        # Legacy project record fallback (`projects.youtube_video_id`): verify accurately whether it's Long or Short!
+        proj_yt_vid = str((fresh_proj or {}).get("youtube_video_id") or "").strip()
+        if proj_yt_vid:
+            if is_youtube_short_video(proj_yt_vid):
+                if not resolved_short_vid:
+                    resolved_short_vid = proj_yt_vid
+                    resolved_short_url = f"https://www.youtube.com/shorts/{proj_yt_vid}"
+                    resolved_short_studio = f"https://studio.youtube.com/video/{proj_yt_vid}/edit"
+            else:
+                if not resolved_long_vid:
+                    resolved_long_vid = proj_yt_vid
+                    resolved_long_url = f"https://www.youtube.com/watch?v={proj_yt_vid}"
+                    resolved_long_studio = f"https://studio.youtube.com/video/{proj_yt_vid}/edit"
 
         connected_chs_s4 = list_connected_youtube_channels(cfg, db)
         active_ch_id_s4 = st.session_state.get("omni_channel_id", "")
@@ -2411,6 +2431,12 @@ elif step == 4:
                 _render_connect_channel_drawer("step4", connected_chs_s4)
 
         playlists = list_user_youtube_playlists(cfg, db, channel_id=active_ch_id_s4) if creds else []
+        recent_ch_videos = (
+            list_recent_channel_videos(cfg, db, channel_id=active_ch_id_s4, max_results=12)
+            if creds
+            else []
+        )
+        recent_long_videos = [v for v in recent_ch_videos if not v.get("is_short")]
         pl_map = {"(No Playlist)": "NONE"}
         for pl in playlists:
             pl_map[pl["title"]] = pl["id"]
@@ -2440,15 +2466,16 @@ elif step == 4:
                 thumb_p_s4 = Path(a3.thumbnail_16x9_path)
                 if resolved_long_vid and thumb_p_s4.exists() and creds is not None:
                     if st.button(
-                        "🖼️ Attach / Update Thumbnail on Published Video",
+                        "🖼️ Attach / Update 16:9 Thumbnail on Published Full Video",
                         use_container_width=True,
                         disabled=any_uploading,
                         key=f"btn_attach_thumb_{pid}_{resolved_long_vid}",
                     ):
-                        with st.spinner("Optimizing thumbnail (<2 MB JPEG) & attaching to YouTube..."):
+                        with st.spinner("Optimizing 16:9 thumbnail (<2 MB JPEG) & attaching to YouTube..."):
                             ok_th, msg_th = attach_thumbnail_to_published_video(
                                 resolved_long_vid,
                                 thumb_p_s4,
+                                is_short=False,
                                 channel_id=active_ch_id_s4 or None,
                                 config=cfg,
                                 db=db,
@@ -2460,6 +2487,72 @@ elif step == 4:
             else:
                 st.markdown("#### 📺 Step 1 of 2: Publish Full-Length Video (16:9) First")
                 st.caption("Upload your main video first so its YouTube URL is automatically inserted into your Hook Short's description in Step 2 below.")
+
+            # Quick Link & Attach Thumbnail helper for ANY already-uploaded Long Video on this channel!
+            thumb_p_existing = Path(a3.thumbnail_16x9_path)
+            if creds is not None and thumb_p_existing.exists():
+                with st.expander(
+                    "🔗 Already Uploaded the Full-Length Video? Link It & Attach 16:9 Thumbnail Here",
+                    expanded=(not resolved_long_url and bool(resolved_short_url)),
+                ):
+                    picked_existing_vid = ""
+                    if recent_long_videos:
+                        lv_opts: Dict[str, str] = {"(Select a Long Video from this channel...)": ""}
+                        for lv in recent_long_videos:
+                            mm = lv["duration_sec"] // 60
+                            ss = lv["duration_sec"] % 60
+                            lv_opts[f"📺 {lv['title'][:58]} ({mm}:{ss:02d} · {lv['video_id']})"] = lv["video_id"]
+                        picked_lbl = st.selectbox(
+                            "Pick Your Published Full-Length Video:",
+                            options=list(lv_opts.keys()),
+                            key=f"pick_existing_long_{active_ch_id_s4}_{pid}",
+                        )
+                        picked_existing_vid = lv_opts[picked_lbl]
+                    pasted_long_raw = st.text_input(
+                        "Or Paste Full-Length Video YouTube URL / Video ID:",
+                        value="",
+                        placeholder="Leave blank if selected above, or paste https://www.youtube.com/watch?v=...",
+                        key=f"paste_existing_long_{pid}",
+                    )
+                    target_existing_vid = extract_youtube_video_id(pasted_long_raw) or picked_existing_vid
+                    if st.button(
+                        "🖼️ Link Full Video & Attach 16:9 Thumbnail",
+                        type="primary" if (not resolved_long_url and target_existing_vid) else "secondary",
+                        use_container_width=True,
+                        disabled=(any_uploading or not target_existing_vid),
+                        key=f"btn_link_attach_long_{pid}",
+                    ):
+                        if is_youtube_short_video(target_existing_vid):
+                            st.error("❌ That URL belongs to a YouTube Short, not a Full-Length Video! Please pick or paste the Long Video URL.")
+                        else:
+                            with st.spinner("Linking Full-Length Video & attaching 16:9 thumbnail (<2 MB JPEG)..."):
+                                ok_ex, msg_ex = attach_thumbnail_to_published_video(
+                                    target_existing_vid,
+                                    thumb_p_existing,
+                                    is_short=False,
+                                    channel_id=active_ch_id_s4 or None,
+                                    config=cfg,
+                                    db=db,
+                                )
+                            watch_ex = f"https://www.youtube.com/watch?v={target_existing_vid}"
+                            studio_ex = f"https://studio.youtube.com/video/{target_existing_vid}/edit"
+                            db.upsert_publish_record(
+                                record_id=f"pub_link_{target_existing_vid}",
+                                project_id=pid,
+                                title=a1.selected_title,
+                                privacy_status="public",
+                                video_id=target_existing_vid,
+                                studio_url=studio_ex,
+                                watch_url=watch_ex,
+                                upload_progress_pct=100,
+                                status="Published (Full Video)",
+                            )
+                            db.update_project_stage(pid, youtube_video_id=target_existing_vid, youtube_url=watch_ex)
+                            if ok_ex:
+                                st.success(f"✅ Linked Long Video ({watch_ex}) & {msg_ex}!")
+                                st.rerun()
+                            else:
+                                st.warning(f"⚠️ Linked Long Video ({watch_ex}), but thumbnail note: {msg_ex}")
 
             long_title = st.text_input(
                 "Full Video Title:",
@@ -2565,24 +2658,23 @@ elif step == 4:
         # ======================================================================
         with st.container(border=True):
             short_dur_str = f"{a3.shorts_duration_sec:.1f}s"
-            if short_pub_rec and short_pub_rec.get("watch_url"):
+            if resolved_short_url:
                 st.markdown(f"#### ✅ Step 2 of 2: Hook Short (9:16 · {short_dur_str}) — Published")
                 st.success(
-                    f"📱 **Hook Short Live:** [{short_pub_rec['watch_url']}]({short_pub_rec['watch_url']})  ·  "
-                    f"[Open in Studio]({short_pub_rec.get('studio_url') or ''})"
+                    f"📱 **Hook Short Live:** [{resolved_short_url}]({resolved_short_url})  ·  "
+                    f"[Open in Studio]({resolved_short_studio})"
                 )
-                short_vid_id = str(short_pub_rec.get("video_id") or "").strip()
                 short_thumb_p = Path(a3.thumbnail_16x9_path)
-                if short_vid_id and short_thumb_p.exists() and creds is not None:
+                if resolved_short_vid and short_thumb_p.exists() and creds is not None:
                     if st.button(
                         "🖼️ Attach / Update 9:16 Thumbnail on Published Short",
                         use_container_width=True,
                         disabled=any_uploading,
-                        key=f"btn_attach_short_thumb_{pid}_{short_vid_id}",
+                        key=f"btn_attach_short_thumb_{pid}_{resolved_short_vid}",
                     ):
                         with st.spinner("Creating 9:16 vertical cover & attaching to your YouTube Short..."):
                             ok_sth, msg_sth = attach_thumbnail_to_published_video(
-                                short_vid_id,
+                                resolved_short_vid,
                                 short_thumb_p,
                                 is_short=True,
                                 channel_id=active_ch_id_s4 or None,
