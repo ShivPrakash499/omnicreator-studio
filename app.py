@@ -1548,12 +1548,12 @@ elif step == 2:
                 top_tab_labels.append(f"🎭 2. Phase 1: Characters ({len(flow_blocks['characters'])})")
                 top_tab_labels.append(f"🎬 3. Phase 2: Batches (1–{len(flow_batches)})")
                 top_tab_labels.append("📋 4. Scene Order Cheat Sheet")
-                top_tab_labels.append("🧵 5. Phase 3: Sew Guide")
+                top_tab_labels.append("📱 5. Phase 3: 9:16 Hook Short")
                 top_tab_labels.append("🖼️ 6. Phase 4: Thumbnails")
             else:
                 top_tab_labels.append(f"🎬 2. Copy Batches (1–{len(flow_batches)})")
                 top_tab_labels.append("📋 3. Scene Order Cheat Sheet")
-                top_tab_labels.append("🧵 4. Sew Guide")
+                top_tab_labels.append("📱 4. 9:16 Hook Short")
                 top_tab_labels.append("🖼️ 5. Thumbnails")
             top_tab_labels.append("📎 Full File Kickoff")
 
@@ -1592,11 +1592,12 @@ elif step == 2:
                 spotter_rows = flow_blocks.get("spotter_rows", [])
                 if spotter_rows:
                     st.dataframe(spotter_rows, use_container_width=True, hide_index=True)
+                st.info(f"🧵 **Stitching in Flow UI:** {flow_blocks['phase3_sew_prompt']}")
             t_idx += 1
 
             with top_tabs[t_idx]:
-                st.caption("Quick 4-step checklist to stitch `S01` → `S{:02d}` in Flow's **SceneBuilder** UI (`+` top-right → straight cuts → export `final_flow_video_16x9.mp4`):".format(len(a2.scenes)))
-                st.code(flow_blocks["phase3_sew_prompt"], language="text", wrap_lines=True)
+                st.caption("Paste directly into Google Flow to generate **2 native `9:16` vertical Hook Short clips** (`short_01.mp4` + `short_02.mp4`, 16s total, zero side-cropping!) — upload them in Step 3 so OMNI STUDIO adds your 10–20s Hook voiceover, BGM & vertical captions:")
+                st.code(flow_blocks["phase3_short_prompt"], language="text", wrap_lines=True)
             t_idx += 1
 
             with top_tabs[t_idx]:
@@ -1969,28 +1970,31 @@ elif step == 3:
         sewn_saved_p = flow_custom_dir / "flow_sewn_master_16x9.mp4"
         t16_saved_p = flow_custom_dir / "flow_thumb_16x9.png"
         t9_saved_p = flow_custom_dir / "flow_thumb_9x16.png"
+        saved_custom_shorts = sorted(
+            [p for p in flow_custom_dir.glob("flow_short_9x16_*.mp4") if p.stat().st_size > 16384]
+        )
 
         has_sewn_ready = sewn_saved_p.exists() and sewn_saved_p.stat().st_size > 16384
         has_t16_ready = t16_saved_p.exists() and t16_saved_p.stat().st_size > 2048
         has_t9_ready = t9_saved_p.exists() and t9_saved_p.stat().st_size > 2048
 
         with st.expander(
-            "🎬 Upload Sewn Google Flow Video + 16:9 & 9:16 Thumbnails → Enrich with Audio, BGM & Hook Short (~₹15)"
+            "🎬 Upload Sewn Google Flow Video, Optional 9:16 Short & Thumbnails → Enrich with Audio, BGM & Captions (~₹15)"
             + (" — ✅ Video Ready!" if has_sewn_ready else ""),
             expanded=has_sewn_ready,
         ):
             st.markdown(
-                "Generated & sewed all scenes inside **Google Flow**? Upload your **3 downloads** below — "
-                "OMNI STUDIO will keep **₹0 Cloud video & thumbnail cost**, align your stitched video cleanly across all "
-                f"**{len(a2.scenes)} scenes**, and enrich it with **locked Indian voiceover, continuous devotional/cinematic BGM, "
-                "preserved Foley SFX, active captions, and a 10–20s Hook Short**, ready to publish straight to YouTube in Step 4!"
+                "Generated & sewed your scenes inside **Google Flow**? Upload your downloads below — "
+                "OMNI STUDIO keeps **₹0 Cloud video & thumbnail cost**, aligns your stitched `16:9` video across all "
+                f"**{len(a2.scenes)} scenes**, and enriches BOTH your Full Video and 10–20s Hook Short with **locked Indian voiceover, "
+                "continuous devotional/cinematic BGM, preserved Foley SFX & active captions**, ready to publish in Step 4!"
             )
-            fu1, fu2, fu3 = st.columns(3)
-            with fu1:
+            fv_r1c1, fv_r1c2 = st.columns(2)
+            with fv_r1c1:
                 sewn_up_ver_key = f"sewn_up_ver_{pid}"
                 sewn_up_ver = int(st.session_state.get(sewn_up_ver_key, 0))
                 up_sewn_vid = st.file_uploader(
-                    "🎥 1. Sewn Flow Video (16:9 .mp4/.mov · up to 1 GB):",
+                    "🎥 1. Sewn 16:9 Flow Master Video (.mp4/.mov · up to 1 GB):",
                     type=["mp4", "mov", "mkv", "webm"],
                     key=f"up_flow_sewn_{pid}_v{sewn_up_ver}",
                 )
@@ -2002,13 +2006,12 @@ elif step == 3:
                         up_sewn_vid.seek(0)
                         with open(sewn_saved_p, "wb") as _dst_f:
                             _shutil_up.copyfileobj(up_sewn_vid, _dst_f, length=2 * 1024 * 1024)
-                    # Immediately reset uploader widget key & free the RAM buffer so FFmpeg has full memory!
                     st.session_state[sewn_up_ver_key] = sewn_up_ver + 1
                     _gc_up.collect()
                     st.rerun()
                 if has_sewn_ready:
                     mb_sz = sewn_saved_p.stat().st_size / (1024 * 1024)
-                    st.success(f"✅ Sewn video saved ({mb_sz:.1f} MB)")
+                    st.success(f"✅ Sewn 16:9 video saved ({mb_sz:.1f} MB)")
                 with st.expander("🔗 Or import via Google Drive / Direct URL (>400 MB)", expanded=False):
                     gdrive_vid_url = st.text_input(
                         "Public Google Drive share link or direct .mp4 URL:",
@@ -2045,9 +2048,40 @@ elif step == 3:
                             st.rerun()
                         except Exception as _gd_exc:
                             st.error(f"Could not import link: {_gd_exc}")
-            with fu2:
+            with fv_r1c2:
+                short_up_ver_key = f"short9_up_ver_{pid}"
+                short_up_ver = int(st.session_state.get(short_up_ver_key, 0))
+                up_short_9_vids = st.file_uploader(
+                    "📱 2. Optional: Native 9:16 Flow Short Clip(s) (1–2 clips from Tab 5):",
+                    type=["mp4", "mov", "mkv", "webm"],
+                    accept_multiple_files=True,
+                    help="Optional! Upload 1 stitched 9:16 Short or 2 raw 8s 9:16 Flow clips (short_01 + short_02) for zero side-cropping. Leave blank to auto-cut from 16:9.",
+                    key=f"up_flow_short9_{pid}_v{short_up_ver}",
+                )
+                if up_short_9_vids:
+                    import gc as _gc_s9
+                    import shutil as _shutil_s9
+
+                    for old_s9 in flow_custom_dir.glob("flow_short_9x16_*.mp4"):
+                        old_s9.unlink(missing_ok=True)
+                    for idx_s9, uf_s9 in enumerate(sorted(up_short_9_vids, key=lambda f: f.name.lower())[:3], start=1):
+                        dst_s9 = flow_custom_dir / f"flow_short_9x16_{idx_s9:02d}.mp4"
+                        uf_s9.seek(0)
+                        with open(dst_s9, "wb") as _sf:
+                            _shutil_s9.copyfileobj(uf_s9, _sf, length=2 * 1024 * 1024)
+                    st.session_state[short_up_ver_key] = short_up_ver + 1
+                    _gc_s9.collect()
+                    st.rerun()
+                if saved_custom_shorts:
+                    tot_s9_mb = sum(p.stat().st_size for p in saved_custom_shorts) / (1024 * 1024)
+                    st.success(f"✅ {len(saved_custom_shorts)} native 9:16 Short clip(s) saved ({tot_s9_mb:.1f} MB)")
+                else:
+                    st.caption("Leave blank to auto-build the 10–20s vertical Hook Short from your 16:9 video.")
+
+            fv_r2c1, fv_r2c2 = st.columns(2)
+            with fv_r2c1:
                 up_flow_t16 = st.file_uploader(
-                    "🖼️ 2. Flow 16:9 Long Thumbnail (.png/.jpg):",
+                    "🖼️ 3. Flow 16:9 Long Thumbnail (.png/.jpg):",
                     type=["png", "jpg", "jpeg", "webp"],
                     key=f"up_flow_t16_{pid}",
                 )
@@ -2056,9 +2090,9 @@ elif step == 3:
                     has_t16_ready = True
                 if has_t16_ready:
                     st.image(str(t16_saved_p), caption="16:9 Long Thumbnail", use_container_width=True)
-            with fu3:
+            with fv_r2c2:
                 up_flow_t9 = st.file_uploader(
-                    "📱 3. Flow 9:16 Shorts Thumbnail (.png/.jpg):",
+                    "🖼️ 4. Flow 9:16 Shorts Thumbnail (.png/.jpg):",
                     type=["png", "jpg", "jpeg", "webp"],
                     key=f"up_flow_t9_{pid}",
                 )
@@ -2106,6 +2140,7 @@ elif step == 3:
                                 "use_ai_thumbnail": not has_t16_ready,
                                 "cost_limit_usd": active_daily_limit,
                                 "sewn_master_video_path": str(sewn_saved_p),
+                                "custom_short_video_paths": [str(p) for p in saved_custom_shorts] if saved_custom_shorts else None,
                                 "custom_thumbnail_16x9_path": str(t16_saved_p) if has_t16_ready else None,
                                 "custom_thumbnail_9x16_path": str(t9_saved_p) if has_t9_ready else None,
                                 "config": cfg,

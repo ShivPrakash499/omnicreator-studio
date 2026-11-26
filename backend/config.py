@@ -425,7 +425,7 @@ def get_cinema_preset(preset_name: Optional[str] = None) -> Dict[str, str]:
     return CINEMA_STYLE_PRESETS[DEFAULT_CINEMA_PRESET]
 
 
-FLOW_SANITIZER_VERSION: str = "pg13-safe-v4"
+FLOW_SANITIZER_VERSION: str = "pg13-safe-v5"
 
 
 def sanitize_policy_safe_visual_text(text: str) -> str:
@@ -803,23 +803,105 @@ def format_flow_agent_memory_block(
     return "\n".join(lines)
 
 
+def format_flow_phase3_short_video_prompt(
+    topic: str,
+    niche: str,
+    character_bible: str,
+    scenes: List[Any],
+    cinema_preset: Optional[str] = None,
+    character_anchor_prompt: str = "",
+) -> str:
+    """
+    Ready-to-paste Phase 3 prompt for Google Flow Agent to generate 2 ultra-dramatic,
+    native 9:16 vertical Hook Short clips (`short_01.mp4` + `short_02.mp4`, 8s each = 16s total,
+    perfect for YouTube Shorts' 10–20s curiosity hook window!) using locked `@Characters`.
+    """
+    prof = get_niche_profile(niche)
+    chars = parse_characters_from_bible(character_bible, character_anchor_prompt)
+
+    def _get_field(sc: Any, key: str, default: Any = "") -> Any:
+        return getattr(sc, key, default) if hasattr(sc, key) else sc.get(key, default)
+
+    # Pick the highest-drama Hook scene (Clip 1) and Climax / Reveal scene (Clip 2)
+    hook_sc = next((s for s in scenes if _get_field(s, "beat_phase") == "Visual_Hook_0_45s"), scenes[0] if scenes else None)
+    climax_sc = next(
+        (s for s in scenes if _get_field(s, "beat_phase") == "Climax_Aha" and s is not hook_sc),
+        scenes[min(len(scenes) - 1, max(1, len(scenes) // 2))] if len(scenes) > 1 else hook_sc,
+    )
+    picked = [c for c in (hook_sc, climax_sc) if c is not None]
+    if len(picked) == 1 and len(scenes) > 1:
+        picked.append(scenes[1])
+
+    clip_blocks: List[str] = []
+    for c_i, sc in enumerate(picked[:2], start=1):
+        raw_vp = _get_field(sc, "visual_prompt_veo_omni", "")
+        sfx_c = _get_field(sc, "sfx_cue", "")
+        feat_c = bool(_get_field(sc, "features_main_character", False))
+        scene_chars = detect_scene_characters(raw_vp, chars, features_main_character=feat_c)
+        if not scene_chars and chars:
+            scene_chars = chars[:2]
+
+        core = (raw_vp or "").strip()
+        for mk in ("Look & Lighting:", "Period Authenticity:", "Sound design:", "Execution:", "ZERO CAMERAS"):
+            if mk in core:
+                core = core.split(mk)[0].strip()
+        core = re.sub(r",?\s*no\s+dialogue", "", _scrub_camera_gear_and_anachronisms(core), flags=re.IGNORECASE).strip()
+        ambient_cue = _clean_flow_ambient_sound_cue(sfx_c)
+
+        if scene_chars:
+            attach_str = " + ".join(c["tag"] for c in scene_chars)
+            mode_str = f"Ingredients to Video (Omni 1.2 Flash, 9:16 Vertical) — ATTACH CHARACTERS: {attach_str}"
+            lock_p = (
+                f"CHARACTER LOCK ({attach_str}): Match the exact face, age, markings, hairstyle, and attire of "
+                f"{attach_str} from Characters (do NOT copy the plain studio backdrop). "
+            )
+        else:
+            mode_str = "Text to Video (Omni 1.2 Flash or Veo 3.1, 9:16 Vertical) — ATTACH CHARACTERS: NONE"
+            lock_p = ""
+
+        role_lbl = "OPENING SCROLL-STOPPER (0:00–0:08)" if c_i == 1 else "CLIFFHANGER TWIST REVEAL (0:08–0:16)"
+        clip_blocks.extend([
+            f"SHORT CLIP {c_i} OF 2 — {role_lbl}",
+            f"TARGET CLIP LABEL: short_{c_i:02d}.mp4",
+            f"MODE & CHARACTERS: {mode_str}",
+            "SHORT PROMPT:",
+            (
+                f"{lock_p}Native 9:16 vertical portrait theatrical composition framed tightly around the center-upper "
+                f"focal subject (keep faces cleanly centered away from the bottom 25% Shorts caption zone). "
+                f"{core.rstrip('.')}. Visual style: {prof['visual_style']}. "
+                f"Ambient sound: {ambient_cue}, subtle dramatic environmental ambience. "
+                f"Execution: Single unbroken continuous 8-second 9:16 vertical shot with dramatic micro-motion. "
+                f"STYLE GUARD: PG-13 epic theatrical cinema, natural lifelike proportions, no video or film camera, "
+                f"no tripod, no film crew, no modern gear, no on-screen text, no watermarks."
+            ),
+            "",
+        ])
+
+    return "\n".join([
+        f"PHASE 3 — GENERATE 2 NATIVE 9:16 VERTICAL HOOK SHORT CLIPS (16s TOTAL) for \"{topic}\":",
+        "Generate ONLY these 2 vertical 9:16 clips (Omni 1.2 Flash, 9:16 Portrait, 8 seconds each, 1 output per clip).",
+        "Subtle natural ambient sound only — do NOT add spoken voiceover, music, or text (OMNI STUDIO adds the punchy "
+        "10–20s curiosity hook voiceover, continuous BGM, and vertical active captions automatically when you upload these 1–2 clips in Step 3!).",
+        "",
+        *clip_blocks,
+        "After generating both clips, rename them short_01 and short_02 if your tools allow it, and reply with their exact Flow titles.",
+    ]).strip()
+
+
 def format_flow_phase3_sew_prompt(
     topic: str,
     total_scenes: int,
 ) -> str:
     """
     Concise SceneBuilder UI assembly checklist for sewing all generated clips
-    in exact order (`01` -> `XX`) inside Flow's `SceneBuilder` (Flow's chat Agent
-    restricts timeline stitching to manual UI clicks).
+    in exact order (`01` -> `XX`) inside Flow's `SceneBuilder`.
     """
     return (
-        f"PHASE 3 — SEW ALL {total_scenes} SCENES IN GOOGLE FLOW 'SceneBuilder' UI for \"{topic}\":\n"
-        f"(Note: Google Flow restricts timeline stitching to the Flow UI — Flow's chat Agent cannot stitch automatically.)\n"
-        f"1. Click the '+' button in Flow's top-right corner (or 'Scenes' in the left sidebar) to open SceneBuilder.\n"
-        f"2. Open 'Add media' -> select your project library -> set the top-right sort dropdown to 'Oldest'.\n"
-        f"3. Add all {total_scenes} clips in exact order (01 -> {total_scenes:02d}) using Flow Agent's post-batch title list "
-        f"or OMNI STUDIO's 'Scene Order Cheat Sheet' tab. Keep clean straight cuts (no transitions, no extra BGM/voiceover).\n"
-        f"4. Export the stitched 16:9 HD video (final_flow_video_16x9.mp4) and upload it + your Phase 4 thumbnails in OMNI STUDIO Step 3!"
+        f"How to sew your {total_scenes} clips in Flow's SceneBuilder UI: "
+        f"(1) Click '+' (top-right) -> SceneBuilder, "
+        f"(2) Open 'Add media' -> sort by 'Oldest', "
+        f"(3) Add clips S01 -> S{total_scenes:02d} in order using the Cheat Sheet above with clean straight cuts (no transitions/BGM), "
+        f"(4) Export final_flow_video_16x9.mp4 and upload it in OMNI STUDIO Step 3!"
     )
 
 
@@ -1152,6 +1234,14 @@ def build_flow_agent_copy_blocks(
         })
 
     spotter_rows = build_flow_scene_spotter_rows(scenes, chars, batch_size=batch_size)
+    phase3_short_prompt = format_flow_phase3_short_video_prompt(
+        topic=topic,
+        niche=niche,
+        character_bible=character_bible,
+        scenes=scenes,
+        cinema_preset=cinema_preset,
+        character_anchor_prompt=character_anchor_prompt,
+    )
     phase3_sew_prompt = format_flow_phase3_sew_prompt(topic=topic, total_scenes=total_scenes)
     phase4_thumbnails_prompt = format_flow_phase4_thumbnails_prompt(
         topic=topic,
@@ -1176,6 +1266,7 @@ def build_flow_agent_copy_blocks(
         "phase1_prompt": phase1_prompt,
         "batches": batches,
         "spotter_rows": spotter_rows,
+        "phase3_short_prompt": phase3_short_prompt,
         "phase3_sew_prompt": phase3_sew_prompt,
         "phase4_thumbnails_prompt": phase4_thumbnails_prompt,
         "kickoff": kickoff_txt,
@@ -1288,7 +1379,19 @@ def format_flow_prompts_export_txt(
 
     lines.extend([
         "==============================================================================",
-        "PHASE 3 — SEW ALL CLIPS INTO ONE MASTER VIDEO (FLOW 'Scenes' BUILDER)",
+        "PHASE 3 — GENERATE 2 NATIVE 9:16 VERTICAL HOOK SHORT CLIPS (16s TOTAL)",
+        "==============================================================================",
+        format_flow_phase3_short_video_prompt(
+            topic=topic,
+            niche=niche,
+            character_bible=character_bible,
+            scenes=scenes,
+            cinema_preset=cinema_preset,
+            character_anchor_prompt=character_anchor_prompt,
+        ),
+        "",
+        "==============================================================================",
+        "SCENEBUILDER STITCHING GUIDE (MANUAL FLOW UI STEP)",
         "==============================================================================",
         format_flow_phase3_sew_prompt(topic=topic, total_scenes=total_scenes),
         "",

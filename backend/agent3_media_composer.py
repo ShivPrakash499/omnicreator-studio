@@ -1541,6 +1541,7 @@ def run_agent3_media_pipeline(
     animate_scene_indices: Optional[set] = None,
     cost_limit_usd: Optional[float] = None,
     sewn_master_video_path: Optional[str] = None,
+    custom_short_video_paths: Optional[List[str]] = None,
     custom_thumbnail_16x9_path: Optional[str] = None,
     custom_thumbnail_9x16_path: Optional[str] = None,
     config: Optional[OmniStudioConfig] = None,
@@ -2135,46 +2136,72 @@ def run_agent3_media_pipeline(
     )
     short_cursor = short_total_frames / float(cfg.fps)
 
-    # Select 3 highest-impact rapid-cut scenes (Opening Hook + Climax Reveal + Hero Twist) — ₹0 extra video spend!
-    short_candidates: List[SceneClipSpec] = []
-    seen_sids: set = set()
-    for sc_c in (
-        [s for s in scenes if s.beat_phase == "Visual_Hook_0_45s"][:2]
-        + [s for s in scenes if s.beat_phase == "Climax_Aha"][:2]
-        + scenes[:3]
-    ):
-        if sc_c.scene_index not in seen_sids:
-            seen_sids.add(sc_c.scene_index)
-            short_candidates.append(sc_c)
-        if len(short_candidates) >= 3:
-            break
-    if not short_candidates:
-        short_candidates = scenes[:1]
-
-    # Split total frames cleanly across the 3 rapid-fire visual cuts (exact frame sum == short_total_frames!)
-    num_cuts = len(short_candidates)
-    base_cut_frames = short_total_frames // num_cuts
-    cut_frame_allocs = [base_cut_frames] * num_cuts
-    cut_frame_allocs[-1] += short_total_frames - sum(cut_frame_allocs)
-
+    # If user uploaded 1–3 native 9:16 vertical Flow Short clip(s), use them directly (zero 16:9 side-cropping!);
+    # otherwise auto-select 3 highest-impact rapid-cut scenes from the 16:9 project.
+    valid_custom_shorts = [
+        Path(sp) for sp in (custom_short_video_paths or [])
+        if sp and Path(sp).exists() and Path(sp).stat().st_size > 16384
+    ]
     vid_9_list: List[Path] = []
     concat_9_lines: List[str] = []
-    for cut_idx, (sc, cut_frames) in enumerate(zip(short_candidates, cut_frame_allocs), start=1):
-        vis_16 = visual_results[sc.scene_index][0]
-        seg_9 = clips_9_dir / f"short_vid_{cut_idx:02d}_s{sc.scene_index:03d}.mp4"
-        cut_dur_sec = cut_frames / float(cfg.fps)
-        _normalize_video_clip_exact(
-            vis_16,
-            seg_9,
-            w=1080,
-            h=1920,
-            fps=cfg.fps,
-            exact_frames=cut_frames,
-            trim_source_sec=cut_dur_sec,
-        )
-        vid_9_list.append(seg_9)
-        concat_9_lines.append(f"file '{seg_9.resolve().as_posix()}'")
-        concat_9_lines.append(f"duration {cut_dur_sec:.6f}")
+    if valid_custom_shorts:
+        num_cuts = len(valid_custom_shorts)
+        base_cut_frames = short_total_frames // num_cuts
+        cut_frame_allocs = [base_cut_frames] * num_cuts
+        cut_frame_allocs[-1] += short_total_frames - sum(cut_frame_allocs)
+        for cut_idx, (src_9_p, cut_frames) in enumerate(zip(valid_custom_shorts, cut_frame_allocs), start=1):
+            seg_9 = clips_9_dir / f"short_vid_{cut_idx:02d}_custom9x16.mp4"
+            cut_dur_sec = cut_frames / float(cfg.fps)
+            _normalize_video_clip_exact(
+                src_9_p,
+                seg_9,
+                w=1080,
+                h=1920,
+                fps=cfg.fps,
+                exact_frames=cut_frames,
+                trim_source_sec=cut_dur_sec,
+            )
+            vid_9_list.append(seg_9)
+            concat_9_lines.append(f"file '{seg_9.resolve().as_posix()}'")
+            concat_9_lines.append(f"duration {cut_dur_sec:.6f}")
+    else:
+        short_candidates: List[SceneClipSpec] = []
+        seen_sids: set = set()
+        for sc_c in (
+            [s for s in scenes if s.beat_phase == "Visual_Hook_0_45s"][:2]
+            + [s for s in scenes if s.beat_phase == "Climax_Aha"][:2]
+            + scenes[:3]
+        ):
+            if sc_c.scene_index not in seen_sids:
+                seen_sids.add(sc_c.scene_index)
+                short_candidates.append(sc_c)
+            if len(short_candidates) >= 3:
+                break
+        if not short_candidates:
+            short_candidates = scenes[:1]
+
+        # Split total frames cleanly across the 3 rapid-fire visual cuts (exact frame sum == short_total_frames!)
+        num_cuts = len(short_candidates)
+        base_cut_frames = short_total_frames // num_cuts
+        cut_frame_allocs = [base_cut_frames] * num_cuts
+        cut_frame_allocs[-1] += short_total_frames - sum(cut_frame_allocs)
+
+        for cut_idx, (sc, cut_frames) in enumerate(zip(short_candidates, cut_frame_allocs), start=1):
+            vis_16 = visual_results[sc.scene_index][0]
+            seg_9 = clips_9_dir / f"short_vid_{cut_idx:02d}_s{sc.scene_index:03d}.mp4"
+            cut_dur_sec = cut_frames / float(cfg.fps)
+            _normalize_video_clip_exact(
+                vis_16,
+                seg_9,
+                w=1080,
+                h=1920,
+                fps=cfg.fps,
+                exact_frames=cut_frames,
+                trim_source_sec=cut_dur_sec,
+            )
+            vid_9_list.append(seg_9)
+            concat_9_lines.append(f"file '{seg_9.resolve().as_posix()}'")
+            concat_9_lines.append(f"duration {cut_dur_sec:.6f}")
 
     # Mix punchy hook narration + topic-matched film score to exact sample lock
     full_master_9_wav = renders_dir / "master_audio_9x16.wav"
