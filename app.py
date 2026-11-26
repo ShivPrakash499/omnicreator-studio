@@ -1963,17 +1963,64 @@ elif step == 3:
             )
             fu1, fu2, fu3 = st.columns(3)
             with fu1:
+                sewn_up_ver_key = f"sewn_up_ver_{pid}"
+                sewn_up_ver = int(st.session_state.get(sewn_up_ver_key, 0))
                 up_sewn_vid = st.file_uploader(
-                    "🎥 1. Sewn Flow Video (16:9 .mp4/.mov):",
+                    "🎥 1. Sewn Flow Video (16:9 .mp4/.mov · up to 1 GB):",
                     type=["mp4", "mov", "mkv", "webm"],
-                    key=f"up_flow_sewn_{pid}",
+                    key=f"up_flow_sewn_{pid}_v{sewn_up_ver}",
                 )
                 if up_sewn_vid is not None:
-                    sewn_saved_p.write_bytes(up_sewn_vid.getvalue())
-                    has_sewn_ready = True
+                    import gc as _gc_up
+                    import shutil as _shutil_up
+
+                    with st.spinner("Saving video cleanly to disk..."):
+                        up_sewn_vid.seek(0)
+                        with open(sewn_saved_p, "wb") as _dst_f:
+                            _shutil_up.copyfileobj(up_sewn_vid, _dst_f, length=2 * 1024 * 1024)
+                    # Immediately reset uploader widget key & free the RAM buffer so FFmpeg has full memory!
+                    st.session_state[sewn_up_ver_key] = sewn_up_ver + 1
+                    _gc_up.collect()
+                    st.rerun()
                 if has_sewn_ready:
                     mb_sz = sewn_saved_p.stat().st_size / (1024 * 1024)
                     st.success(f"✅ Sewn video saved ({mb_sz:.1f} MB)")
+                with st.expander("🔗 Or import via Google Drive / Direct URL (>400 MB)", expanded=False):
+                    gdrive_vid_url = st.text_input(
+                        "Public Google Drive share link or direct .mp4 URL:",
+                        placeholder="https://drive.google.com/file/d/.../view",
+                        key=f"gdrive_sewn_url_{pid}",
+                    )
+                    if gdrive_vid_url.strip() and st.button(
+                        "⬇️ Stream Video from Link",
+                        use_container_width=True,
+                        key=f"btn_fetch_sewn_url_{pid}",
+                    ):
+                        import re as _re_gd
+                        import requests as _req_gd
+
+                        raw_u = gdrive_vid_url.strip()
+                        m_gd = _re_gd.search(r"/file/d/([a-zA-Z0-9_-]+)|[?&]id=([a-zA-Z0-9_-]+)", raw_u)
+                        dl_u = (
+                            f"https://drive.usercontent.google.com/download?id={m_gd.group(1) or m_gd.group(2)}&export=download&confirm=t"
+                            if ("drive.google.com" in raw_u and m_gd)
+                            else raw_u
+                        )
+                        try:
+                            with st.spinner("Streaming video cleanly to studio disk..."):
+                                with _req_gd.get(dl_u, stream=True, timeout=180) as _r_gd:
+                                    _r_gd.raise_for_status()
+                                    ctype = (_r_gd.headers.get("Content-Type") or "").lower()
+                                    if "text/html" in ctype:
+                                        raise RuntimeError("Link returned an HTML page — set Google Drive sharing to 'Anyone with the link'.")
+                                    with open(sewn_saved_p, "wb") as _out_gd:
+                                        for _chunk in _r_gd.iter_content(chunk_size=1024 * 1024):
+                                            if _chunk:
+                                                _out_gd.write(_chunk)
+                            st.success(f"✅ Imported ({sewn_saved_p.stat().st_size / (1024 * 1024):.1f} MB)!")
+                            st.rerun()
+                        except Exception as _gd_exc:
+                            st.error(f"Could not import link: {_gd_exc}")
             with fu2:
                 up_flow_t16 = st.file_uploader(
                     "🖼️ 2. Flow 16:9 Long Thumbnail (.png/.jpg):",
