@@ -2571,6 +2571,28 @@ elif step == 4:
                     f"📱 **Hook Short Live:** [{short_pub_rec['watch_url']}]({short_pub_rec['watch_url']})  ·  "
                     f"[Open in Studio]({short_pub_rec.get('studio_url') or ''})"
                 )
+                short_vid_id = str(short_pub_rec.get("video_id") or "").strip()
+                short_thumb_p = Path(a3.thumbnail_16x9_path)
+                if short_vid_id and short_thumb_p.exists() and creds is not None:
+                    if st.button(
+                        "🖼️ Attach / Update 9:16 Thumbnail on Published Short",
+                        use_container_width=True,
+                        disabled=any_uploading,
+                        key=f"btn_attach_short_thumb_{pid}_{short_vid_id}",
+                    ):
+                        with st.spinner("Creating 9:16 vertical cover & attaching to your YouTube Short..."):
+                            ok_sth, msg_sth = attach_thumbnail_to_published_video(
+                                short_vid_id,
+                                short_thumb_p,
+                                is_short=True,
+                                channel_id=active_ch_id_s4 or None,
+                                config=cfg,
+                                db=db,
+                            )
+                        if ok_sth:
+                            st.success(f"✅ {msg_sth}!")
+                        else:
+                            st.warning(f"⚠️ Could not attach Short thumbnail: {msg_sth}")
             else:
                 st.markdown(f"#### 📱 Step 2 of 2: Publish Hook Short (9:16 · {short_dur_str}) Linking to Full Video")
 
@@ -2670,7 +2692,7 @@ elif step == 4:
                     kwargs={
                         "project_id": pid,
                         "video_path": Path(a3.video_9x16_shorts_path),
-                        "thumbnail_path": None,
+                        "thumbnail_path": Path(a3.thumbnail_16x9_path),
                         "title": short_title,
                         "description": short_desc,
                         "exact_chapters_text": "",

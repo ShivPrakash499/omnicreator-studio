@@ -692,30 +692,66 @@ def _prepare_youtube_thumbnail_bytes(
     thumbnail_path: Path,
     *,
     max_bytes: int = YOUTUBE_MAX_THUMBNAIL_BYTES,
+    is_short: bool = False,
 ) -> Tuple[bytes, str]:
     """
     Guarantees every thumbnail uploaded to YouTube Data API v3 (`thumbnails.set`) strictly obeys
-    YouTube's hard 2 MB limit & 1280x720 standard without losing visual sharpness:
-    - Large PNGs (e.g. 2.4 MB AI renders) are converted in-memory to crisp 1280x720 high-quality JPEG (~220-400 KB).
-    - Small valid JPEGs/PNGs already under `max_bytes` are kept cleanly or re-encoded safely if oversized.
+    YouTube's hard 2 MB limit & ideal aspect ratio without losing visual sharpness:
+    - Long videos (`is_short=False`): crisp 1280x720 high-quality JPEG (~220-400 KB).
+    - Vertical Shorts (`is_short=True`): lush 1080x1920 (9:16) cinema poster preserving 100% of the
+      uncropped headline & artwork inside YouTube Shorts' center safe zone over a color-matched
+      atmospheric blurred backdrop (zero clipped letters!).
     """
     raw = thumbnail_path.read_bytes()
     suffix = thumbnail_path.suffix.lower()
-    if suffix in (".jpg", ".jpeg") and len(raw) <= max_bytes:
+    if (not is_short) and suffix in (".jpg", ".jpeg") and len(raw) <= max_bytes:
         return raw, "image/jpeg"
 
     try:
         from io import BytesIO
-        from PIL import Image
+        from PIL import Image, ImageDraw, ImageEnhance, ImageFilter
 
         with Image.open(BytesIO(raw)) as im:
             rgb = im.convert("RGB")
-            # Resize oversized 4K/1080p renders cleanly to YouTube's recommended 1280x720 crisp resolution
-            if rgb.width > 1280 or rgb.height > 720:
-                rgb = rgb.resize((1280, 720), Image.Resampling.LANCZOS)
+            if is_short:
+                # Build crisp 1080x1920 vertical Shorts cover with zero cut-off headline letters
+                cw, ch = 1080, 1920
+                scale_bg = max(cw / float(rgb.width), ch / float(rgb.height))
+                bg_w, bg_h = int(round(rgb.width * scale_bg)), int(round(rgb.height * scale_bg))
+                bg = rgb.resize((bg_w, bg_h), Image.Resampling.LANCZOS)
+                left = (bg_w - cw) // 2
+                top = (bg_h - ch) // 2
+                bg = bg.crop((left, top, left + cw, top + ch))
+                bg = bg.filter(ImageFilter.GaussianBlur(radius=38))
+                bg = ImageEnhance.Brightness(bg).enhance(0.46)
+
+                # Place full uncropped 16:9 artwork centered cleanly inside Shorts safe zone
+                fg_w = 1040
+                fg_h = int(round(fg_w * (rgb.height / float(rgb.width))))
+                fg = rgb.resize((fg_w, fg_h), Image.Resampling.LANCZOS)
+                px = (cw - fg_w) // 2
+                py = max(240, (ch - fg_h) // 2 - 70)
+
+                # Soft shadow + crisp subtle luminous border frame
+                draw = ImageDraw.Draw(bg)
+                draw.rounded_rectangle(
+                    [px - 6, py - 6, px + fg_w + 6, py + fg_h + 6],
+                    radius=14,
+                    fill=(245, 200, 95),
+                )
+                bg.paste(fg, (px, py))
+                out_img = bg
+            else:
+                out_img = (
+                    rgb.resize((1280, 720), Image.Resampling.LANCZOS)
+                    if (rgb.width > 1280 or rgb.height > 720)
+                    else rgb
+                )
+
+            data = raw
             for q in (93, 88, 82, 75, 68):
                 buf = BytesIO()
-                rgb.save(buf, format="JPEG", quality=q, optimize=True, subsampling=0 if q >= 88 else 2)
+                out_img.save(buf, format="JPEG", quality=q, optimize=True, subsampling=0 if q >= 88 else 2)
                 data = buf.getvalue()
                 if len(data) <= max_bytes:
                     return data, "image/jpeg"
@@ -726,7 +762,50 @@ def _prepare_youtube_thumbnail_bytes(
         return raw, mime
 
 
-def _attach_thumbnail(creds: Credentials, video_id: str, thumbnail_path: Path) -> Tuple[bool, str]:
+def _wait_for_video_processing(
+    creds: Credentials,
+    video_id: str,
+    *,
+    max_wait_sec: float = 45.0,
+    poll_interval_sec: float = 3.0,
+) -> str:
+    """
+    Polls YouTube Data API v3 `videos.list(part=processingDetails)` until a newly uploaded Short
+    finishes processing (`succeeded`), preventing YouTube from silently ignoring `thumbnails.set`!
+    """
+    deadline = time.time() + max_wait_sec
+    last_status = "unknown"
+    while time.time() < deadline:
+        try:
+            resp = requests.get(
+                "https://www.googleapis.com/youtube/v3/videos",
+                params={"part": "processingDetails,status", "id": video_id},
+                headers={"Authorization": f"Bearer {creds.token}"},
+                timeout=15.0,
+            )
+            if resp.status_code == 200:
+                items = (resp.json() or {}).get("items") or []
+                if items:
+                    proc = items[0].get("processingDetails") or {}
+                    st = str(proc.get("processingStatus") or "").lower()
+                    if st:
+                        last_status = st
+                    if st in ("succeeded", "failed", "terminated"):
+                        return st
+        except Exception as exc:
+            logger.debug("Processing status poll skipped for %s: %s", video_id, exc)
+        time.sleep(poll_interval_sec)
+    return last_status
+
+
+def _attach_thumbnail(
+    creds: Credentials,
+    video_id: str,
+    thumbnail_path: Path,
+    *,
+    is_short: bool = False,
+    wait_for_processing: bool = False,
+) -> Tuple[bool, str]:
     if not thumbnail_path.exists():
         return False, f"Thumbnail file not found locally ({thumbnail_path.name})."
     try:
@@ -737,7 +816,10 @@ def _attach_thumbnail(creds: Credentials, video_id: str, thumbnail_path: Path) -
             except Exception as ref_exc:
                 logger.warning("Pre-thumbnail token refresh warning: %s", ref_exc)
 
-        payload_bytes, mime = _prepare_youtube_thumbnail_bytes(thumbnail_path)
+        if is_short and wait_for_processing:
+            _wait_for_video_processing(creds, video_id, max_wait_sec=45.0, poll_interval_sec=3.0)
+
+        payload_bytes, mime = _prepare_youtube_thumbnail_bytes(thumbnail_path, is_short=is_short)
         last_err = ""
         for attempt in range(1, 3):
             resp = requests.post(
@@ -751,7 +833,8 @@ def _attach_thumbnail(creds: Credentials, video_id: str, thumbnail_path: Path) -
                 timeout=35.0,
             )
             if resp.status_code in (200, 201):
-                return True, f"Custom thumbnail attached ({len(payload_bytes) // 1024} KB JPEG)"
+                dims_lbl = "9:16 Shorts" if is_short else "16:9 HD"
+                return True, f"Custom {dims_lbl} thumbnail attached ({len(payload_bytes) // 1024} KB JPEG)"
             # Parse YouTube's exact diagnostic reason so we never guess blindly!
             reason = ""
             api_msg = ""
@@ -785,11 +868,12 @@ def attach_thumbnail_to_published_video(
     video_id: str,
     thumbnail_path: Path,
     *,
+    is_short: bool = False,
     channel_id: Optional[str] = None,
     config: Optional[OmniStudioConfig] = None,
     db: Optional[OmniDatabase] = None,
 ) -> Tuple[bool, str]:
-    """Attaches or updates a custom thumbnail directly on an already-published YouTube video (no video re-upload!)."""
+    """Attaches or updates a custom thumbnail directly on an already-published Long or Short YouTube video."""
     cfg = config or OmniStudioConfig()
     database = db or get_db()
     vid = (video_id or "").strip()
@@ -798,7 +882,7 @@ def attach_thumbnail_to_published_video(
     creds, _ = get_valid_youtube_credentials(cfg, database, channel_id=channel_id)
     if creds is None:
         return False, "Selected YouTube channel is not authenticated. Reconnect it first."
-    return _attach_thumbnail(creds, vid, thumbnail_path)
+    return _attach_thumbnail(creds, vid, thumbnail_path, is_short=is_short, wait_for_processing=is_short)
 
 
 def _add_video_to_playlist(creds: Credentials, video_id: str, playlist_id: str) -> bool:
@@ -1200,9 +1284,18 @@ def run_agent4_youtube_publish(
 
     thumb_ok = False
     thumb_detail = ""
-    if (not is_short) and thumbnail_path and thumbnail_path.exists():
-        _on_progress(97, "Optimizing & attaching video thumbnail (<2 MB)...")
-        thumb_ok, thumb_detail = _attach_thumbnail(creds, video_id, thumbnail_path)
+    if thumbnail_path and thumbnail_path.exists():
+        if is_short:
+            _on_progress(97, "Waiting for YouTube Shorts processing & attaching 9:16 thumbnail...")
+        else:
+            _on_progress(97, "Optimizing & attaching video thumbnail (<2 MB)...")
+        thumb_ok, thumb_detail = _attach_thumbnail(
+            creds,
+            video_id,
+            thumbnail_path,
+            is_short=is_short,
+            wait_for_processing=is_short,
+        )
 
     if playlist_id and playlist_id != "NONE":
         _on_progress(99, "Adding video to playlist...")
@@ -1249,7 +1342,11 @@ def run_agent4_youtube_publish(
         linked_long_video_url=(linked_long_video_url or "").strip() or None,
         status="Published",
         note=(
-            f"Hook Short published to '{target_ch_name}' with Full Video URL embedded in description."
+            (
+                f"Hook Short published to '{target_ch_name}' with Full Video URL & custom 9:16 thumbnail."
+                if thumb_ok
+                else f"Hook Short published to '{target_ch_name}' with Full Video URL (thumbnail note: {thumb_detail or 'not attached'})."
+            )
             if is_short
             else (
                 f"Full-Length Video published to '{target_ch_name}' with chapters & custom thumbnail."
