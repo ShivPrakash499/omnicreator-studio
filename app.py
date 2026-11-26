@@ -31,6 +31,7 @@ from backend.agent3_media_composer import (
     select_hybrid_hero_scene_indices,
 )
 from backend.agent4_youtube_publisher import (
+    attach_thumbnail_to_published_video,
     build_short_funnel_description,
     build_youtube_oauth_url,
     create_youtube_playlist,
@@ -2356,14 +2357,17 @@ elif step == 4:
             ),
             None,
         )
+        resolved_long_vid = ""
         resolved_long_url = ""
         resolved_long_studio = ""
         if long_pub_rec and long_pub_rec.get("video_id"):
-            resolved_long_url = f"https://www.youtube.com/watch?v={long_pub_rec['video_id']}"
-            resolved_long_studio = long_pub_rec.get("studio_url") or f"https://studio.youtube.com/video/{long_pub_rec['video_id']}/edit"
+            resolved_long_vid = str(long_pub_rec["video_id"]).strip()
+            resolved_long_url = f"https://www.youtube.com/watch?v={resolved_long_vid}"
+            resolved_long_studio = long_pub_rec.get("studio_url") or f"https://studio.youtube.com/video/{resolved_long_vid}/edit"
         elif fresh_proj and fresh_proj.get("youtube_video_id"):
-            resolved_long_url = f"https://www.youtube.com/watch?v={fresh_proj['youtube_video_id']}"
-            resolved_long_studio = f"https://studio.youtube.com/video/{fresh_proj['youtube_video_id']}/edit"
+            resolved_long_vid = str(fresh_proj["youtube_video_id"]).strip()
+            resolved_long_url = f"https://www.youtube.com/watch?v={resolved_long_vid}"
+            resolved_long_studio = f"https://studio.youtube.com/video/{resolved_long_vid}/edit"
 
         connected_chs_s4 = list_connected_youtube_channels(cfg, db)
         active_ch_id_s4 = st.session_state.get("omni_channel_id", "")
@@ -2433,6 +2437,26 @@ elif step == 4:
                     f"📺 **Full-Length Video Live:** [{resolved_long_url}]({resolved_long_url})  ·  "
                     f"[Open in Studio]({resolved_long_studio})"
                 )
+                thumb_p_s4 = Path(a3.thumbnail_16x9_path)
+                if resolved_long_vid and thumb_p_s4.exists() and creds is not None:
+                    if st.button(
+                        "🖼️ Attach / Update Thumbnail on Published Video",
+                        use_container_width=True,
+                        disabled=any_uploading,
+                        key=f"btn_attach_thumb_{pid}_{resolved_long_vid}",
+                    ):
+                        with st.spinner("Optimizing thumbnail (<2 MB JPEG) & attaching to YouTube..."):
+                            ok_th, msg_th = attach_thumbnail_to_published_video(
+                                resolved_long_vid,
+                                thumb_p_s4,
+                                channel_id=active_ch_id_s4 or None,
+                                config=cfg,
+                                db=db,
+                            )
+                        if ok_th:
+                            st.success(f"✅ {msg_th}!")
+                        else:
+                            st.warning(f"⚠️ Could not attach thumbnail: {msg_th}")
             else:
                 st.markdown("#### 📺 Step 1 of 2: Publish Full-Length Video (16:9) First")
                 st.caption("Upload your main video first so its YouTube URL is automatically inserted into your Hook Short's description in Step 2 below.")

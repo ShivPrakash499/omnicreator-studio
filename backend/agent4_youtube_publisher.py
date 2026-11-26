@@ -685,25 +685,120 @@ def create_youtube_playlist(
 # ==============================================================================
 # 2. 4MB CHUNKED RESUMABLE UPLOAD ENGINE WITH EXPONENTIAL BACKOFF
 # ==============================================================================
-def _attach_thumbnail(creds: Credentials, video_id: str, thumbnail_path: Path) -> bool:
-    if not thumbnail_path.exists():
-        return False
+YOUTUBE_MAX_THUMBNAIL_BYTES: int = 1_900_000  # YouTube hard cap is 2,097,152 bytes (2 MB)
+
+
+def _prepare_youtube_thumbnail_bytes(
+    thumbnail_path: Path,
+    *,
+    max_bytes: int = YOUTUBE_MAX_THUMBNAIL_BYTES,
+) -> Tuple[bytes, str]:
+    """
+    Guarantees every thumbnail uploaded to YouTube Data API v3 (`thumbnails.set`) strictly obeys
+    YouTube's hard 2 MB limit & 1280x720 standard without losing visual sharpness:
+    - Large PNGs (e.g. 2.4 MB AI renders) are converted in-memory to crisp 1280x720 high-quality JPEG (~220-400 KB).
+    - Small valid JPEGs/PNGs already under `max_bytes` are kept cleanly or re-encoded safely if oversized.
+    """
+    raw = thumbnail_path.read_bytes()
+    suffix = thumbnail_path.suffix.lower()
+    if suffix in (".jpg", ".jpeg") and len(raw) <= max_bytes:
+        return raw, "image/jpeg"
+
     try:
-        mime = "image/png" if thumbnail_path.suffix.lower() == ".png" else "image/jpeg"
-        resp = requests.post(
-            "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
-            params={"videoId": video_id, "uploadType": "media"},
-            headers={
-                "Authorization": f"Bearer {creds.token}",
-                "Content-Type": mime,
-            },
-            data=thumbnail_path.read_bytes(),
-            timeout=30.0,
-        )
-        return resp.status_code in (200, 201)
+        from io import BytesIO
+        from PIL import Image
+
+        with Image.open(BytesIO(raw)) as im:
+            rgb = im.convert("RGB")
+            # Resize oversized 4K/1080p renders cleanly to YouTube's recommended 1280x720 crisp resolution
+            if rgb.width > 1280 or rgb.height > 720:
+                rgb = rgb.resize((1280, 720), Image.Resampling.LANCZOS)
+            for q in (93, 88, 82, 75, 68):
+                buf = BytesIO()
+                rgb.save(buf, format="JPEG", quality=q, optimize=True, subsampling=0 if q >= 88 else 2)
+                data = buf.getvalue()
+                if len(data) <= max_bytes:
+                    return data, "image/jpeg"
+            return data, "image/jpeg"
+    except Exception as exc:
+        logger.warning("Pillow thumbnail optimization skipped (%s); sending raw bytes.", exc)
+        mime = "image/png" if suffix == ".png" else "image/jpeg"
+        return raw, mime
+
+
+def _attach_thumbnail(creds: Credentials, video_id: str, thumbnail_path: Path) -> Tuple[bool, str]:
+    if not thumbnail_path.exists():
+        return False, f"Thumbnail file not found locally ({thumbnail_path.name})."
+    try:
+        # Refresh OAuth token if expired during a long 300MB+ video upload!
+        if getattr(creds, "expired", False) and getattr(creds, "refresh_token", None):
+            try:
+                creds.refresh(GoogleAuthRequest())
+            except Exception as ref_exc:
+                logger.warning("Pre-thumbnail token refresh warning: %s", ref_exc)
+
+        payload_bytes, mime = _prepare_youtube_thumbnail_bytes(thumbnail_path)
+        last_err = ""
+        for attempt in range(1, 3):
+            resp = requests.post(
+                "https://www.googleapis.com/upload/youtube/v3/thumbnails/set",
+                params={"videoId": video_id, "uploadType": "media"},
+                headers={
+                    "Authorization": f"Bearer {creds.token}",
+                    "Content-Type": mime,
+                },
+                data=payload_bytes,
+                timeout=35.0,
+            )
+            if resp.status_code in (200, 201):
+                return True, f"Custom thumbnail attached ({len(payload_bytes) // 1024} KB JPEG)"
+            # Parse YouTube's exact diagnostic reason so we never guess blindly!
+            reason = ""
+            api_msg = ""
+            try:
+                err_obj = resp.json().get("error") or {}
+                api_msg = str(err_obj.get("message") or "")
+                errs = err_obj.get("errors") or []
+                if errs:
+                    reason = str(errs[0].get("reason") or "")
+            except Exception:
+                api_msg = (resp.text or "")[:200]
+            last_err = f"HTTP {resp.status_code} ({reason or 'error'}): {api_msg}".strip()
+            if resp.status_code in (429, 500, 502, 503, 504) and attempt < 2:
+                time.sleep(2.5)
+                continue
+            break
+
+        if "403" in last_err and ("forbidden" in last_err.lower() or "permissions" in last_err.lower() or "verify" in last_err.lower()):
+            return False, (
+                f"YouTube blocked custom thumbnail ({last_err}). Verify your YouTube channel by phone at "
+                "https://www.youtube.com/verify (Intermediate Features) to unlock custom thumbnails."
+            )
+        logger.warning("Thumbnail attachment failed for %s: %s", video_id, last_err)
+        return False, last_err
     except Exception as exc:
         logger.warning("Thumbnail attachment warning for %s: %s", video_id, exc)
-        return False
+        return False, str(exc)
+
+
+def attach_thumbnail_to_published_video(
+    video_id: str,
+    thumbnail_path: Path,
+    *,
+    channel_id: Optional[str] = None,
+    config: Optional[OmniStudioConfig] = None,
+    db: Optional[OmniDatabase] = None,
+) -> Tuple[bool, str]:
+    """Attaches or updates a custom thumbnail directly on an already-published YouTube video (no video re-upload!)."""
+    cfg = config or OmniStudioConfig()
+    database = db or get_db()
+    vid = (video_id or "").strip()
+    if not vid:
+        return False, "Missing YouTube video ID."
+    creds, _ = get_valid_youtube_credentials(cfg, database, channel_id=channel_id)
+    if creds is None:
+        return False, "Selected YouTube channel is not authenticated. Reconnect it first."
+    return _attach_thumbnail(creds, vid, thumbnail_path)
 
 
 def _add_video_to_playlist(creds: Credentials, video_id: str, playlist_id: str) -> bool:
@@ -1104,9 +1199,10 @@ def run_agent4_youtube_publish(
             raise
 
     thumb_ok = False
+    thumb_detail = ""
     if (not is_short) and thumbnail_path and thumbnail_path.exists():
-        _on_progress(97, "Attaching video thumbnail...")
-        thumb_ok = _attach_thumbnail(creds, video_id, thumbnail_path)
+        _on_progress(97, "Optimizing & attaching video thumbnail (<2 MB)...")
+        thumb_ok, thumb_detail = _attach_thumbnail(creds, video_id, thumbnail_path)
 
     if playlist_id and playlist_id != "NONE":
         _on_progress(99, "Adding video to playlist...")
@@ -1158,7 +1254,7 @@ def run_agent4_youtube_publish(
             else (
                 f"Full-Length Video published to '{target_ch_name}' with chapters & custom thumbnail."
                 if thumb_ok
-                else f"Full-Length Video published to '{target_ch_name}' with chapters."
+                else f"Full-Length Video published to '{target_ch_name}' with chapters (thumbnail note: {thumb_detail or 'not attached'})."
             )
         ),
     )
