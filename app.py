@@ -1229,7 +1229,7 @@ elif step == 1:
             phase_labels = {
                 "Visual_Hook_0_45s": "⚡ Opening Hook",
                 "Core_Act": "🎬 Story Act",
-                "Micro_Retention_Loop": "🪝 Mid-Video Retention Hook",
+                "Micro_Retention_Loop": "🎯 Mid-Video Retention Hook",
                 "Climax_Aha": "💡 Big Reveal / Climax",
                 "Outro_CTA": "📣 Outro & CTA",
             }
@@ -1255,7 +1255,7 @@ elif step == 1:
                         )
                     bs = st.text_area("Story Beat Summary:", value=b.narrative_summary, height=64, key=f"beat_sum_{b.beat_id}")
                     br = st.text_input(
-                        "🪝 Retention Hook (Keeps Viewers Watching):",
+                        "🎯 Retention Hook (Keeps Viewers Watching):",
                         value=b.retention_device,
                         key=f"beat_ret_{b.beat_id}",
                         help="Curiosity loop, pattern interrupt, or mid-video hook injected by the scriptwriter at this chapter.",
