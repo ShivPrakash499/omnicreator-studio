@@ -782,6 +782,182 @@ def format_flow_agent_kickoff_prompt(
     )
 
 
+def _format_single_flow_scene_lines(
+    sc: Any,
+    *,
+    fallback_idx: int,
+    niche: str,
+    cinema_preset: Optional[str],
+    chars: List[Dict[str, Any]],
+) -> List[str]:
+    """Formats one deduplicated, character-routed scene block for Google Flow Agent Mode."""
+    s_idx = sc.scene_index if hasattr(sc, "scene_index") else sc.get("scene_index", fallback_idx)
+    ch_lbl = sc.chapter_label if hasattr(sc, "chapter_label") else sc.get("chapter_label", "")
+    raw_vp = sc.visual_prompt_veo_omni if hasattr(sc, "visual_prompt_veo_omni") else sc.get("visual_prompt_veo_omni", "")
+    cam_c = sc.camera_and_lighting_cue if hasattr(sc, "camera_and_lighting_cue") else sc.get("camera_and_lighting_cue", "")
+    sfx_c = sc.sfx_cue if hasattr(sc, "sfx_cue") else sc.get("sfx_cue", "")
+    dur_s = sc.duration_sec if hasattr(sc, "duration_sec") else sc.get("duration_sec", 8.0)
+    vo_txt = sc.voiceover_text if hasattr(sc, "voiceover_text") else sc.get("voiceover_text", "")
+    feat_c = bool(sc.features_main_character if hasattr(sc, "features_main_character") else sc.get("features_main_character", False))
+
+    scene_chars = detect_scene_characters(raw_vp, chars, features_main_character=feat_c)
+
+    # Build clean, deduplicated cinematic prompt (no duplicate Period Authenticity!)
+    full_clean = build_cinematic_video_prompt(
+        raw_vp,
+        niche=niche,
+        cinema_preset=cinema_preset,
+        camera_cue=cam_c,
+        sfx_cue=sfx_c,
+        duration_sec=min(8.0, float(dur_s)),
+        scene_index=int(s_idx),
+    )
+    # Replace verbose repeated footer with tight per-scene guard (full blacklist lives in Global Rules & Memory!)
+    short_clean = full_clean.split("ZERO CAMERAS")[0].strip()
+    short_clean = (
+        f"{short_clean} "
+        "NEGATIVE: No video/film camera, no tripod, no film crew, no modern gear, no spoken dialogue or music, "
+        "no deformed anatomy, no foreign/garbled text, no watermarks."
+    )
+
+    if scene_chars:
+        attach_str = " + ".join(c["tag"] for c in scene_chars)
+        mode_str = f"Ingredients to Video — ATTACH CHARACTERS: {attach_str}"
+        lock_prefix = (
+            f"CHARACTER LOCK ({attach_str}): Match the exact face, age, markings, hairstyle, and attire of "
+            f"{attach_str} from Characters (do NOT copy the plain studio backdrop). "
+        )
+        final_prompt = lock_prefix + short_clean
+    else:
+        mode_str = "Text to Video — ATTACH CHARACTERS: NONE (Scenery / Supporting Only)"
+        final_prompt = short_clean
+
+    return [
+        f"SCENE {int(s_idx):02d} — {ch_lbl}",
+        f"CLIP FILENAME: scene_{int(s_idx):02d}.mp4",
+        f"MODE & CHARACTERS: {mode_str}",
+        f"VOICEOVER CONTEXT (SILENT — DO NOT SPEAK IN VIDEO): {vo_txt}",
+        "SCENE PROMPT:",
+        final_prompt,
+        "",
+        "-" * 78,
+        "",
+    ]
+
+
+def build_flow_agent_copy_blocks(
+    topic: str,
+    niche: str,
+    character_bible: str,
+    scenes: List[Any],
+    cinema_preset: Optional[str] = None,
+    character_anchor_prompt: str = "",
+    batch_size: int = 6,
+) -> Dict[str, Any]:
+    """
+    Builds ready-to-copy 1-click prompt blocks for Google Flow Agent Mode side-by-side workflow:
+    - `memory`: Paste once into Flow's `Agent settings -> Memory -> + Add new`
+    - `phase1_prompt`: Self-contained Phase 1 prompt to generate & save locked `@Character` portraits first
+    - `batches`: List of self-contained 6-scene batch prompts (`Batch 1 (01-06)` .. `Batch N`) ready to paste
+      straight into Flow's `Describe your goal` / `Use side panel` even without uploading a `.txt` file!
+    - `kickoff`: Short kickoff prompt when uploading the full Master `.txt` file via `+`
+    """
+    chars = parse_characters_from_bible(character_bible, character_anchor_prompt)
+    memory_txt = format_flow_agent_memory_block(
+        topic=topic,
+        niche=niche,
+        character_bible=character_bible,
+        cinema_preset=cinema_preset,
+        character_anchor_prompt=character_anchor_prompt,
+    )
+    total_scenes = len(scenes)
+    num_batches = max(1, (total_scenes + batch_size - 1) // batch_size)
+
+    phase1_prompt = ""
+    if chars:
+        tag_list = ", ".join(ch["tag"] for ch in chars)
+        p1_lines: List[str] = [
+            f"PHASE 1 ONLY (CHARACTER LOCK) for \"{topic}\":",
+            f"Generate 1 clean 16:9 studio reference portrait (Nano Banana Pro, 1 output each) for the {len(chars)} locked character(s) below ({tag_list}).",
+            "Save each generated portrait into this project's Characters library under its exact @Name below, then STOP and wait for my face approval before generating any videos.",
+            "",
+        ]
+        for c_idx, ch in enumerate(chars, start=1):
+            p1_lines.extend([
+                f"CHARACTER {c_idx}: {ch['name']}  |  Save in Characters as: {ch['tag']}",
+                "PORTRAIT PROMPT:",
+                ch["portrait_prompt"],
+                "",
+            ])
+        phase1_prompt = "\n".join(p1_lines).strip()
+
+    batches: List[Dict[str, Any]] = []
+    for b_idx in range(num_batches):
+        start_0 = b_idx * batch_size
+        end_0 = min(total_scenes, start_0 + batch_size)
+        slice_scenes = scenes[start_0:end_0]
+        if not slice_scenes:
+            continue
+        b_num = b_idx + 1
+        first_s = slice_scenes[0].scene_index if hasattr(slice_scenes[0], "scene_index") else slice_scenes[0].get("scene_index", start_0 + 1)
+        last_s = slice_scenes[-1].scene_index if hasattr(slice_scenes[-1], "scene_index") else slice_scenes[-1].get("scene_index", end_0)
+        attached_in_batch = sum(
+            1
+            for s in slice_scenes
+            if (s.asset_mode if hasattr(s, "asset_mode") else s.get("asset_mode")) == "custom_upload"
+            and bool(((s.custom_asset_path if hasattr(s, "custom_asset_path") else s.get("custom_asset_path")) or "").strip())
+        )
+
+        char_rule = (
+            "Strictly obey each scene's ATTACH CHARACTERS tag using our saved Characters portraits "
+            "(and attach NO character portrait on scenes marked NONE)."
+            if chars
+            else "Generate pure Text-to-Video scenes (no recurring character lock)."
+        )
+        b_lines: List[str] = [
+            f"PHASE 2 — BATCH {b_num} OF {num_batches} (SCENES {int(first_s):02d}–{int(last_s):02d}) for \"{topic}\":",
+            f"Generate ONLY these {len(slice_scenes)} clips sequentially using Veo 3.1 (16:9 landscape, 1 output per scene, 8s continuous single shot). "
+            f"{char_rule} Follow our Project Memory rules strictly: realistic physical foley ONLY (ZERO spoken dialogue, ZERO voices, ZERO music), "
+            f"ZERO cameras/tripods/film crew/modern gear, ZERO foreign or garbled text. Label every clip clearly as scene_{int(first_s):02d}.mp4 through scene_{int(last_s):02d}.mp4.",
+            "",
+        ]
+        for offset, sc in enumerate(slice_scenes):
+            b_lines.extend(
+                _format_single_flow_scene_lines(
+                    sc,
+                    fallback_idx=start_0 + offset + 1,
+                    niche=niche,
+                    cinema_preset=cinema_preset,
+                    chars=chars,
+                )
+            )
+        batches.append({
+            "batch_num": b_num,
+            "total_batches": num_batches,
+            "start_scene": int(first_s),
+            "end_scene": int(last_s),
+            "scene_count": len(slice_scenes),
+            "attached_count": attached_in_batch,
+            "label": f"Batch {b_num} ({int(first_s):02d}–{int(last_s):02d})",
+            "prompt_text": "\n".join(b_lines).strip(),
+        })
+
+    kickoff_txt = format_flow_agent_kickoff_prompt(
+        topic=topic,
+        total_scenes=total_scenes,
+        character_bible=character_bible,
+        character_anchor_prompt=character_anchor_prompt,
+        batch_size=batch_size,
+    )
+    return {
+        "characters": chars,
+        "memory": memory_txt,
+        "phase1_prompt": phase1_prompt,
+        "batches": batches,
+        "kickoff": kickoff_txt,
+    }
+
+
 def format_flow_prompts_export_txt(
     topic: str,
     niche: str,
@@ -869,60 +1045,15 @@ def format_flow_prompts_export_txt(
                 f"#################### BATCH {b_num} OF {num_batches} (SCENES {b_start:02d} - {b_end:02d}) ####################",
                 "",
             ])
-
-        s_idx = sc.scene_index if hasattr(sc, "scene_index") else sc.get("scene_index", idx_0 + 1)
-        ch_lbl = sc.chapter_label if hasattr(sc, "chapter_label") else sc.get("chapter_label", "")
-        raw_vp = sc.visual_prompt_veo_omni if hasattr(sc, "visual_prompt_veo_omni") else sc.get("visual_prompt_veo_omni", "")
-        cam_c = sc.camera_and_lighting_cue if hasattr(sc, "camera_and_lighting_cue") else sc.get("camera_and_lighting_cue", "")
-        sfx_c = sc.sfx_cue if hasattr(sc, "sfx_cue") else sc.get("sfx_cue", "")
-        dur_s = sc.duration_sec if hasattr(sc, "duration_sec") else sc.get("duration_sec", 8.0)
-        vo_txt = sc.voiceover_text if hasattr(sc, "voiceover_text") else sc.get("voiceover_text", "")
-        feat_c = bool(sc.features_main_character if hasattr(sc, "features_main_character") else sc.get("features_main_character", False))
-
-        scene_chars = detect_scene_characters(raw_vp, chars, features_main_character=feat_c)
-
-        # Build clean, deduplicated cinematic prompt (no duplicate Period Authenticity!)
-        full_clean = build_cinematic_video_prompt(
-            raw_vp,
-            niche=niche,
-            cinema_preset=cinema_preset,
-            camera_cue=cam_c,
-            sfx_cue=sfx_c,
-            duration_sec=min(8.0, float(dur_s)),
-            scene_index=int(s_idx),
-        )
-        # Keep the holistic file crisp for Flow Agent context window by replacing the 700-char
-        # repeated footer with a tight per-scene guard (full blacklist already sits in Global Rules & Memory!)
-        short_clean = full_clean.split("ZERO CAMERAS")[0].strip()
-        short_clean = (
-            f"{short_clean} "
-            "NEGATIVE: No video/film camera, no tripod, no film crew, no modern gear, no spoken dialogue or music, "
-            "no deformed anatomy, no foreign/garbled text, no watermarks."
-        )
-
-        if scene_chars:
-            attach_str = " + ".join(c["tag"] for c in scene_chars)
-            mode_str = f"Ingredients to Video — ATTACH CHARACTERS: {attach_str}"
-            lock_prefix = (
-                f"CHARACTER LOCK ({attach_str}): Match the exact face, age, markings, hairstyle, and attire of "
-                f"{attach_str} from Characters (do NOT copy the plain studio backdrop). "
+        lines.extend(
+            _format_single_flow_scene_lines(
+                sc,
+                fallback_idx=idx_0 + 1,
+                niche=niche,
+                cinema_preset=cinema_preset,
+                chars=chars,
             )
-            final_prompt = lock_prefix + short_clean
-        else:
-            mode_str = "Text to Video — ATTACH CHARACTERS: NONE (Scenery / Supporting Only)"
-            final_prompt = short_clean
-
-        lines.extend([
-            f"SCENE {int(s_idx):02d} — {ch_lbl}",
-            f"CLIP FILENAME: scene_{int(s_idx):02d}.mp4",
-            f"MODE & CHARACTERS: {mode_str}",
-            f"VOICEOVER CONTEXT (SILENT — DO NOT SPEAK IN VIDEO): {vo_txt}",
-            "SCENE PROMPT:",
-            final_prompt,
-            "",
-            "-" * 78,
-            "",
-        ])
+        )
 
     return "\n".join(lines)
 

@@ -54,8 +54,7 @@ from backend.config import (
     SUPPORTED_LANGUAGES,
     SUPPORTED_NICHES,
     OmniStudioConfig,
-    format_flow_agent_kickoff_prompt,
-    format_flow_agent_memory_block,
+    build_flow_agent_copy_blocks,
     format_flow_prompts_export_txt,
     format_timestamp,
     sanitize_slug,
@@ -1428,13 +1427,11 @@ elif step == 2:
         )
         with st.expander(flow_exp_lbl, expanded=False):
             st.markdown(
-                "Have a **Google AI Ultra** subscription? Use **Google Flow Agent Mode** at "
-                "[flow.google.com](https://flow.google.com) (**₹0 extra Google Cloud video cost**): "
-                "**(1)** paste the Memory block into Flow's **Agent settings → Memory**, "
-                "**(2)** upload the Holistic Master File via `+` + paste the Kickoff Prompt so Flow creates your locked "
-                "**Characters** and queues scenes in batches, then **(3)** bulk-drop the finished `.mp4` clips below!"
+                "Have a **Google AI Ultra** subscription? Run **Google Flow Agent Mode** side-by-side (**₹0 Cloud video cost**): "
+                "**(1)** click **Open Google Flow**, **(2)** 1-click Copy → Paste **Memory**, **Phase 1: Characters**, and each **6-scene Batch** "
+                "below straight into Flow's `Describe your goal` box (no `.txt` upload needed!), then **(3)** bulk-drop the finished `.mp4` clips here!"
             )
-            fl_c1, fl_c2 = st.columns([1.05, 1.3])
+            fl_c1, fl_c2 = st.columns([1.15, 1.25])
             with fl_c1:
                 cur_a1_for_flow = Agent1Output.model_validate(a1_data)
                 flow_txt = format_flow_prompts_export_txt(
@@ -1445,27 +1442,31 @@ elif step == 2:
                     cinema_preset=sel_preset_s2,
                     character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
                 )
-                flow_mem_txt = format_flow_agent_memory_block(
+                flow_blocks = build_flow_agent_copy_blocks(
                     topic=a2.topic,
                     niche=a2.niche,
                     character_bible=cur_a1_for_flow.character_bible,
+                    scenes=a2.scenes,
                     cinema_preset=sel_preset_s2,
                     character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
                 )
-                flow_kickoff_txt = format_flow_agent_kickoff_prompt(
-                    topic=a2.topic,
-                    total_scenes=len(a2.scenes),
-                    character_bible=cur_a1_for_flow.character_bible,
-                    character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
-                )
-                st.download_button(
-                    "📥 Download Flow Agent Master File (.txt)",
-                    data=flow_txt.encode("utf-8"),
-                    file_name=f"{sanitize_slug(a2.topic)}_flow_agent_master.txt",
-                    mime="text/plain",
-                    use_container_width=True,
-                    key=f"dl_flow_prompts_{pid}",
-                )
+                fb_btn1, fb_btn2 = st.columns(2)
+                with fb_btn1:
+                    st.link_button(
+                        "🚀 Open Google Flow",
+                        url="https://flow.google.com",
+                        type="primary",
+                        use_container_width=True,
+                    )
+                with fb_btn2:
+                    st.download_button(
+                        "📥 Master File (.txt)",
+                        data=flow_txt.encode("utf-8"),
+                        file_name=f"{sanitize_slug(a2.topic)}_flow_agent_master.txt",
+                        mime="text/plain",
+                        use_container_width=True,
+                        key=f"dl_flow_prompts_{pid}",
+                    )
                 flow_start_scene = st.number_input(
                     "Assign sequential uploads starting at Scene #:",
                     min_value=1,
@@ -1514,16 +1515,49 @@ elif step == 2:
                         st.rerun()
 
             st.markdown("---")
-            fm_tab1, fm_tab2 = st.tabs([
-                "🧠 1. Copy into Flow 'Agent settings → Memory'",
-                "🚀 2. Copy Kickoff Prompt for 'Describe your goal'",
-            ])
-            with fm_tab1:
-                st.caption("In Google Flow → right panel **Agent settings → Memory → + Add new** → paste this block once:")
-                st.code(flow_mem_txt, language="text")
-            with fm_tab2:
-                st.caption("Upload the downloaded Master `.txt` file using `+` (or paste into **Use side panel**), then paste this prompt:")
-                st.code(flow_kickoff_txt, language="text")
+            has_p1_chars = bool(flow_blocks.get("phase1_prompt"))
+            flow_batches = flow_blocks.get("batches", [])
+            top_tab_labels: List[str] = ["🧠 1. Memory"]
+            if has_p1_chars:
+                top_tab_labels.append(f"🎭 2. Phase 1: Characters ({len(flow_blocks['characters'])})")
+                top_tab_labels.append(f"🎬 3. Phase 2: Batches (1–{len(flow_batches)})")
+            else:
+                top_tab_labels.append(f"🎬 2. Copy Batches (1–{len(flow_batches)})")
+            top_tab_labels.append("📎 Full File Kickoff")
+
+            top_tabs = st.tabs(top_tab_labels)
+            t_idx = 0
+            with top_tabs[t_idx]:
+                st.caption("In Google Flow → right panel **Agent settings → Memory → + Add new** → hover box below and click **Copy** (top-right):")
+                st.code(flow_blocks["memory"], language="text", wrap_lines=True)
+            t_idx += 1
+
+            if has_p1_chars:
+                with top_tabs[t_idx]:
+                    st.caption("Paste into Google Flow's **Describe your goal** box first — Flow creates & saves your locked **Characters**, then stops for your approval:")
+                    st.code(flow_blocks["phase1_prompt"], language="text", wrap_lines=True)
+                t_idx += 1
+
+            with top_tabs[t_idx]:
+                st.caption("After approving your Characters, click each batch tab below → **1-click Copy** (top-right of box) → paste straight into Google Flow's **Describe your goal** (or **Use side panel**):")
+                if flow_batches:
+                    batch_labels = [
+                        (f"✅ {b['label']}" if b["attached_count"] >= b["scene_count"] else b["label"])
+                        for b in flow_batches
+                    ]
+                    b_tabs = st.tabs(batch_labels)
+                    for bt, b_info in zip(b_tabs, flow_batches):
+                        with bt:
+                            st.caption(
+                                f"**{b_info['label']}** — {b_info['scene_count']} scenes "
+                                f"({b_info['attached_count']}/{b_info['scene_count']} clips uploaded to OMNI STUDIO)"
+                            )
+                            st.code(b_info["prompt_text"], language="text", wrap_lines=True)
+            t_idx += 1
+
+            with top_tabs[t_idx]:
+                st.caption("Optional: If you upload the downloaded Master `.txt` file using `+` in Flow, paste this short kickoff prompt:")
+                st.code(flow_blocks["kickoff"], language="text", wrap_lines=True)
 
         start_idx = (int(current_page) - 1) * per_page
         end_idx = min(len(a2.scenes), start_idx + per_page)
