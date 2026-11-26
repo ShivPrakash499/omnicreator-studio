@@ -46,6 +46,21 @@ from backend.agent4_youtube_publisher import (
     list_user_youtube_playlists,
     run_agent4_youtube_publish,
 )
+import importlib as _importlib
+import backend.config as _cfg_mod
+
+try:
+    _cfg_file_p = Path(getattr(_cfg_mod, "__file__", "") or "")
+    _cfg_mtime = _cfg_file_p.stat().st_mtime if _cfg_file_p.exists() else 0.0
+    if _cfg_mtime and getattr(_cfg_mod, "_OMNI_LOADED_MTIME", 0.0) != _cfg_mtime:
+        _prev_adc_cache = dict(getattr(_cfg_mod, "_VERTEX_ADC_CACHE", {}) or {})
+        _cfg_mod = _importlib.reload(_cfg_mod)
+        if _prev_adc_cache.get("checked") and _prev_adc_cache.get("creds") is not None:
+            _cfg_mod._VERTEX_ADC_CACHE.update(_prev_adc_cache)
+        setattr(_cfg_mod, "_OMNI_LOADED_MTIME", _cfg_mtime)
+except Exception:
+    pass
+
 from backend.config import (
     BGM_SCORE_PRESETS,
     CINEMA_STYLE_PRESETS,
