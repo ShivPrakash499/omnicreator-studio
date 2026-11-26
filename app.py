@@ -54,6 +54,8 @@ from backend.config import (
     SUPPORTED_LANGUAGES,
     SUPPORTED_NICHES,
     OmniStudioConfig,
+    format_flow_agent_kickoff_prompt,
+    format_flow_agent_memory_block,
     format_flow_prompts_export_txt,
     format_timestamp,
     sanitize_slug,
@@ -1426,12 +1428,13 @@ elif step == 2:
         )
         with st.expander(flow_exp_lbl, expanded=False):
             st.markdown(
-                "Have a **Google AI Ultra** subscription? Generate your full-motion clips inside "
-                "[Google Flow](https://labs.google/fx/tools/flow) using your included Ultra credits (**₹0 extra Google Cloud cost**), "
-                "then drop all clips here in one batch — OMNI STUDIO will automatically add Indian voiceover, music, active subtitles, "
-                "thumbnail, 16:9 HD + 9:16 Short & publish to YouTube (for only ~₹20 total)!"
+                "Have a **Google AI Ultra** subscription? Use **Google Flow Agent Mode** at "
+                "[flow.google.com](https://flow.google.com) (**₹0 extra Google Cloud video cost**): "
+                "**(1)** paste the Memory block into Flow's **Agent settings → Memory**, "
+                "**(2)** upload the Holistic Master File via `+` + paste the Kickoff Prompt so Flow creates your locked "
+                "**Characters** and queues scenes in batches, then **(3)** bulk-drop the finished `.mp4` clips below!"
             )
-            fl_c1, fl_c2 = st.columns([1.0, 1.35])
+            fl_c1, fl_c2 = st.columns([1.05, 1.3])
             with fl_c1:
                 cur_a1_for_flow = Agent1Output.model_validate(a1_data)
                 flow_txt = format_flow_prompts_export_txt(
@@ -1442,10 +1445,23 @@ elif step == 2:
                     cinema_preset=sel_preset_s2,
                     character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
                 )
+                flow_mem_txt = format_flow_agent_memory_block(
+                    topic=a2.topic,
+                    niche=a2.niche,
+                    character_bible=cur_a1_for_flow.character_bible,
+                    cinema_preset=sel_preset_s2,
+                    character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
+                )
+                flow_kickoff_txt = format_flow_agent_kickoff_prompt(
+                    topic=a2.topic,
+                    total_scenes=len(a2.scenes),
+                    character_bible=cur_a1_for_flow.character_bible,
+                    character_anchor_prompt=cur_a1_for_flow.character_anchor_prompt,
+                )
                 st.download_button(
-                    "📥 Download Clean Flow Prompts (.txt)",
+                    "📥 Download Flow Agent Master File (.txt)",
                     data=flow_txt.encode("utf-8"),
-                    file_name=f"{sanitize_slug(a2.topic)}_google_flow_prompts.txt",
+                    file_name=f"{sanitize_slug(a2.topic)}_flow_agent_master.txt",
                     mime="text/plain",
                     use_container_width=True,
                     key=f"dl_flow_prompts_{pid}",
@@ -1496,6 +1512,18 @@ elif step == 2:
                         db.update_project_stage(pid, agent2_data=new_a2_dict)
                         st.success(f"✅ Attached {len(mapped_msgs)} clip(s): " + ", ".join(mapped_msgs[:6]) + ("..." if len(mapped_msgs) > 6 else ""))
                         st.rerun()
+
+            st.markdown("---")
+            fm_tab1, fm_tab2 = st.tabs([
+                "🧠 1. Copy into Flow 'Agent settings → Memory'",
+                "🚀 2. Copy Kickoff Prompt for 'Describe your goal'",
+            ])
+            with fm_tab1:
+                st.caption("In Google Flow → right panel **Agent settings → Memory → + Add new** → paste this block once:")
+                st.code(flow_mem_txt, language="text")
+            with fm_tab2:
+                st.caption("Upload the downloaded Master `.txt` file using `+` (or paste into **Use side panel**), then paste this prompt:")
+                st.code(flow_kickoff_txt, language="text")
 
         start_idx = (int(current_page) - 1) * per_page
         end_idx = min(len(a2.scenes), start_idx + per_page)
