@@ -1225,14 +1225,22 @@ elif step == 1:
                 key="a1_short_hook_edit",
             )
 
-            st.markdown("**Chapter Breakdown:**")
+            st.markdown("**Chapter Breakdown (with Retention Hooks):**")
+            phase_labels = {
+                "Visual_Hook_0_45s": "⚡ Opening Hook",
+                "Core_Act": "🎬 Story Act",
+                "Micro_Retention_Loop": "🪝 Mid-Video Retention Hook",
+                "Climax_Aha": "💡 Big Reveal / Climax",
+                "Outro_CTA": "📣 Outro & CTA",
+            }
             updated_beats = []
             for b in a1.storyboard_beats:
+                phase_tag = phase_labels.get(b.phase, b.phase.replace("_", " "))
                 with st.container(border=True):
                     bc1, bc2 = st.columns([2.2, 1.0])
                     with bc1:
                         bt = st.text_input(
-                            f"Chapter {b.beat_id} · {format_timestamp(b.start_sec)}:",
+                            f"Chapter {b.beat_id} · {format_timestamp(b.start_sec)} · {phase_tag}:",
                             value=b.beat_title,
                             key=f"beat_title_{b.beat_id}",
                         )
@@ -1246,10 +1254,17 @@ elif step == 1:
                             key=f"beat_dur_{b.beat_id}",
                         )
                     bs = st.text_area("Story Beat Summary:", value=b.narrative_summary, height=64, key=f"beat_sum_{b.beat_id}")
+                    br = st.text_input(
+                        "🪝 Retention Hook (Keeps Viewers Watching):",
+                        value=b.retention_device,
+                        key=f"beat_ret_{b.beat_id}",
+                        help="Curiosity loop, pattern interrupt, or mid-video hook injected by the scriptwriter at this chapter.",
+                    )
                     b_dict = b.model_dump()
                     b_dict["beat_title"] = bt
                     b_dict["duration_sec"] = float(bd)
                     b_dict["narrative_summary"] = bs
+                    b_dict["retention_device"] = br.strip() or b.retention_device
                     updated_beats.append(b_dict)
 
         cinema_presets = list(CINEMA_STYLE_PRESETS.keys())

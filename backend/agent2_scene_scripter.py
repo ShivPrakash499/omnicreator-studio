@@ -244,6 +244,11 @@ def run_agent2_scene_scripting(
                     + "\n".join(f"  - {line}" for line in prev_recap)
                     + "\n\n"
                 )
+            retention_hooks_summary = "\n".join(
+                f"  - Chapter {b.beat_id} ({b.beat_title} · {b.phase}): {b.retention_device}"
+                for b in agent1.storyboard_beats
+                if (b.retention_device or "").strip()
+            )
             prompt = (
                 f"You are Agent 2 — an Award-Winning Film Director & Vocal Scriptwriter inside OMNI STUDIO.\n"
                 f"Topic: {agent1.topic} | Niche: {agent1.niche} | Language & Tone: {agent1.language_tone}\n"
@@ -255,7 +260,8 @@ def run_agent2_scene_scripting(
                 f"Niche Visual Aesthetic: {prof['visual_style']}\n"
                 f"Selected Title: {agent1.selected_title}\n"
                 f"Opening Hook Direction: {agent1.hook_script_0_45s}\n"
-                f"Climax Misconception Reveal: {agent1.climax_misconception_aha}\n\n"
+                f"Climax Misconception Reveal: {agent1.climax_misconception_aha}\n"
+                f"Chapter Retention Hooks (weave these curiosity loops & pattern interrupts naturally into the corresponding chapter's narration & visuals):\n{retention_hooks_summary}\n\n"
                 f"{char_bible_block}"
                 f"{prev_story_block}"
                 f"Rewrite and elevate these {len(slice_scenes)} consecutive scenes (indices {slice_scenes[0].scene_index} to {slice_scenes[-1].scene_index}) "
