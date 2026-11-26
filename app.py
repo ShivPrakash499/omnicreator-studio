@@ -1532,18 +1532,20 @@ elif step == 2:
             if has_p1_chars:
                 top_tab_labels.append(f"🎭 2. Phase 1: Characters ({len(flow_blocks['characters'])})")
                 top_tab_labels.append(f"🎬 3. Phase 2: Batches (1–{len(flow_batches)})")
-                top_tab_labels.append("🧵 4. Phase 3: Sew Video")
-                top_tab_labels.append("🖼️ 5. Phase 4: Thumbnails (16:9 + 9:16)")
+                top_tab_labels.append("📋 4. Scene Order Cheat Sheet")
+                top_tab_labels.append("🧵 5. Phase 3: Sew Guide")
+                top_tab_labels.append("🖼️ 6. Phase 4: Thumbnails")
             else:
                 top_tab_labels.append(f"🎬 2. Copy Batches (1–{len(flow_batches)})")
-                top_tab_labels.append("🧵 3. Sew Video")
-                top_tab_labels.append("🖼️ 4. Thumbnails (16:9 + 9:16)")
+                top_tab_labels.append("📋 3. Scene Order Cheat Sheet")
+                top_tab_labels.append("🧵 4. Sew Guide")
+                top_tab_labels.append("🖼️ 5. Thumbnails")
             top_tab_labels.append("📎 Full File Kickoff")
 
             top_tabs = st.tabs(top_tab_labels)
             t_idx = 0
             with top_tabs[t_idx]:
-                st.caption("In Google Flow → right panel **Agent settings → Memory → + Add new** → hover box below and click **Copy** (top-right):")
+                st.caption("In Google Flow → right panel **Agent settings → Memory → + Add new** → paste this block once (also enable Flow **⚙️ Settings → Return silent videos** so an audio glitch never rejects a video!):")
                 st.code(flow_blocks["memory"], language="text", wrap_lines=True)
             t_idx += 1
 
@@ -1554,7 +1556,7 @@ elif step == 2:
                 t_idx += 1
 
             with top_tabs[t_idx]:
-                st.caption("After approving your Characters, click each batch tab below → **1-click Copy** (top-right of box) → paste straight into Google Flow's **Describe your goal** (or **Use side panel**):")
+                st.caption("Click each batch tab → **1-click Copy** (top-right) → paste into Flow. Every batch asks Flow Agent to rename clips `S01..S06` (if supported) **and** print the exact `Scene # → Clip Name` list:")
                 if flow_batches:
                     batch_labels = [
                         (f"✅ {b['label']}" if b["attached_count"] >= b["scene_count"] else b["label"])
@@ -1571,7 +1573,14 @@ elif step == 2:
             t_idx += 1
 
             with top_tabs[t_idx]:
-                st.caption("After all scenes finish generating in Flow, paste this prompt so Flow sews `scene_01` → `scene_{:02d}` inside **Scenes** into ONE downloadable 16:9 master video (`final_flow_video_16x9.mp4`):".format(len(a2.scenes)))
+                st.caption("Keep this table open side-by-side with Google Flow's **SceneBuilder → Add media (`Oldest`)** to pick all clips in exact `S01 → S{:02d}` order in ~2 minutes:".format(len(a2.scenes)))
+                spotter_rows = flow_blocks.get("spotter_rows", [])
+                if spotter_rows:
+                    st.dataframe(spotter_rows, use_container_width=True, hide_index=True)
+            t_idx += 1
+
+            with top_tabs[t_idx]:
+                st.caption("Quick 4-step checklist to stitch `S01` → `S{:02d}` in Flow's **SceneBuilder** UI (`+` top-right → straight cuts → export `final_flow_video_16x9.mp4`):".format(len(a2.scenes)))
                 st.code(flow_blocks["phase3_sew_prompt"], language="text", wrap_lines=True)
             t_idx += 1
 

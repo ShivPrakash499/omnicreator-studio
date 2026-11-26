@@ -425,7 +425,7 @@ def get_cinema_preset(preset_name: Optional[str] = None) -> Dict[str, str]:
     return CINEMA_STYLE_PRESETS[DEFAULT_CINEMA_PRESET]
 
 
-FLOW_SANITIZER_VERSION: str = "pg13-safe-v3"
+FLOW_SANITIZER_VERSION: str = "pg13-safe-v4"
 
 
 def sanitize_policy_safe_visual_text(text: str) -> str:
@@ -783,8 +783,9 @@ def format_flow_agent_memory_block(
     lines: List[str] = [
         f"PROJECT: {topic} ({niche})",
         f"VISUAL STYLE: 16:9 widescreen theatrical cinema, {preset['camera_rig']}. {prof['visual_style']}.",
-        "VIDEO DEFAULTS: Use Omni 1.2 Flash (8s, 16:9 landscape, 1 output/scene) for character-referenced scenes for best face consistency, and Veo 3.1 or Omni 1.2 Flash (8s, 16:9, 1 output/scene) for scenery scenes. Single unbroken continuous shot (strictly NO scene cuts, NO split screens, NO UI overlays).",
-        "AUDIO RULE: Realistic frame-synced environmental foley ONLY. Strictly NO spoken dialogue, NO lip-syncing, NO human voices, NO singing, NO background music (OMNI STUDIO adds the locked narrator voiceover & continuous BGM after sewing).",
+        "VIDEO DEFAULTS: Use Omni 1.2 Flash (8s, 16:9 landscape, 1 output/scene) for character-referenced scenes for best face consistency, and Veo 3.1 or Omni 1.2 Flash (8s, 16:9, 1 output/scene) for scenery scenes. Single unbroken continuous shot (no scene cuts, no split screens, no UI overlays).",
+        "AUDIO STYLE: Subtle natural environmental ambience only (no music track or narration — OMNI STUDIO adds the locked narrator voiceover & continuous BGM after sewing).",
+        "NAMING & ORDER RULE: Submit clips in strict numerical order (S01, S02, ...). After each batch finishes, rename each clip in the project library to S01, S02, ... if your asset tools allow renaming, AND always reply with a clean numbered list mapping Scene # -> exact Flow clip title so SceneBuilder assembly is instant.",
     ]
     if chars:
         lines.append("CHARACTER LOCK (ALWAYS USE SAVED 'Characters' PORTRAITS — NEVER COPY PLAIN STUDIO BACKDROP INTO SCENES):")
@@ -807,20 +808,18 @@ def format_flow_phase3_sew_prompt(
     total_scenes: int,
 ) -> str:
     """
-    Ready-to-paste Phase 3 prompt telling Google Flow Agent to sew all generated clips
-    in exact order (`scene_01` -> `scene_XX`) inside Flow's `Scenes` builder into ONE
-    single 16:9 master MP4 ready to download and enrich with audio/BGM/captions in OMNI STUDIO.
+    Concise SceneBuilder UI assembly checklist for sewing all generated clips
+    in exact order (`01` -> `XX`) inside Flow's `SceneBuilder` (Flow's chat Agent
+    restricts timeline stitching to manual UI clicks).
     """
     return (
-        f"PHASE 3 — SEW ALL {total_scenes} SCENES INTO ONE MASTER VIDEO (IN FLOW 'Scenes' BUILDER) for \"{topic}\":\n"
-        f"1. Open the project's Scenes timeline and place all {total_scenes} generated video clips in exact sequential order "
-        f"from scene_01.mp4 through scene_{total_scenes:02d}.mp4 (verify no scene is skipped, duplicated, or out of order).\n"
-        f"2. Join consecutive clips with clean, seamless theatrical cuts (either crisp straight cuts or subtle 0.25-second "
-        f"soft cross-dissolves where scenes shift location). Keep every clip at its full original 8-second duration and 16:9 landscape framing.\n"
-        f"3. AUDIO PRESERVATION: Keep each clip's subtle native environmental Foley sound effects ONLY. Do NOT add any spoken "
-        f"voiceover, background music track, or on-screen text/subtitles (OMNI STUDIO will enrich this stitched master video with "
-        f"studio narration, continuous BGM, sound polish, and active captions).\n"
-        f"4. Render and prepare the single complete stitched 16:9 HD video (named final_flow_video_16x9.mp4) so I can download it."
+        f"PHASE 3 — SEW ALL {total_scenes} SCENES IN GOOGLE FLOW 'SceneBuilder' UI for \"{topic}\":\n"
+        f"(Note: Google Flow restricts timeline stitching to the Flow UI — Flow's chat Agent cannot stitch automatically.)\n"
+        f"1. Click the '+' button in Flow's top-right corner (or 'Scenes' in the left sidebar) to open SceneBuilder.\n"
+        f"2. Open 'Add media' -> select your project library -> set the top-right sort dropdown to 'Oldest'.\n"
+        f"3. Add all {total_scenes} clips in exact order (01 -> {total_scenes:02d}) using Flow Agent's post-batch title list "
+        f"or OMNI STUDIO's 'Scene Order Cheat Sheet' tab. Keep clean straight cuts (no transitions, no extra BGM/voiceover).\n"
+        f"4. Export the stitched 16:9 HD video (final_flow_video_16x9.mp4) and upload it + your Phase 4 thumbnails in OMNI STUDIO Step 3!"
     )
 
 
@@ -922,6 +921,22 @@ def format_flow_agent_kickoff_prompt(
     )
 
 
+def _clean_flow_ambient_sound_cue(sfx_cue: str) -> str:
+    """
+    Produces light, Flow-friendly natural ambient sound wording so Google Flow's audio head
+    never throws 'Audio generation failed' on overly quiet/metallic micro-sounds or heavy audio bans.
+    """
+    s = sanitize_policy_safe_visual_text((sfx_cue or "").strip())
+    if not s or s.lower() in ("subtle whoosh transition", "crisp whoosh riser", "subtle kinetic click"):
+        return "gentle natural environmental ambience"
+    # Soften fragile micro-scratch / breath phrases that frequently trigger Veo/Flow audio failures
+    s = re.sub(r"\bdelicate\s+metallic\s+scratch\s+of\s+brass\s+stylus\s+on\s+palm\s+leaf\b", "gentle temple evening breeze", s, flags=re.IGNORECASE)
+    s = re.sub(r"\bmetallic\s+scratch\b", "soft rustling", s, flags=re.IGNORECASE)
+    s = re.sub(r"\bheavy\s+ragged\s+breathing\b", "quiet evening wind", s, flags=re.IGNORECASE)
+    s = re.sub(r"\bheavy\s+gasping\s+breath\b", "soft evening breeze", s, flags=re.IGNORECASE)
+    return s.rstrip(".;, ")
+
+
 def _format_single_flow_scene_lines(
     sc: Any,
     *,
@@ -930,19 +945,18 @@ def _format_single_flow_scene_lines(
     cinema_preset: Optional[str],
     chars: List[Dict[str, Any]],
 ) -> List[str]:
-    """Formats one deduplicated, character-routed scene block for Google Flow Agent Mode."""
+    """Formats one deduplicated, character-routed, audio-safe scene block for Google Flow Agent Mode."""
     s_idx = sc.scene_index if hasattr(sc, "scene_index") else sc.get("scene_index", fallback_idx)
     ch_lbl = sc.chapter_label if hasattr(sc, "chapter_label") else sc.get("chapter_label", "")
     raw_vp = sc.visual_prompt_veo_omni if hasattr(sc, "visual_prompt_veo_omni") else sc.get("visual_prompt_veo_omni", "")
     cam_c = sc.camera_and_lighting_cue if hasattr(sc, "camera_and_lighting_cue") else sc.get("camera_and_lighting_cue", "")
     sfx_c = sc.sfx_cue if hasattr(sc, "sfx_cue") else sc.get("sfx_cue", "")
     dur_s = sc.duration_sec if hasattr(sc, "duration_sec") else sc.get("duration_sec", 8.0)
-    vo_txt = sc.voiceover_text if hasattr(sc, "voiceover_text") else sc.get("voiceover_text", "")
     feat_c = bool(sc.features_main_character if hasattr(sc, "features_main_character") else sc.get("features_main_character", False))
 
     scene_chars = detect_scene_characters(raw_vp, chars, features_main_character=feat_c)
 
-    # Build clean, deduplicated cinematic prompt (no duplicate Period Authenticity!)
+    # Build clean, deduplicated visual core (strip heavy cloud audio bans so Flow audio head never rejects!)
     full_clean = build_cinematic_video_prompt(
         raw_vp,
         niche=niche,
@@ -952,12 +966,16 @@ def _format_single_flow_scene_lines(
         duration_sec=min(8.0, float(dur_s)),
         scene_index=int(s_idx),
     )
-    # Replace verbose repeated footer with tight, policy-safe per-scene guard (avoid trigger words even in negatives!)
-    short_clean = full_clean.split("ZERO CAMERAS")[0].strip()
+    visual_core = full_clean.split("Sound design:")[0].strip()
+    # Also soften inline "no dialogue" / "zero cameras" clutter cleanly
+    visual_core = re.sub(r",?\s*no\s+dialogue", "", visual_core, flags=re.IGNORECASE).strip()
+    ambient_cue = _clean_flow_ambient_sound_cue(sfx_c)
     short_clean = (
-        f"{short_clean} "
+        f"{visual_core} "
+        f"Ambient sound: {ambient_cue}, soft natural environmental ambience. "
+        "Execution: Single unbroken continuous 8-second 16:9 widescreen theatrical shot with lived-in natural micro-motion. "
         "STYLE GUARD: PG-13 epic theatrical cinema, natural lifelike proportions, no video or film camera, "
-        "no tripod, no film crew, no modern gear, no spoken dialogue or music, no on-screen text, no watermarks."
+        "no tripod, no film crew, no modern gear, no on-screen text, no watermarks."
     )
 
     if scene_chars:
@@ -973,12 +991,12 @@ def _format_single_flow_scene_lines(
         final_prompt = short_clean
 
     # NOTE: Intentionally omit Hindi/narrative voiceover cues & non-ASCII chapter titles from Flow prompts so dramatic
-    # narration words never trip Google Flow's text safety classifier (Flow generates visual foley only; OMNI STUDIO adds VO).
+    # narration words never trip Google Flow's text safety classifier (Flow generates visuals; OMNI STUDIO adds VO).
     ascii_ch = sanitize_policy_safe_visual_text(_scrub_camera_gear_and_anachronisms(ch_lbl))
     clean_hdr = f"SCENE {int(s_idx):02d} — {ascii_ch}" if len(re.findall(r"[A-Za-z]", ascii_ch)) >= 4 else f"SCENE {int(s_idx):02d}"
     return [
         clean_hdr,
-        f"CLIP FILENAME: scene_{int(s_idx):02d}.mp4",
+        f"TARGET CLIP LABEL: S{int(s_idx):02d} (scene_{int(s_idx):02d}.mp4)",
         f"MODE & CHARACTERS: {mode_str}",
         "SCENE PROMPT:",
         final_prompt,
@@ -986,6 +1004,41 @@ def _format_single_flow_scene_lines(
         "-" * 78,
         "",
     ]
+
+
+def build_flow_scene_spotter_rows(
+    scenes: List[Any],
+    chars: List[Dict[str, Any]],
+    *,
+    batch_size: int = 6,
+) -> List[Dict[str, Any]]:
+    """
+    Builds a crisp 1-line-per-scene Visual Spotter Cheat Sheet (`01` -> `N`) so users can
+    identify and order every clip inside Google Flow's SceneBuilder `Add media` window in seconds.
+    """
+    rows: List[Dict[str, Any]] = []
+    for idx_0, sc in enumerate(scenes):
+        s_idx = int(sc.scene_index if hasattr(sc, "scene_index") else sc.get("scene_index", idx_0 + 1))
+        raw_vp = sc.visual_prompt_veo_omni if hasattr(sc, "visual_prompt_veo_omni") else sc.get("visual_prompt_veo_omni", "")
+        feat_c = bool(sc.features_main_character if hasattr(sc, "features_main_character") else sc.get("features_main_character", False))
+        scene_chars = detect_scene_characters(raw_vp, chars, features_main_character=feat_c)
+        char_col = " + ".join(c["tag"] for c in scene_chars) if scene_chars else "Scenery / Supporting"
+
+        # Strip appended boilerplate to surface the exact opening visual cue clearly
+        core = (raw_vp or "").strip()
+        for mk in ("Look & Lighting:", "Period Authenticity:", "Sound design:", "Execution:", "ZERO CAMERAS"):
+            if mk in core:
+                core = core.split(mk)[0].strip()
+        core = _scrub_camera_gear_and_anachronisms(core)
+        first_part = core.split(". ")[0].strip()
+        spotter_cue = (first_part[:135] + "…") if len(first_part) > 138 else first_part
+        rows.append({
+            "Scene #": f"S{s_idx:02d}",
+            "Batch": f"Batch {(idx_0 // batch_size) + 1}",
+            "Characters": char_col,
+            "Visual Spotter Cue (Match in Flow SceneBuilder)": spotter_cue,
+        })
+    return rows
 
 
 def build_flow_agent_copy_blocks(
@@ -1067,9 +1120,8 @@ def build_flow_agent_copy_blocks(
         )
         b_lines: List[str] = [
             f"PHASE 2 — BATCH {b_num} OF {num_batches} (SCENES {int(first_s):02d}–{int(last_s):02d}) for \"{topic}\":",
-            f"Generate ONLY these {len(slice_scenes)} clips sequentially (8s continuous single shot each). "
-            f"{char_rule} Follow our Project Memory rules strictly: realistic physical foley ONLY (ZERO spoken dialogue, ZERO voices, ZERO music), "
-            f"PG-13 visuals, ZERO cameras/tripods/film crew/modern gear, ZERO foreign or garbled text. Label every clip clearly as scene_{int(first_s):02d}.mp4 through scene_{int(last_s):02d}.mp4.",
+            f"Generate ONLY these {len(slice_scenes)} clips in strict numerical order S{int(first_s):02d} through S{int(last_s):02d} (8s continuous single shot each). "
+            f"{char_rule} Follow our Project Memory rules: subtle natural ambient sound only (no music/narration), PG-13 visuals, zero cameras/text.",
             "",
         ]
         for offset, sc in enumerate(slice_scenes):
@@ -1082,6 +1134,12 @@ def build_flow_agent_copy_blocks(
                     chars=chars,
                 )
             )
+        b_lines.append(
+            f"POST-BATCH NAMING & ORDER STEP: Once Scenes {int(first_s):02d}–{int(last_s):02d} finish generating, "
+            f"rename each generated video clip in the project library to S{int(first_s):02d}..S{int(last_s):02d} "
+            f"if your asset tools allow renaming — AND reply with a clean numbered list mapping "
+            f"Scene {int(first_s):02d} through Scene {int(last_s):02d} to each clip's exact Flow display title."
+        )
         batches.append({
             "batch_num": b_num,
             "total_batches": num_batches,
@@ -1093,6 +1151,7 @@ def build_flow_agent_copy_blocks(
             "prompt_text": "\n".join(b_lines).strip(),
         })
 
+    spotter_rows = build_flow_scene_spotter_rows(scenes, chars, batch_size=batch_size)
     phase3_sew_prompt = format_flow_phase3_sew_prompt(topic=topic, total_scenes=total_scenes)
     phase4_thumbnails_prompt = format_flow_phase4_thumbnails_prompt(
         topic=topic,
@@ -1116,6 +1175,7 @@ def build_flow_agent_copy_blocks(
         "memory": memory_txt,
         "phase1_prompt": phase1_prompt,
         "batches": batches,
+        "spotter_rows": spotter_rows,
         "phase3_sew_prompt": phase3_sew_prompt,
         "phase4_thumbnails_prompt": phase4_thumbnails_prompt,
         "kickoff": kickoff_txt,
