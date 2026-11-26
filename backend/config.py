@@ -425,14 +425,66 @@ def get_cinema_preset(preset_name: Optional[str] = None) -> Dict[str, str]:
     return CINEMA_STYLE_PRESETS[DEFAULT_CINEMA_PRESET]
 
 
+def sanitize_policy_safe_visual_text(text: str) -> str:
+    """
+    Translates graphic gore, open-wound, blood, self-harm, or extreme-violence phrasing
+    into 100% policy-safe PG-13 theatrical/mythological visual cinematography so Google Flow
+    (Nano Banana Pro / Veo 3.1), Vertex Veo, and Gemini Omni never trigger 'harmful content'
+    safety rejections while preserving full dramatic & mythological authenticity.
+    """
+    s = (text or "").strip()
+    if not s:
+        return s
+    safe_replacements = [
+        # Forehead wound / gem extraction (common in Ashwatthama / Mahabharata stories)
+        (r"\b(?:deep\s+)?raw\s+crimson\s+(?:hollowed\s+|gem-socket\s+)?wound(?:\s+on\s+(?:his\s+|her\s+)?center-forehead)?\b",
+         "faint crimson vermilion tilak mark and subtle weathered indentation on center-forehead"),
+        (r"\b(?:his|her|their)\s+center-forehead\s+wound\b", "his weathered center-forehead tilak mark"),
+        (r"\bcenter-forehead\s+wound\b", "weathered center-forehead tilak mark"),
+        (r"\b(?:open|bleeding|festering|oozing|gory|gaping|hollowed|raw)\s+wounds?\b", "subtle weathered ancient mark"),
+        (r"\bwounds?\b", "weathered mark"),
+        (r"\btrembling\s+blood[-\s]?stained\s+fingers\b", "trembling dust-weathered hands"),
+        (r"\bblood[-\s]?stained\b", "dust-weathered"),
+        (r"\bblood[-\s]?soaked\b", "ash-dusted"),
+        (r"\b(?:drenched|covered|dripping)\s+(?:in|with)\s+blood\b", "dusted with battlefield ash"),
+        (r"\bbloody\b", "battle-worn"),
+        (r"\bbleeding\b", "weathered"),
+        (r"\bblood\b", "crimson vermilion dust"),
+        (r"\bjust\s+carved\s+from\s+(?:the\s+)?", "gently lifted away from "),
+        (r"\bcarved\s+from\s+(?:the\s+)?", "lifted away from "),
+        (r"\bextracted\s+from\s+(?:his|her|their)\s+", "lifted away from "),
+        (r"\bvisceral\s+crystalline\s+gem\s+extraction\s+resonance\b", "radiant crystalline gem chime"),
+        (r"\bvisceral\b", "dramatic"),
+        (r"\bwet\s+flesh\s+parting(?:\s+sound)?\b", "deep solemn temple chime resonance"),
+        (r"\bflesh\b", "skin"),
+        (r"\bheavy\s+ragged\s+breathing\s+of\s+pain\b", "deep solemn exhale"),
+        (r"\bdrops\s+of\s+liquid\s+hitting\s+dusty\s+stone\b", "gentle wind stirring temple dust"),
+        # General mythological/historical violence -> PG-13 theatrical framing
+        (r"\b(?:severed|decapitated)\s+head\b", "fallen ancient warrior silhouette in twilight mist"),
+        (r"\b(?:behead(?:ed|ing)?|decapitat(?:e|ed|ing|ion))\b", "solemn mythic defeat"),
+        (r"\b(?:slaughter(?:ed|ing)?|massacre(?:d)?|butcher(?:ed|ing)?|murder(?:ed|er|ing)?|brutal\s+killing)\b", "dramatic mythic confrontation"),
+        (r"\b(?:corpses?|dead\s+bodies|mutilated|dismembered|gore|gory)\b", "abandoned ancient shields and broken wooden chariot wheels in mist"),
+        (r"\b(?:stab(?:bed|bing)?|slash(?:ed|ing)?)\b", "clashing ancient bronze blades"),
+        (r"\b(?:suicide|self-harm|cutting\s+(?:himself|herself|his\s+own|her\s+own))\b", "solemn vow of renunciation"),
+        (r"\b(?:unborn\s+child|womb|sleeping\s+children|killing\s+children)\b", "royal palace sanctuary"),
+        (r"\bmutant\s+animals\b", "unrealistic animals"),
+        (r"\bdeformed\s+anatomy\b", "distorted proportions"),
+        (r"\bunnatural\s+liquid\s+from\s+mouth\b", "unnatural fluid physics"),
+    ]
+    for pat, repl in safe_replacements:
+        s = re.sub(pat, repl, s, flags=re.IGNORECASE)
+    s = re.sub(r"\s{2,}", " ", s).strip()
+    return s
+
+
 def _scrub_camera_gear_and_anachronisms(text: str) -> str:
     """
     Deterministically strips physical cinema hardware brands & rig terms (`ARRI Alexa`, `Panavision`,
     `RED V-Raptor`, `Steadicam`, `gimbal`, `dolly`, `crane`, `drone`, `tripod`, `Camera tracks`, etc.)
     so video models NEVER render a physical video camera or film crew inside the scene!
-    Also removes stray non-ASCII foreign words accidentally mixed into English visual prompts.
+    Also applies PG-13 policy-safe visual phrasing and removes stray non-ASCII foreign words.
     """
-    s = (text or "").strip()
+    s = sanitize_policy_safe_visual_text((text or "").strip())
     gear_replacements = [
         (
             r"\b(?:shot\s+)?on\s+ARRI\s+Alexa\s*\d*"
@@ -578,7 +630,7 @@ def build_cinematic_video_prompt(
         )
 
     # Inject rich frame-synced physical Foley sound design (strictly NO dialogue/music so it blends cleanly!)
-    clean_sfx = (sfx_cue or "").strip()
+    clean_sfx = sanitize_policy_safe_visual_text((sfx_cue or "").strip())
     if clean_sfx.lower() in ("", "subtle whoosh transition", "crisp whoosh riser", "subtle kinetic click"):
         clean_sfx = "subtle realistic environmental ambience and physical foley matching the visible on-screen motion"
     parts.append(
@@ -739,9 +791,10 @@ def format_flow_agent_memory_block(
     if niche in ("Religious & Devotional", "History & Geopolitics"):
         lines.append("ERA AUTHENTICITY: 100% period-authentic ancient clothing, sandstone architecture, brass diyas, and props. Strictly ZERO modern items.")
     lines.append(
-        "STRICT NEGATIVE GUARDRAILS (NEVER SHOW): Video camera, film camera, DSLR, tripod, lens, gimbal, boom mic, "
-        "lighting rig, film crew, wires, smartphone, plastic, modern tech, mutant or deformed anatomy, unnatural liquid "
-        "from mouth, morphing faces, floating text, Chinese/foreign/garbled letters, watermarks."
+        "STRICT VISUAL GUARDRAILS: Keep all scenes PG-13 mythological cinema with natural lifelike human and animal "
+        "proportions, calm realistic expressions, and authentic ancient textures. NEVER show video cameras, film cameras, "
+        "DSLR rigs, tripods, lenses, gimbals, boom mics, studio lights, film crews, wires, smartphones, plastic, modern "
+        "tech, morphing faces, floating text, Chinese or foreign letters, or watermarks."
     )
     return "\n".join(lines)
 
@@ -812,12 +865,12 @@ def _format_single_flow_scene_lines(
         duration_sec=min(8.0, float(dur_s)),
         scene_index=int(s_idx),
     )
-    # Replace verbose repeated footer with tight per-scene guard (full blacklist lives in Global Rules & Memory!)
+    # Replace verbose repeated footer with tight, policy-safe per-scene guard (avoid trigger words even in negatives!)
     short_clean = full_clean.split("ZERO CAMERAS")[0].strip()
     short_clean = (
         f"{short_clean} "
-        "NEGATIVE: No video/film camera, no tripod, no film crew, no modern gear, no spoken dialogue or music, "
-        "no deformed anatomy, no foreign/garbled text, no watermarks."
+        "STYLE GUARD: PG-13 epic theatrical cinema, natural lifelike proportions, no video or film camera, "
+        "no tripod, no film crew, no modern gear, no spoken dialogue or music, no on-screen text, no watermarks."
     )
 
     if scene_chars:
@@ -832,11 +885,14 @@ def _format_single_flow_scene_lines(
         mode_str = "Text to Video — ATTACH CHARACTERS: NONE (Scenery / Supporting Only)"
         final_prompt = short_clean
 
+    # NOTE: Intentionally omit Hindi/narrative voiceover cues & non-ASCII chapter titles from Flow prompts so dramatic
+    # narration words never trip Google Flow's text safety classifier (Flow generates visual foley only; OMNI STUDIO adds VO).
+    ascii_ch = sanitize_policy_safe_visual_text(_scrub_camera_gear_and_anachronisms(ch_lbl))
+    clean_hdr = f"SCENE {int(s_idx):02d} — {ascii_ch}" if len(re.findall(r"[A-Za-z]", ascii_ch)) >= 4 else f"SCENE {int(s_idx):02d}"
     return [
-        f"SCENE {int(s_idx):02d} — {ch_lbl}",
+        clean_hdr,
         f"CLIP FILENAME: scene_{int(s_idx):02d}.mp4",
         f"MODE & CHARACTERS: {mode_str}",
-        f"VOICEOVER CONTEXT (SILENT — DO NOT SPEAK IN VIDEO): {vo_txt}",
         "SCENE PROMPT:",
         final_prompt,
         "",
